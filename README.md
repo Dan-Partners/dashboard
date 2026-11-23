@@ -12,6 +12,8 @@ The client can point at a real shop server, or open a full mock of **Golden Drag
 
 ![Kitchen ticket, split by station](docs/screenshots/ticket.png)
 
+![Choose a theme, or customise one](docs/screenshots/themes.png)
+
 ## Run
 
 ```bash
@@ -25,8 +27,8 @@ Open [http://localhost:3000](http://localhost:3000).
 - **Try the demo / 試用示範** signs into Golden Dragon with no backend. Orders, the menu, stamp cards and today’s takings persist in `localStorage`. **Reset demo** in the side menu loads the shop again.
 
 ```bash
-npm test          # mock server and HTTP client
-npm run test:e2e  # connect → demo → till → kitchen ticket
+npm test          # mock server, HTTP client, theme colours and contrast
+npm run test:e2e  # connect → demo → till → kitchen ticket, and themes
 npm run lint
 npm run build
 ```
@@ -173,6 +175,47 @@ Takings are every order placed in the period, including ones still on the board.
 The demo also drops in an online order every so often while the tab is visible. Reset demo puts Golden Dragon back to the seeded service.
 
 UI copy is English, with Chinese beside the labels that staff already say. The language control switches the chrome to Traditional Chinese (`zh-Hant`). Strings live in [`src/lib/i18n.ts`](src/lib/i18n.ts); dish names are data, not chrome, and both languages are always stored on the menu.
+
+## Themes
+
+**Theme / 主題** is in the side menu, in **More** on a phone, and on the connect screen. It opens a dialog with two views.
+
+| View | What it does |
+| --- | --- |
+| Choose | Six presets and Custom. A choice applies at once, so the counter behind the dialog is the preview. |
+| Customise | Three colours (background, text, accent) and where the side menu sits (on the background, the accent, or the text colour). It starts from the theme on screen and becomes Custom at the first change. **Reset to Dan** puts the default back. |
+
+| Preset | Look |
+| --- | --- |
+| Dan 單 | The default. Ivory paper, near-black ink, vermilion. |
+| Seal 印 | Dan with the side menu on vermilion. |
+| Ink 墨 | Dark, for evening service. |
+| Jade 玉 | Green accent. |
+| Porcelain 青花 | White and cobalt. |
+| Contrast 高對比 | Black on white, black side menu. |
+
+![Orders in the Ink theme](docs/screenshots/orders-ink.png)
+
+How it works:
+
+- **Roles, not colours.** Components paint with `paper`, `paper-raised`, `paper-deep`, `ink`, `ink-soft`, `accent`, `accent-deep`, `accent-ink`, `on-accent` and `rule` (for example `bg-paper`, `text-accent-ink`). Do not put a hex value in a component. The roles are declared in [`src/app/globals.css`](src/app/globals.css).
+- **Derived and checked.** [`src/lib/theme.ts`](src/lib/theme.ts) derives every role from the three chosen colours and moves any that would be hard to read: body text aims for 7:1 against its background and nothing falls below 4.5:1. The Customise view says when it has done this.
+- **The side menu is its own surface.** Inside an element with the `chrome` class the same roles resolve to the side menu's colours, so a button placed there needs no variant.
+- **Saved on the device.** The choice lives in `localStorage` with the rest of `dan.v1`. A small inline script paints a saved theme before React loads, so a reload does not flash the default. A theme shared by every tablet in a shop would need an endpoint on the shop server; it is not in `DanClient`.
+- **Storage is not trusted.** Only six-digit hex colours and known property names are applied, both in the app and in the inline script.
+- **Not themed.** The mark stays vermilion in every theme. The 80mm ticket stays black on white, on screen and in print.
+
+## Mark and icons
+
+The mark is 單 drawn from flat strokes, with the last stroke falling as a torn receipt. `DanMark` is the seal (white on a vermilion rounded square) and `DanGlyph` is the character alone, both in [`src/components/mark.tsx`](src/components/mark.tsx). The same torn edge finishes order dockets, the till slip and the ticket (`torn` in `globals.css`).
+
+`src/app/icon.svg` is the source. The favicon, the iOS home screen icon and the install icons in `public/icons/` are rendered from it:
+
+```bash
+node scripts/render-icons.mjs
+```
+
+The brand masters (app icon, Instagram square and circle) and the design language live in the [wiki](https://github.com/Dan-Partners/wiki), under `Attachments/` and `02-Engineering/Design-System/`.
 
 ## Fonts
 

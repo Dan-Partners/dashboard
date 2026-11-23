@@ -1,4 +1,5 @@
 import type { DemoState } from "./seed";
+import { DEFAULT_THEME, normalizeTheme, type ThemeChoice } from "./theme";
 import type { Session } from "./types";
 
 export type Locale = "en" | "zh-Hant";
@@ -10,6 +11,8 @@ export type Persisted = {
   locale: Locale;
   demoState: DemoState | null;
   activeOrderId: string | null;
+  /** Saved on this device only. A shop-wide theme would need the shop server. */
+  theme: ThemeChoice;
 };
 
 export const STORAGE_KEY = "dan.v1";
@@ -21,6 +24,7 @@ export const EMPTY_PERSISTED: Persisted = {
   locale: "en",
   demoState: null,
   activeOrderId: null,
+  theme: DEFAULT_THEME,
 };
 
 const listeners = new Set<() => void>();
@@ -46,6 +50,7 @@ export function normalizePersisted(value: unknown): Persisted {
     locale: isLocale(record.locale) ? record.locale : "en",
     demoState: demo,
     activeOrderId: typeof record.activeOrderId === "string" ? record.activeOrderId : null,
+    theme: normalizeTheme(record.theme),
   };
 }
 

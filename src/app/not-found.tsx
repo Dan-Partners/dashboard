@@ -7,7 +7,7 @@ export default function NotFound() {
       <DanMark size={56} title="Dan" />
       <h1 className="mt-4 font-display text-5xl">Not on this slip</h1>
       <p className="mt-3 text-ink-soft">That page is not part of the counter.</p>
-      <Link href="/" className="mt-6 inline-flex min-h-11 items-center font-display text-vermilion">
+      <Link href="/" className="mt-6 inline-flex min-h-11 items-center font-display text-accent-ink">
         Back to Dan
       </Link>
     </main>

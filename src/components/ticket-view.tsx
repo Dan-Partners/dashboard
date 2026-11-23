@@ -37,9 +37,9 @@ export function TicketView() {
 
   return (
     <div>
-      <div className="no-print mb-6 flex flex-wrap items-end justify-between gap-4">
-        <PageTitle className="mb-0" title={t("ticketTitle")} gloss={locale === "zh-Hant" ? "Ticket" : "廚單"} />
-        <div className="flex gap-2">
+      <div className="no-print mb-6">
+        <PageTitle className="mb-4" title={t("ticketTitle")} gloss={locale === "zh-Hant" ? "Ticket" : "廚單"} />
+        <div className="flex flex-wrap gap-2">
           <Button variant={mode === "one" ? "ink" : "line"} onClick={() => setMode("one")}>
             {t("ticketOne")}
           </Button>
@@ -69,58 +69,60 @@ export function TicketView() {
 function Slip({ order, shopInfo, sections }: { order: Order; shopInfo: Shop; sections: TicketSection[] }) {
   const { t, locale } = useI18n();
   return (
-    <article className="ticket-print ticket-slip border border-rule px-4 py-5 font-ticket text-[13px] leading-snug" data-testid="ticket-slip">
-      <header className="text-center">
-        <p className="font-display text-xl tracking-[0.14em]">{shopInfo.name.toUpperCase()}</p>
-        <p className="font-zh text-base">
-          {shopInfo.nameZh}
-          {locale === "zh-Hant" ? "外賣" : " · takeaway"}
+    <div className="torn-wrap ticket-print max-w-full">
+      <article className="ticket-slip torn border border-b-0 border-slip-ink/15 px-4 py-5 font-ticket text-[13px] leading-snug" data-testid="ticket-slip">
+        <header className="text-center">
+          <p className="font-display text-xl tracking-[0.14em]">{shopInfo.name.toUpperCase()}</p>
+          <p className="font-zh text-base">
+            {shopInfo.nameZh}
+            {locale === "zh-Hant" ? "外賣" : " · takeaway"}
+          </p>
+          <p>{shopInfo.address}</p>
+          <p>{shopInfo.phone}</p>
+        </header>
+        <Rule />
+        <p className="flex justify-between font-display text-base">
+          <span>#{order.number}</span>
+          <span>{t(order.fulfilment === "delivery" ? "fulfilDelivery" : "fulfilCollection").toUpperCase()}</span>
         </p>
-        <p>{shopInfo.address}</p>
-        <p>{shopInfo.phone}</p>
-      </header>
-      <Rule />
-      <p className="flex justify-between font-display text-base">
-        <span>#{order.number}</span>
-        <span>{t(order.fulfilment === "delivery" ? "fulfilDelivery" : "fulfilCollection").toUpperCase()}</span>
-      </p>
-      <p className="flex justify-between">
-        <span>{formatClock(new Date(order.createdAt))}</span>
-        <span>{t(order.source === "online" ? "sourceOnline" : order.source === "phone" ? "sourcePhone" : "sourceCounter")}</span>
-      </p>
-      {order.customerName ? <p>{order.customerName}</p> : null}
-      {order.phone ? <p>{order.phone}</p> : null}
-      {order.address ? <p>{order.address}</p> : null}
-      {order.notes ? <p className="mt-1">* {order.notes}</p> : null}
-      {sections.map((section) => (
-        <section key={section.station}>
-          <Rule />
-          <h2 className="font-display text-sm tracking-[0.16em]">
-            {t(STATION_KEY[section.station]).toUpperCase()} <span className="font-zh tracking-normal">{t(STATION_ZH[section.station])}</span>
-          </h2>
-          <ul className="mt-1">
-            {section.lines.map((line) => (
-              <li key={`${section.station}-${line.number}`} className="mt-1">
-                <p>
-                  {line.qty} × {line.number} {line.nameEn}
-                </p>
-                <p className="pl-8 font-zh">{line.nameZh}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
-      <Rule />
-      <p className="flex justify-between font-display text-base">
-        <span>{t("tillTotal").toUpperCase()}</span>
-        <span>{formatPence(order.totalPence)}</span>
-      </p>
-      <p className="mt-3 text-center font-zh">{t("ticketThanks")}</p>
-      <p className="text-center font-display text-[0.68rem] tracking-[0.18em] uppercase">{primaryName(t("ticketBill"), "帳單", locale)}</p>
-    </article>
+        <p className="flex justify-between">
+          <span>{formatClock(new Date(order.createdAt))}</span>
+          <span>{t(order.source === "online" ? "sourceOnline" : order.source === "phone" ? "sourcePhone" : "sourceCounter")}</span>
+        </p>
+        {order.customerName ? <p>{order.customerName}</p> : null}
+        {order.phone ? <p>{order.phone}</p> : null}
+        {order.address ? <p>{order.address}</p> : null}
+        {order.notes ? <p className="mt-1">* {order.notes}</p> : null}
+        {sections.map((section) => (
+          <section key={section.station}>
+            <Rule />
+            <h2 className="font-display text-sm tracking-[0.16em]">
+              {t(STATION_KEY[section.station]).toUpperCase()} <span className="font-zh tracking-normal">{t(STATION_ZH[section.station])}</span>
+            </h2>
+            <ul className="mt-1">
+              {section.lines.map((line) => (
+                <li key={`${section.station}-${line.number}`} className="mt-1">
+                  <p>
+                    {line.qty} × {line.number} {line.nameEn}
+                  </p>
+                  <p className="pl-8 font-zh">{line.nameZh}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+        <Rule />
+        <p className="flex justify-between font-display text-base">
+          <span>{t("tillTotal").toUpperCase()}</span>
+          <span>{formatPence(order.totalPence)}</span>
+        </p>
+        <p className="mt-3 text-center font-zh">{t("ticketThanks")}</p>
+        <p className="text-center font-display text-[0.68rem] tracking-[0.18em] uppercase">{primaryName(t("ticketBill"), "帳單", locale)}</p>
+      </article>
+    </div>
   );
 }
 
 function Rule() {
-  return <div className="my-2 border-t border-dashed border-ink/50" aria-hidden />;
+  return <div className="my-2 border-t border-dashed border-slip-ink/50" aria-hidden />;
 }

@@ -1,43 +1,57 @@
-type DanMarkProps = {
-  size?: number;
+/**
+ * 單, drawn from flat strokes, with the last stroke falling as a torn receipt.
+ * One path on a 250 by 304 grid; each stroke is 20 units.
+ *
+ * The same geometry is in src/app/icon.svg, public/icon.svg and the icon
+ * masters in the wiki (Attachments/). Change them together.
+ */
+export const GLYPH_WIDTH = 250;
+export const GLYPH_HEIGHT = 304;
+export const GLYPH_PATH =
+  "M35 0h80v60H35zM55 20v20h40V20zM135 0h80v60h-80zM155 20v20h40V20z" +
+  "M35 78h180v110h-80v18h115v20h-95v63l-10 15-10-15-10 15-10-15-10 15-10-15v-63H0v-20h115v-18H35z" +
+  "M55 98v25h60V98zM135 98v25h60V98zM55 143v25h60v-25zM135 143v25h60v-25z" +
+  "M106 244v7h38v-7zM106 263v7h25v-7z";
+
+type MarkProps = {
   title?: string;
   className?: string;
 };
 
-/**
- * Vermilion square, a blocky 單, and a receipt where the last stroke falls.
- * Keep the geometry in sync with src/app/icon.svg.
- */
-export function DanMark({ size = 48, title, className }: DanMarkProps) {
+/** The character alone, in the current text colour. For use on a colour field. */
+export function DanGlyph({ height = 32, title, className }: MarkProps & { height?: number }) {
   return (
     <svg
-      width={size}
-      height={size}
-      viewBox="0 0 64 64"
+      width={(height * GLYPH_WIDTH) / GLYPH_HEIGHT}
+      height={height}
+      viewBox={`0 0 ${GLYPH_WIDTH} ${GLYPH_HEIGHT}`}
       className={className}
       role={title ? "img" : undefined}
       aria-hidden={title ? undefined : true}
       aria-label={title}
     >
-      <rect width="64" height="64" rx="14" fill="#B83A2E" />
-      <path
-        fill="#FFFDF8"
-        fillRule="evenodd"
-        d="M14 7h16v12H14zm3 3h10v6H17zm17-3h16v12H34zm3 3h10v6H37z"
-      />
-      <path
-        fill="#FFFDF8"
-        fillRule="evenodd"
-        d="M14 22h36v20H14zm3 3h14v6H17zm16 0h14v6H33zM17 33h14v6H17zm16 0h14v6H33z"
-      />
-      <path fill="#FFFDF8" d="M7 45h50v3.5H7z" />
-      <path fill="#FFFDF8" d="M25 46.5h14V56l-2.5-1.7L34 56l-2.5-1.7L29 56l-2.5-1.7L25 56z" />
-      <path
-        d="M27.3 50.2H36.4M27.3 52.7H33.2"
-        stroke="#B83A2E"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
+      <path fill="currentColor" fillRule="evenodd" d={GLYPH_PATH} />
+    </svg>
+  );
+}
+
+/**
+ * The seal: a vermilion rounded square with the white character. This is the
+ * brand mark, so it keeps its colours in every theme.
+ */
+export function DanMark({ size = 48, title, className }: MarkProps & { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 420 420"
+      className={className}
+      role={title ? "img" : undefined}
+      aria-hidden={title ? undefined : true}
+      aria-label={title}
+    >
+      <rect width="420" height="420" rx="92" fill="#B83A2E" />
+      <path fill="#FFFFFF" fillRule="evenodd" transform="translate(85 58)" d={GLYPH_PATH} />
     </svg>
   );
 }

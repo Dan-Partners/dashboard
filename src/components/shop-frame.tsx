@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
 import { formatStamp } from "@/lib/format";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useSessionRedirect, useShop } from "@/lib/shop-context";
-import { DanMark } from "./mark";
+import { DanGlyph, DanMark } from "./mark";
+import { ThemeButton, ThemeDialog } from "./theme-dialog";
 import { Button, Dialog, Splash } from "./ui";
 
 const LINKS: { href: string; label: CopyKey; gloss: CopyKey }[] = [
@@ -25,6 +26,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [more, setMore] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [themeOpen, setThemeOpen] = useState(false);
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -45,15 +47,21 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[13.75rem_minmax(0,1fr)]">
-      <aside className="no-print hidden border-r border-rule px-4 py-5 md:sticky md:top-0 md:flex md:h-dvh md:flex-col md:overflow-y-auto">
-        <Link href="/shop/orders" className="flex items-center gap-2">
-          <DanMark size={36} />
-          <span className="font-display text-3xl leading-none">Dan</span>
+      <aside className="chrome no-print hidden border-r border-rule bg-paper text-ink md:sticky md:top-0 md:flex md:h-dvh md:flex-col md:overflow-y-auto">
+        {/* The seal: white on vermilion, as on the icon, in every theme. */}
+        <Link href="/shop/orders" className="flex items-center gap-3 bg-seal px-4 py-4 text-on-seal">
+          <DanGlyph height={44} />
+          <span>
+            <span className="block font-zh text-[10px] tracking-[0.3em] opacity-90">{t("appPun")}</span>
+            <span className="block font-display text-4xl leading-none">Dan</span>
+          </span>
         </Link>
-        <p className="mt-6 font-display text-2xl leading-tight">{session.shop.name}</p>
-        <p className="font-zh text-vermilion">{session.shop.nameZh}</p>
-        <p className="text-sm text-ink-soft">{session.shop.city}</p>
-        <nav className="mt-8 flex flex-col" aria-label="Dan">
+        <div className="border-b-[3px] border-ink px-4 pt-5 pb-4">
+          <p className="font-display text-2xl leading-tight">{session.shop.name}</p>
+          <p className="font-zh text-accent-ink">{session.shop.nameZh}</p>
+          <p className="text-sm text-ink-soft">{session.shop.city}</p>
+        </div>
+        <nav className="flex flex-col px-2 pt-3" aria-label="Dan">
           {LINKS.map((link) => {
             const active = pathname === link.href;
             return (
@@ -61,7 +69,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
                 key={link.href}
                 href={link.href}
                 aria-current={active ? "page" : undefined}
-                className={`flex min-h-11 items-baseline justify-between gap-3 border-l-2 px-2 py-2 ${active ? "border-vermilion text-ink" : "border-transparent text-ink-soft"}`}
+                className={`flex min-h-11 items-baseline justify-between gap-3 px-3 py-2.5 ${active ? "bg-ink text-paper" : "text-ink-soft hover:bg-paper-deep hover:text-ink"}`}
               >
                 <span className="font-display text-xl leading-none">{t(link.label)}</span>
                 <span className="font-zh text-xs">{t(link.gloss)}</span>
@@ -69,7 +77,8 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="mt-auto space-y-2 pt-8">
+        <div className="mt-auto space-y-2 px-4 pt-8 pb-5">
+          <ThemeButton label={t("theme")} gloss={t("themeZh")} onClick={() => setThemeOpen(true)} />
           <LanguageToggle locale={locale} setLocale={setLocale} labelEn={t("langEn")} labelZh={t("langZh")} />
           {session.mode === "demo" ? (
             <Button variant="ghost" className="w-full" onClick={() => setConfirmReset(true)}>
@@ -83,7 +92,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="min-w-0">
-        <header className="no-print sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-rule bg-paper/95 px-4 py-3 backdrop-blur md:px-8">
+        <header className="chrome-sm no-print sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-rule bg-paper/95 px-4 py-3 text-ink backdrop-blur md:px-8">
           <div className="flex min-w-0 items-center gap-3 md:hidden">
             <DanMark size={32} />
             <div className="min-w-0">
@@ -95,7 +104,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
           </div>
           <p className="hidden font-display text-lg md:block">
             {session.shop.name}
-            <span className="ml-3 font-zh text-base text-vermilion">{session.shop.nameZh}</span>
+            <span className="ml-3 font-zh text-base text-accent-ink">{session.shop.nameZh}</span>
           </p>
           <p className="font-display text-sm tracking-[0.14em] text-ink-soft uppercase">{formatStamp(now)}</p>
         </header>
@@ -103,7 +112,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
         {shop.notice ? (
           <Link
             href={shop.notice.href ?? "/shop/orders"}
-            className="no-print flex items-baseline justify-between gap-4 border-b border-rule bg-vermilion px-4 py-3 text-paper md:px-8"
+            className="no-print flex items-baseline justify-between gap-4 border-b border-rule bg-accent px-4 py-3 text-on-accent md:px-8"
             onClick={() => shop.dismissNotice()}
           >
             <span className="font-display text-sm tracking-[0.16em] uppercase">{t("noticeOnline")}</span>
@@ -138,7 +147,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
                 key={link.href}
                 href={link.href}
                 aria-current={active ? "page" : undefined}
-                className={`flex min-h-14 flex-col items-center justify-center ${active ? "text-vermilion" : "text-ink-soft"}`}
+                className={`flex min-h-14 flex-col items-center justify-center border-t-[3px] ${active ? "border-accent text-accent-ink" : "border-transparent text-ink-soft"}`}
               >
                 <span className="font-display text-sm leading-none">{t(link.label)}</span>
                 <span className="font-zh text-[10px]">{t(link.gloss)}</span>
@@ -147,7 +156,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
           })}
           <button
             type="button"
-            className="flex min-h-14 cursor-pointer flex-col items-center justify-center text-ink-soft"
+            className="flex min-h-14 cursor-pointer flex-col items-center justify-center border-t-[3px] border-transparent text-ink-soft"
             onClick={() => setMore(true)}
           >
             <span className="font-display text-sm leading-none">{t("navMore")}</span>
@@ -166,10 +175,18 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
               onClick={() => setMore(false)}
             >
               <span className="font-display text-2xl">{t(link.label)}</span>
-              <span className="font-zh text-vermilion">{t(link.gloss)}</span>
+              <span className="font-zh text-accent-ink">{t(link.gloss)}</span>
             </Link>
           ))}
-          <div className="mt-4">
+          <div className="mt-4 space-y-2">
+            <ThemeButton
+              label={t("theme")}
+              gloss={t("themeZh")}
+              onClick={() => {
+                setMore(false);
+                setThemeOpen(true);
+              }}
+            />
             <LanguageToggle locale={locale} setLocale={setLocale} labelEn={t("langEn")} labelZh={t("langZh")} />
           </div>
           {session.mode === "demo" ? (
@@ -204,7 +221,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
             {t("cancel")}
           </Button>
           <Button
-            variant="vermilion"
+            variant="accent"
             className="flex-1"
             onClick={() => {
               shop.resetDemo();
@@ -215,6 +232,8 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
           </Button>
         </div>
       </Dialog>
+
+      <ThemeDialog open={themeOpen} onClose={() => setThemeOpen(false)} />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { useSessionRedirect, useShop } from "@/lib/shop-context";
 import { normalizeServerUrl } from "@/lib/url";
 import type { ServerPing } from "@/lib/types";
 import { DanMark } from "./mark";
+import { ThemeButton, ThemeDialog } from "./theme-dialog";
 import { Button, Kicker, Splash, TextField } from "./ui";
 
 type Phase = { name: "url" } | { name: "login"; baseUrl: string; ping: ServerPing };
@@ -26,6 +27,7 @@ export function ConnectScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pin, setPin] = useState("");
+  const [themeOpen, setThemeOpen] = useState(false);
 
   if (ready && session) return <Splash />;
 
@@ -85,11 +87,26 @@ export function ConnectScreen() {
       <div className="flex items-end gap-4">
         <DanMark size={76} title="Dan" />
         <div className="min-w-0 pb-1">
-          <p className="font-zh text-sm tracking-[0.42em] text-vermilion">{t("appPun")}</p>
+          <p className="font-zh text-sm tracking-[0.42em] text-accent-ink">{t("appPun")}</p>
           <p className="font-display text-6xl leading-none">Dan</p>
         </div>
       </div>
-      <p className="mt-6 text-lg leading-relaxed text-ink-soft">{t("connectLede")}</p>
+      {/* The name, set as its dictionary entry. */}
+      <p className="mt-4 border-t-[3px] border-ink pt-3 text-ink-soft">
+        <span className="font-zh text-xl text-ink">單</span>
+        <span className="ml-2 italic">
+          daan<sup>1</sup>
+        </span>
+        <span className="mx-2" aria-hidden>
+          ·
+        </span>
+        <span className="italic">{t("dictPart")}</span>
+        <span className="mx-2" aria-hidden>
+          ·
+        </span>
+        {t("dictSense")}
+      </p>
+      <p className="mt-4 text-lg leading-relaxed text-ink-soft">{t("connectLede")}</p>
 
       {phase.name === "url" ? (
         <form
@@ -153,11 +170,11 @@ export function ConnectScreen() {
         <form className="mt-8 border-t border-rule pt-6" onSubmit={signIn}>
           <Kicker>{phase.ping.shop.city}</Kicker>
           <h1 className="mt-1 font-display text-4xl leading-none">{phase.ping.shop.name}</h1>
-          <p className="font-zh text-lg text-vermilion">{phase.ping.shop.nameZh}</p>
+          <p className="font-zh text-lg text-accent-ink">{phase.ping.shop.nameZh}</p>
           <p className="mt-2 truncate text-sm text-ink-soft">{phase.baseUrl}</p>
           <button
             type="button"
-            className="mt-2 min-h-11 cursor-pointer font-display text-sm tracking-[0.14em] text-vermilion uppercase"
+            className="mt-2 min-h-11 cursor-pointer font-display text-sm tracking-[0.14em] text-accent-ink uppercase"
             onClick={() => {
               setPhase({ name: "url" });
               setError(null);
@@ -214,11 +231,11 @@ export function ConnectScreen() {
             )}
           </div>
           {error ? (
-            <p className="mt-4 border-l-2 border-vermilion pl-3 text-sm" role="alert" data-testid="connect-error">
+            <p className="mt-4 border-l-2 border-accent pl-3 text-sm" role="alert" data-testid="connect-error">
               {error}
             </p>
           ) : null}
-          <Button type="submit" variant="vermilion" className="mt-4 w-full" disabled={busy}>
+          <Button type="submit" variant="accent" className="mt-4 w-full" disabled={busy}>
             {busy ? t("loginSubmitting") : t("loginSubmit")}
           </Button>
         </form>
@@ -229,7 +246,7 @@ export function ConnectScreen() {
         <button
           type="button"
           data-testid="demo-button"
-          className="mt-4 flex min-h-16 w-full cursor-pointer flex-col items-center justify-center bg-vermilion px-4 py-3 text-paper hover:bg-vermilion-deep"
+          className="mt-4 flex min-h-16 w-full cursor-pointer flex-col items-center justify-center bg-accent px-4 py-3 text-on-accent hover:bg-accent-deep"
           onClick={() => {
             shop.enterDemo();
             router.push("/shop/orders");
@@ -240,6 +257,11 @@ export function ConnectScreen() {
         </button>
         <p className="mt-3 text-center text-sm text-ink-soft">{t("connectDemoHint")}</p>
       </div>
+
+      <div className="mt-8 flex justify-center">
+        <ThemeButton className="gap-4" label={t("theme")} gloss={t("themeZh")} onClick={() => setThemeOpen(true)} />
+      </div>
+      <ThemeDialog open={themeOpen} onClose={() => setThemeOpen(false)} />
     </div>
   );
 }

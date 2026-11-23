@@ -49,6 +49,23 @@ test("capture the connect screen and the counter", async ({ page }) => {
   await expect(page.getByText("Takings")).toBeVisible();
   await page.screenshot({ path: `${out}/sales.png` });
 
+  await page.getByRole("link", { name: /^Orders/ }).click();
+  await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
+  await page.getByTestId("theme-button").first().click();
+  await expect(page.getByRole("heading", { name: "Theme" })).toBeVisible();
+  await page.screenshot({ path: `${out}/themes.png` });
+  await page.getByRole("button", { name: "Customise" }).click();
+  await expect(page.getByRole("heading", { name: "Customise theme" })).toBeVisible();
+  await page.screenshot({ path: `${out}/theme-customise.png` });
+  await page.getByRole("button", { name: "Back to themes" }).click();
+  await page.getByTestId("theme-seal").click();
+  await page.getByRole("button", { name: "Done" }).click();
+  await page.screenshot({ path: `${out}/orders-seal.png` });
+  await page.getByTestId("theme-button").first().click();
+  await page.getByTestId("theme-ink").click();
+  await page.getByRole("button", { name: "Done" }).click();
+  await page.screenshot({ path: `${out}/orders-ink.png` });
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());

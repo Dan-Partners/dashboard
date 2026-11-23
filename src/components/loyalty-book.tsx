@@ -7,6 +7,7 @@ import { messageForError, useI18n } from "@/lib/i18n";
 import { STAMP_GOAL } from "@/lib/seed";
 import { useShop } from "@/lib/shop-context";
 import type { Customer } from "@/lib/types";
+import { DanGlyph } from "./mark";
 import { Button, PageTitle } from "./ui";
 
 export function LoyaltyBook() {
@@ -72,7 +73,7 @@ export function LoyaltyBook() {
         </Button>
       </form>
       {error ? (
-        <p className="mt-3 border-l-2 border-vermilion pl-3 text-sm" role="alert">
+        <p className="mt-3 border-l-2 border-accent pl-3 text-sm" role="alert">
           {error}
         </p>
       ) : null}
@@ -94,7 +95,7 @@ export function LoyaltyBook() {
             <span className="font-display text-[0.72rem] tracking-[0.16em] uppercase text-ink-soft">{t("loyaltyName")}</span>
             <input value={name} onChange={(event) => setName(event.target.value)} className="mt-1 w-full min-h-11 border border-rule bg-paper px-3" />
           </label>
-          <Button type="submit" variant="vermilion" className="mt-3" disabled={busy}>
+          <Button type="submit" variant="accent" className="mt-3" disabled={busy}>
             {t("loyaltyOpen")}
           </Button>
         </form>
@@ -121,7 +122,7 @@ export function LoyaltyBook() {
                   <span className="block font-display text-xl">{customer.name}</span>
                   <span className="text-sm text-ink-soft">{customer.phone}</span>
                 </span>
-                <span className="font-display text-vermilion">
+                <span className="font-display text-accent-ink">
                   {customer.stamps}/{STAMP_GOAL}
                 </span>
               </button>
@@ -158,13 +159,16 @@ function Card({
         {Array.from({ length: STAMP_GOAL }, (_, index) => (
           <span
             key={index}
-            className={`aspect-square rounded-full border border-ink ${index < customer.stamps ? "bg-vermilion border-vermilion" : "bg-transparent"}`}
-          />
+            className={`flex aspect-square items-center justify-center ${index < customer.stamps ? "bg-accent text-on-accent" : "border border-dashed border-ink-soft"}`}
+          >
+            {/* A stamp is the seal: the character pressed onto the card. */}
+            {index < customer.stamps ? <DanGlyph height={30} /> : null}
+          </span>
         ))}
       </div>
       <p className="mt-4 text-sm">{full ? t("loyaltyFull") : t("loyaltyReward")}</p>
       <div className="mt-4 flex gap-2">
-        <Button variant="vermilion" disabled={busy || full} onClick={onStamp}>
+        <Button variant="accent" disabled={busy || full} onClick={onStamp}>
           {t("loyaltyAdd")}
         </Button>
         <Button variant="line" disabled={busy || !full} onClick={onRedeem}>

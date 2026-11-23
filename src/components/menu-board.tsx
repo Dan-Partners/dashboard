@@ -48,14 +48,14 @@ export function MenuBoard() {
   return (
     <div>
       <PageTitle title={t("menuTitle")} gloss={locale === "zh-Hant" ? "Menu" : "餐牌"} />
-      {notice ? <p className="mb-4 text-sm text-vermilion">{notice}</p> : null}
+      {notice ? <p className="mb-4 text-sm text-accent-ink">{notice}</p> : null}
       <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
         {categories.map((category) => (
           <button
             key={category.id}
             type="button"
             aria-pressed={category.id === active}
-            className={`min-h-11 shrink-0 cursor-pointer border px-3 ${category.id === active ? "border-vermilion text-ink" : "border-rule text-ink-soft"}`}
+            className={`min-h-11 shrink-0 cursor-pointer border px-3 ${category.id === active ? "border-ink bg-ink text-paper" : "border-rule text-ink-soft hover:bg-paper-deep"}`}
             onClick={() => setCategoryId(category.id)}
           >
             <span className="font-display">{primaryName(category.nameEn, category.nameZh, locale)}</span>
@@ -69,14 +69,14 @@ export function MenuBoard() {
             <div className="flex items-start gap-3 py-3">
               <button type="button" className="min-w-0 flex-1 cursor-pointer text-left" onClick={() => setEditing(item)}>
                 <span className="flex items-baseline gap-3">
-                  <span className="w-10 shrink-0 font-display text-xl text-vermilion">{item.number}</span>
+                  <span className="w-10 shrink-0 font-display text-xl text-accent-ink">{item.number}</span>
                   <span className={item.soldOut ? "line-through" : undefined}>{primaryName(item.nameEn, item.nameZh, locale)}</span>
                   <span className="h-px min-w-6 flex-1 border-b border-dotted border-rule" />
                   <span className="font-display">{formatPence(item.pricePence)}</span>
                 </span>
                 <span className="mt-1 flex gap-3 pl-[3.25rem] text-sm text-ink-soft">
                   <span className="font-zh">{secondaryName(item.nameEn, item.nameZh, locale)}</span>
-                  {item.soldOut ? <span className="font-display tracking-[0.14em] text-vermilion uppercase">{t("menuSoldOut")}</span> : null}
+                  {item.soldOut ? <span className="font-display tracking-[0.14em] text-accent-ink uppercase">{t("menuSoldOut")}</span> : null}
                 </span>
                 {item.allergens.length > 0 ? (
                   <span className="mt-1 block pl-[3.25rem] text-xs tracking-wide text-ink-soft uppercase">
@@ -89,7 +89,7 @@ export function MenuBoard() {
                 role="switch"
                 aria-checked={!item.soldOut}
                 aria-label={`${item.number} ${item.nameEn}`}
-                className={`mt-1 min-h-11 min-w-16 cursor-pointer border px-2 font-display text-sm ${item.soldOut ? "border-vermilion text-vermilion" : "border-rule"}`}
+                className={`mt-1 min-h-11 min-w-16 cursor-pointer border px-2 font-display text-sm ${item.soldOut ? "border-accent-ink text-accent-ink" : "border-rule"}`}
                 onClick={() => {
                   setNotice(null);
                   void shop.updateItem(item.id, { soldOut: !item.soldOut }).catch((error: unknown) => {
@@ -234,7 +234,7 @@ function EditDish({ item, onClose, onSaved }: { item: MenuItem; onClose: () => v
           {t("menuSoldOut")}
         </label>
         {error ? (
-          <p role="alert" className="text-sm text-vermilion">
+          <p role="alert" className="text-sm text-accent-ink">
             {error}
           </p>
         ) : null}
@@ -242,7 +242,7 @@ function EditDish({ item, onClose, onSaved }: { item: MenuItem; onClose: () => v
           <Button type="button" variant="ghost" className="flex-1" onClick={onClose}>
             {t("cancel")}
           </Button>
-          <Button type="submit" variant="vermilion" className="flex-1" disabled={busy}>
+          <Button type="submit" variant="accent" className="flex-1" disabled={busy}>
             {t("menuSave")}
           </Button>
         </div>

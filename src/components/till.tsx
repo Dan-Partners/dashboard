@@ -137,51 +137,53 @@ export function Till() {
     <div>
       <PageTitle title={t("tillTitle")} gloss={locale === "zh-Hant" ? "Till" : "收銀"} />
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <section className="border border-rule bg-paper-raised p-4">
-          <div className="flex flex-wrap gap-2">
-            <Toggle pressed={source === "counter"} onClick={() => setSource("counter")} label={t("tillCounter")} />
-            <Toggle pressed={source === "phone"} onClick={() => setSource("phone")} label={t("tillPhoneOrder")} />
-            <Toggle pressed={fulfilment === "collection"} onClick={() => setFulfilment("collection")} label={t("fulfilCollection")} />
-            <Toggle pressed={fulfilment === "delivery"} onClick={() => setFulfilment("delivery")} label={t("fulfilDelivery")} />
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <Field label={t("tillPhone")} value={phone} onChange={setPhone} inputMode="tel" />
-            <Field label={t("tillName")} value={name} onChange={setName} />
-            {fulfilment === "delivery" ? (
-              <div className="sm:col-span-2">
-                <Field label={t("tillAddress")} value={address} onChange={setAddress} />
-              </div>
-            ) : null}
-            <div className="sm:col-span-2">
-              <Field label={t("tillNotes")} value={notes} onChange={setNotes} />
+        <div className="torn-wrap">
+          <section className="torn border border-b-0 border-rule bg-paper-raised p-4">
+            <div className="flex flex-wrap gap-2">
+              <Toggle pressed={source === "counter"} onClick={() => setSource("counter")} label={t("tillCounter")} />
+              <Toggle pressed={source === "phone"} onClick={() => setSource("phone")} label={t("tillPhoneOrder")} />
+              <Toggle pressed={fulfilment === "collection"} onClick={() => setFulfilment("collection")} label={t("fulfilCollection")} />
+              <Toggle pressed={fulfilment === "delivery"} onClick={() => setFulfilment("delivery")} label={t("fulfilDelivery")} />
             </div>
-          </div>
-          <ul className="mt-5 divide-y divide-rule border-y border-rule">
-            {lines.length === 0 ? <li className="py-4 text-ink-soft">{t("tillEmpty")}</li> : null}
-            {lines.map((line) => (
-              <li key={line.number} className="flex items-center gap-3 py-3">
-                <span className="w-10 font-display text-xl text-vermilion">{line.number}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block">{primaryName(line.nameEn, line.nameZh, locale)}</span>
-                  <span className="font-zh text-sm text-ink-soft">{secondaryName(line.nameEn, line.nameZh, locale)}</span>
-                </span>
-                <span className="flex items-center gap-1">
-                  <IconButton label="−" onClick={() => changeQty(line.number, -1)} />
-                  <span className="w-6 text-center font-display">{line.qty}</span>
-                  <IconButton label="+" onClick={() => changeQty(line.number, 1)} />
-                </span>
-                <span className="w-16 text-right font-display">{formatPence(line.qty * line.unitPricePence)}</span>
-                <button type="button" className="min-h-11 cursor-pointer px-1 text-sm text-ink-soft" onClick={() => setLines((current) => current.filter((entryLine) => entryLine.number !== line.number))}>
-                  {t("tillRemove")}
-                </button>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-4 flex items-baseline justify-between">
-            <span className="font-display text-[0.72rem] tracking-[0.18em] uppercase text-ink-soft">{t("tillTotal")}</span>
-            <span className="font-display text-4xl">{formatPence(total)}</span>
-          </div>
-        </section>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Field label={t("tillPhone")} value={phone} onChange={setPhone} inputMode="tel" />
+              <Field label={t("tillName")} value={name} onChange={setName} />
+              {fulfilment === "delivery" ? (
+                <div className="sm:col-span-2">
+                  <Field label={t("tillAddress")} value={address} onChange={setAddress} />
+                </div>
+              ) : null}
+              <div className="sm:col-span-2">
+                <Field label={t("tillNotes")} value={notes} onChange={setNotes} />
+              </div>
+            </div>
+            <ul className="mt-5 divide-y divide-rule border-y border-rule">
+              {lines.length === 0 ? <li className="py-4 text-ink-soft">{t("tillEmpty")}</li> : null}
+              {lines.map((line) => (
+                <li key={line.number} className="flex items-center gap-3 py-3">
+                  <span className="w-10 font-display text-xl text-accent-ink">{line.number}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block">{primaryName(line.nameEn, line.nameZh, locale)}</span>
+                    <span className="font-zh text-sm text-ink-soft">{secondaryName(line.nameEn, line.nameZh, locale)}</span>
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <IconButton label="−" onClick={() => changeQty(line.number, -1)} />
+                    <span className="w-6 text-center font-display">{line.qty}</span>
+                    <IconButton label="+" onClick={() => changeQty(line.number, 1)} />
+                  </span>
+                  <span className="w-16 text-right font-display">{formatPence(line.qty * line.unitPricePence)}</span>
+                  <button type="button" className="min-h-11 cursor-pointer px-1 text-sm text-ink-soft" onClick={() => setLines((current) => current.filter((entryLine) => entryLine.number !== line.number))}>
+                    {t("tillRemove")}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-4 flex items-baseline justify-between">
+              <span className="font-display text-[0.72rem] tracking-[0.18em] uppercase text-ink-soft">{t("tillTotal")}</span>
+              <span className="font-display text-4xl">{formatPence(total)}</span>
+            </div>
+          </section>
+        </div>
 
         <section className="lg:sticky lg:top-20">
           <div className="border border-rule bg-paper-raised px-4 py-3" aria-live="polite">
@@ -190,14 +192,14 @@ export function Till() {
             <p className="mt-2 min-h-6 font-zh text-ink-soft">{previewText(exact, locale)}</p>
           </div>
           {error ? (
-            <p className="mt-3 border-l-2 border-vermilion pl-3 text-sm" role="alert">
+            <p className="mt-3 border-l-2 border-accent pl-3 text-sm" role="alert">
               {error}
             </p>
           ) : null}
           {sent ? (
             <p className="mt-3 text-sm">
               {t("tillSent")} #{sent.number}.{" "}
-              <Link href={`/shop/ticket?order=${sent.id}`} className="text-vermilion underline">
+              <Link href={`/shop/ticket?order=${sent.id}`} className="text-accent-ink underline">
                 {t("viewTicket")}
               </Link>
             </p>
@@ -219,7 +221,7 @@ export function Till() {
             <Button variant="line" onClick={() => dispatch("clear")}>
               {t("tillClear")}
             </Button>
-            <Button variant="vermilion" className="col-span-2" onClick={addDish}>
+            <Button variant="accent" className="col-span-2" onClick={addDish}>
               {t("tillAdd")}
             </Button>
           </div>

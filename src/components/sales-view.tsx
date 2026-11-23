@@ -40,7 +40,7 @@ export function SalesView() {
         <RangeButton pressed={range === "today"} label={t("salesToday")} onClick={() => setRange("today")} />
         <RangeButton pressed={range === "week"} label={t("salesWeek")} onClick={() => setRange("week")} />
       </div>
-      {error ? <p className="mt-4 text-vermilion">{t("errGeneric")}</p> : null}
+      {error ? <p className="mt-4 text-accent-ink">{t("errGeneric")}</p> : null}
       {summary && summary.orderCount === 0 ? <p className="mt-8 text-ink-soft">{t("salesEmpty")}</p> : null}
       {summary && summary.orderCount > 0 ? (
         <>
@@ -53,7 +53,7 @@ export function SalesView() {
             <h2 className="font-display text-2xl">{t("salesSplit")}</h2>
             <div className="mt-3 flex h-3 overflow-hidden border border-rule" aria-hidden>
               <span className="bg-ink" style={{ width: `${(summary.collectionCount / summary.orderCount) * 100}%` }} />
-              <span className="bg-vermilion" style={{ width: `${(summary.deliveryCount / summary.orderCount) * 100}%` }} />
+              <span className="bg-accent" style={{ width: `${(summary.deliveryCount / summary.orderCount) * 100}%` }} />
             </div>
             <p className="mt-2 text-sm">
               {t("fulfilCollection")} {summary.collectionCount}
@@ -67,14 +67,16 @@ export function SalesView() {
               {summary.topItems.map((item) => (
                 <li key={item.number} className="py-3">
                   <div className="flex items-baseline gap-3">
-                    <span className="w-10 font-display text-vermilion">{item.number}</span>
+                    <span className="w-10 font-display text-accent-ink">{item.number}</span>
                     <span className="min-w-0 flex-1">
                       {primaryName(item.nameEn, item.nameZh, locale)}
                       <span className="ml-2 font-zh text-sm text-ink-soft">{secondaryName(item.nameEn, item.nameZh, locale)}</span>
                     </span>
                     <span className="font-display">×{item.qty}</span>
                   </div>
-                  <div className="mt-2 ml-[3.25rem] h-px bg-vermilion" style={{ width: `${Math.max(8, (item.qty / maxQty) * 100)}%` }} />
+                  <div className="mt-2 ml-[3.25rem]">
+                    <div className="h-0.5 bg-accent" style={{ width: `${Math.max(8, (item.qty / maxQty) * 100)}%` }} />
+                  </div>
                   <p className="mt-1 ml-[3.25rem] text-sm text-ink-soft">{formatPence(item.totalPence)}</p>
                 </li>
               ))}

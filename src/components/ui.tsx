@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { DanMark } from "./mark";
 
 export function Splash() {
@@ -30,11 +30,11 @@ export function PageTitle({
   className?: string;
 }) {
   return (
-    <header className={className}>
+    <header className={`border-b-[3px] border-ink pb-3 ${className}`}>
       {kicker ? <Kicker>{kicker}</Kicker> : null}
       <div className="mt-1 flex items-baseline gap-3">
         <h1 className="font-display text-4xl leading-none md:text-5xl">{title}</h1>
-        {gloss ? <p className="font-zh text-lg text-vermilion">{gloss}</p> : null}
+        {gloss ? <p className="font-zh text-lg text-accent-ink">{gloss}</p> : null}
       </div>
     </header>
   );
@@ -44,10 +44,10 @@ export function Button({
   variant = "ink",
   className = "",
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "ink" | "vermilion" | "ghost" | "line" }) {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "ink" | "accent" | "ghost" | "line" }) {
   const styles = {
     ink: "bg-ink text-paper hover:bg-ink/90",
-    vermilion: "bg-vermilion text-paper hover:bg-vermilion-deep",
+    accent: "bg-accent text-on-accent hover:bg-accent-deep",
     ghost: "bg-transparent text-ink hover:bg-paper-deep",
     line: "border border-rule bg-paper-raised text-ink hover:bg-paper-deep",
   }[variant];
@@ -80,7 +80,7 @@ export function TextField({
         className="mt-2 w-full min-h-12 border border-rule bg-paper-raised px-3 font-body text-lg text-ink outline-none placeholder:text-ink-soft/70"
       />
       {error ? (
-        <p id={`${fieldId}-error`} className="mt-2 text-sm text-vermilion" role="alert">
+        <p id={`${fieldId}-error`} className="mt-2 text-sm text-accent-ink" role="alert">
           {error}
         </p>
       ) : hint ? (
@@ -104,6 +104,7 @@ export function Dialog({
   children: React.ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
 
   useEffect(() => {
     const el = ref.current;
@@ -119,14 +120,14 @@ export function Dialog({
     <dialog
       ref={ref}
       className="sheet"
-      aria-labelledby="dialog-title"
+      aria-labelledby={titleId}
       onClose={onClose}
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
       <div className="border-b border-rule px-5 py-4">
-        <h2 id="dialog-title" className="font-display text-3xl leading-none">
+        <h2 id={titleId} className="font-display text-3xl leading-none">
           {title}
         </h2>
       </div>

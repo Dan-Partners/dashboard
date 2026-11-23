@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Bodoni_Moda, IBM_Plex_Mono, Source_Serif_4 } from "next/font/google";
+import { ThemeSync } from "@/components/theme-sync";
 import { ShopProvider } from "@/lib/shop-context";
+import { THEME_BOOT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
 const bodoni = Bodoni_Moda({
@@ -42,8 +44,13 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${bodoni.variable} ${sourceSerif.variable} ${plex.variable} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        {/* Paints a saved theme before first paint. See THEME_BOOT_SCRIPT for what it will accept. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body className="min-h-full">
-        <div className="no-print h-1.5 bg-vermilion" aria-hidden />
+        <ThemeSync />
+        <div className="no-print h-1.5 bg-seal" aria-hidden />
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:bg-paper focus:px-3 focus:py-2">
           Skip to the counter
         </a>

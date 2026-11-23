@@ -9,6 +9,12 @@ export default function manifest(): MetadataRoute.Manifest {
     display: "standalone",
     background_color: "#F5EEDC",
     theme_color: "#B83A2E",
-    icons: [{ src: "/icon.svg", sizes: "any", type: "image/svg+xml" }],
+    // Rendered from the SVG by scripts/render-icons.mjs. iOS uses src/app/apple-icon.png.
+    icons: [
+      { src: "/icon.svg", sizes: "any", type: "image/svg+xml" },
+      { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      { src: "/icons/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+    ],
   };
 }

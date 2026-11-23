@@ -36,7 +36,7 @@ export function OrdersBoard() {
       <PageTitle title={t("ordersTitle")} gloss={locale === "zh-Hant" ? "Orders" : "訂單"} />
       {shop.persisted.session?.mode === "demo" ? <p className="mb-5 text-sm text-ink-soft">{t("ordersDemoNote")}</p> : null}
       {cardError ? (
-        <p className="mb-4 border-l-2 border-vermilion pl-3 text-sm" role="alert">
+        <p className="mb-4 border-l-2 border-accent pl-3 text-sm" role="alert">
           {cardError}
         </p>
       ) : null}
@@ -47,7 +47,7 @@ export function OrdersBoard() {
             key={column.status}
             type="button"
             aria-pressed={focus === column.status}
-            className={`min-h-11 cursor-pointer border px-1 py-1 text-center font-display text-sm leading-tight ${focus === column.status ? "border-vermilion text-vermilion" : "border-rule text-ink-soft"}`}
+            className={`min-h-11 cursor-pointer border px-1 py-1 text-center font-display text-sm leading-tight ${focus === column.status ? "border-ink bg-ink text-paper" : "border-rule text-ink-soft"}`}
             onClick={() => setFocus(column.status)}
           >
             {t(column.label)}
@@ -63,7 +63,7 @@ export function OrdersBoard() {
             .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
           return (
             <section key={column.status} className={focus === column.status ? "" : "hidden md:block"} aria-label={t(column.label)}>
-              <div className="mb-3 flex items-baseline justify-between border-b border-rule pb-2">
+              <div className="mb-3 flex items-baseline justify-between border-b border-ink pb-2">
                 <h2 className="font-display text-2xl leading-none">{t(column.label)}</h2>
                 <span className="font-display text-ink-soft">{list.length}</span>
               </div>
@@ -104,79 +104,81 @@ function Docket({
   const next = nextStep(order, t);
 
   return (
-    <article className={`border border-rule bg-paper-raised px-3 py-3 ${order.status === "new" ? "border-t-[3px] border-t-vermilion" : "border-t-[3px] border-t-ink/15"}`}>
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="font-display text-2xl leading-none">#{order.number}</h3>
-        <p className="text-sm text-ink-soft">{ago(order.createdAt, now, locale, t("justNow"))}</p>
-      </div>
-      <p className="mt-2 font-display text-[0.72rem] tracking-[0.16em] text-ink-soft uppercase">
-        {t(order.source === "online" ? "sourceOnline" : order.source === "phone" ? "sourcePhone" : "sourceCounter")}
-        {" · "}
-        {t(order.fulfilment === "delivery" ? "fulfilDelivery" : "fulfilCollection")}
-      </p>
-      <ul className="mt-3 space-y-1">
-        {order.lines.map((line) => (
-          <li key={`${line.number}-${line.nameEn}`} className="flex gap-2 text-sm">
-            <span className="font-display text-vermilion">{line.number}</span>
-            <span className="min-w-0 flex-1">
-              {primaryName(line.nameEn, line.nameZh, locale)}
-              <span className="ml-2 font-zh text-ink-soft">{secondaryName(line.nameEn, line.nameZh, locale)}</span>
-            </span>
-            <span>×{line.qty}</span>
-          </li>
-        ))}
-      </ul>
-      {order.customerName || order.phone ? (
-        <p className="mt-3 text-sm">
-          {order.customerName}
-          {order.phone ? <span className="text-ink-soft"> · {order.phone}</span> : null}
+    <div className="torn-wrap">
+      <article className={`torn border border-b-0 border-rule bg-paper-raised px-3 py-3 ${order.status === "new" ? "border-t-[3px] border-t-accent" : "border-t-[3px] border-t-ink/15"}`}>
+        <div className="flex items-baseline justify-between gap-3">
+          <h3 className="font-display text-2xl leading-none">#{order.number}</h3>
+          <p className="text-sm text-ink-soft">{ago(order.createdAt, now, locale, t("justNow"))}</p>
+        </div>
+        <p className="mt-2 font-display text-[0.72rem] tracking-[0.16em] text-ink-soft uppercase">
+          {t(order.source === "online" ? "sourceOnline" : order.source === "phone" ? "sourcePhone" : "sourceCounter")}
+          {" · "}
+          {t(order.fulfilment === "delivery" ? "fulfilDelivery" : "fulfilCollection")}
         </p>
-      ) : null}
-      {order.address ? <p className="text-sm text-ink-soft">{order.address}</p> : null}
-      {order.notes ? <p className="mt-1 text-sm italic text-ink-soft">{order.notes}</p> : null}
-      <p className="mt-3 font-display text-xl">{formatPence(order.totalPence)}</p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {next ? (
-          <Button
-            variant="vermilion"
-            disabled={busy}
-            onClick={() => {
-              setBusy(true);
-              onError(null);
-              void shop.setOrderStatus(order.id, next.status).catch((error: unknown) => {
-                onError(isDanError(error) ? error.message : t("errGeneric"));
-              }).finally(() => setBusy(false));
-            }}
-          >
-            {next.label}
-          </Button>
+        <ul className="mt-3 space-y-1">
+          {order.lines.map((line) => (
+            <li key={`${line.number}-${line.nameEn}`} className="flex gap-2 text-sm">
+              <span className="font-display text-accent-ink">{line.number}</span>
+              <span className="min-w-0 flex-1">
+                {primaryName(line.nameEn, line.nameZh, locale)}
+                <span className="ml-2 font-zh text-ink-soft">{secondaryName(line.nameEn, line.nameZh, locale)}</span>
+              </span>
+              <span>×{line.qty}</span>
+            </li>
+          ))}
+        </ul>
+        {order.customerName || order.phone ? (
+          <p className="mt-3 text-sm">
+            {order.customerName}
+            {order.phone ? <span className="text-ink-soft"> · {order.phone}</span> : null}
+          </p>
         ) : null}
-        <Link href={`/shop/ticket?order=${order.id}`} className="inline-flex min-h-11 items-center px-2 font-display text-ink-soft">
-          {t("viewTicket")}
-        </Link>
-        {order.phone ? (
-          rewardReady ? (
-            <Link href="/shop/loyalty" className="inline-flex min-h-11 items-center px-2 font-display text-vermilion">
-              {t("rewardWaiting")}
-            </Link>
-          ) : (
+        {order.address ? <p className="text-sm text-ink-soft">{order.address}</p> : null}
+        {order.notes ? <p className="mt-1 text-sm italic text-ink-soft">{order.notes}</p> : null}
+        <p className="mt-3 font-display text-xl">{formatPence(order.totalPence)}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {next ? (
             <Button
-              variant="line"
+              variant="accent"
               disabled={busy}
               onClick={() => {
                 setBusy(true);
                 onError(null);
-                void shop.addStamp(order.phone).catch((error: unknown) => {
+                void shop.setOrderStatus(order.id, next.status).catch((error: unknown) => {
                   onError(isDanError(error) ? error.message : t("errGeneric"));
                 }).finally(() => setBusy(false));
               }}
             >
-              {t("stampThis")}
+              {next.label}
             </Button>
-          )
-        ) : null}
-      </div>
-    </article>
+          ) : null}
+          <Link href={`/shop/ticket?order=${order.id}`} className="inline-flex min-h-11 items-center px-2 font-display text-ink-soft">
+            {t("viewTicket")}
+          </Link>
+          {order.phone ? (
+            rewardReady ? (
+              <Link href="/shop/loyalty" className="inline-flex min-h-11 items-center px-2 font-display text-accent-ink">
+                {t("rewardWaiting")}
+              </Link>
+            ) : (
+              <Button
+                variant="line"
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true);
+                  onError(null);
+                  void shop.addStamp(order.phone).catch((error: unknown) => {
+                    onError(isDanError(error) ? error.message : t("errGeneric"));
+                  }).finally(() => setBusy(false));
+                }}
+              >
+                {t("stampThis")}
+              </Button>
+            )
+          ) : null}
+        </div>
+      </article>
+    </div>
   );
 }
 
