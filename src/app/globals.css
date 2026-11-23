@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-paper: #f5eedc;
+  --color-paper-deep: #e7dcc4;
+  --color-paper-raised: #fbf6ea;
+  --color-ink: #1c1612;
+  --color-ink-soft: #5e534a;
+  --color-vermilion: #b83a2e;
+  --color-vermilion-deep: #8c2b22;
+  --color-rule: rgb(28 22 18 / 16%);
+  --font-display: var(--font-bodoni), "Didot", "Bodoni MT", "Times New Roman", serif;
+  --font-body: var(--font-source), "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  --font-ticket: var(--font-plex), "Courier New", ui-monospace, monospace;
+  --font-zh: "Noto Serif TC", "Noto Serif CJK TC", "Songti TC", "PMingLiU", serif;
+}
+
+@font-face {
+  font-family: "Noto Serif TC";
+  src: url("/fonts/noto-serif-tc.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+html {
+  color-scheme: light;
+  background: var(--color-paper);
+}
+
+body {
+  min-height: 100dvh;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: #b83a2e;
+  color: #f5eedc;
+}
+
+:focus-visible {
+  outline: 2px solid #b83a2e;
+  outline-offset: 2px;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+dialog.sheet {
+  width: min(36rem, calc(100% - 2rem));
+  margin: auto;
+  padding: 0;
+  border: 1px solid rgb(28 22 18 / 22%);
+  background: #f5eedc;
+  color: inherit;
+}
+
+dialog.sheet::backdrop {
+  background: rgb(28 22 18 / 42%);
+}
+
+.ticket-slip {
+  width: 80mm;
+  max-width: 100%;
+  background: #fffef8;
+  color: #1a1612;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white;
+  }
+
+  .ticket-print {
+    position: static;
+  }
+}
