@@ -215,7 +215,7 @@ The mark is 單 drawn from flat strokes, with the last stroke falling as a torn 
 node scripts/render-icons.mjs
 ```
 
-The brand masters (app icon, Instagram square and circle) and the design language live in the [wiki](https://github.com/Dan-Partners/wiki), under `Attachments/` and `02-Engineering/Design-System/`.
+The brand masters (app icon, Instagram square and circle) and the design language live in the [wiki](https://github.com/DanPartners/wiki), under `Attachments/` and `02-Engineering/Design-System/`.
 
 ## Fonts
 
