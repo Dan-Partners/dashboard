@@ -88,7 +88,7 @@ export function ConnectScreen() {
         <DanMark size={76} title="Dan" />
         <div className="min-w-0 pb-1">
           <p className="font-zh text-sm tracking-[0.42em] text-accent-ink">{t("appPun")}</p>
-          <p className="font-display text-6xl leading-none">Dan</p>
+          <p className="font-wordmark text-6xl leading-none">Dan</p>
         </div>
       </div>
       {/* The name, set as its dictionary entry. */}

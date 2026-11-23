@@ -1,9 +1,22 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const token = (page: Page, name: string) =>
   page.evaluate((property) => document.documentElement.style.getPropertyValue(property), name);
 
 const background = (page: Page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+
+/**
+ * Reloads with the app's script files blocked. React never starts, so anything
+ * on <html> afterwards was put there by the inline script in <head>.
+ */
+async function reloadWithoutReact(page: Page) {
+  await page.route("**/_next/static/**/*.js", (route) => route.abort());
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.unroute("**/_next/static/**/*.js");
+  expect(await page.evaluate(() => document.documentElement.dataset.dan)).toBeUndefined();
+}
+
+const fontOf = (locator: Locator) => locator.evaluate((element) => getComputedStyle(element).fontFamily);
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -22,9 +35,11 @@ test("a theme picked on the connect screen is applied, saved, and painted before
   expect(await background(page)).toBe("rgb(27, 25, 22)");
   await page.getByRole("button", { name: "Done" }).click();
 
-  // Stop the page as soon as the document commits: the colours must already be there.
-  await page.reload({ waitUntil: "commit" });
+  // With React kept from loading, the colours must already be there.
+  await reloadWithoutReact(page);
   expect(await token(page, "--dan-paper")).toBe("#1b1916");
+  expect(await background(page)).toBe("rgb(27, 25, 22)");
+  await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");
   expect(await background(page)).toBe("rgb(27, 25, 22)");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "ink");
@@ -89,12 +104,50 @@ test("a custom theme keeps text readable, rejects half a colour, and can be rese
   expect(await background(page)).toBe("rgb(245, 238, 220)");
 });
 
+test("the typeface can be changed and is saved, and the wordmark keeps the brand serif", async ({ page }) => {
+  const heading = page.getByRole("heading", { name: "Connect" });
+  const wordmark = page.getByText("Dan", { exact: true }).first();
+  // Plex is the default.
+  expect(await fontOf(heading)).toMatch(/IBM.Plex.Sans/i);
+  expect(await fontOf(page.locator("body"))).toMatch(/IBM.Plex.Sans/i);
+  expect(await fontOf(wordmark)).toMatch(/Bodoni/i);
+
+  await page.getByTestId("theme-button").click();
+  await expect(page.getByTestId("typeface-plex")).toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("typeface-inter").click();
+  await expect(page.locator("html")).toHaveAttribute("data-typeface", "inter");
+  expect(await fontOf(heading)).toMatch(/Inter/i);
+  expect(await fontOf(wordmark)).toMatch(/Bodoni/i);
+  // A typeface is independent of the colours.
+  await page.getByTestId("theme-jade").click();
+  await expect(page.locator("html")).toHaveAttribute("data-typeface", "inter");
+  await page.getByRole("button", { name: "Done" }).click();
+
+  // Applied before React loads, like the colours.
+  await reloadWithoutReact(page);
+  expect(await page.locator("html").getAttribute("data-typeface")).toBe("inter");
+  await page.reload();
+  await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");
+  expect(await fontOf(heading)).toMatch(/Inter/i);
+
+  // The earlier look is still there to pick, and resetting colours leaves the typeface alone.
+  await page.getByTestId("theme-button").click();
+  await page.getByTestId("typeface-classic").click();
+  expect(await fontOf(heading)).toMatch(/Bodoni/i);
+  expect(await fontOf(page.locator("body"))).toMatch(/Source.Serif/i);
+  await page.getByRole("button", { name: "Customise" }).click();
+  await page.getByRole("button", { name: "Reset to Dan" }).click();
+  await expect(page.getByTestId("theme-dan")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("typeface-classic")).toHaveAttribute("aria-pressed", "true");
+});
+
 test("tampered storage cannot inject styles", async ({ page }) => {
   await page.evaluate(() => {
     localStorage.setItem(
       "dan.theme",
       JSON.stringify({
         scheme: "dark",
+        typeface: 'x"] {} body { display: none } [x="',
         vars: {
           "--dan-paper": "#000000;} body{display:none} :root{--x:1",
           "--dan-ink": "url(https://example.invalid/track)",
@@ -103,13 +156,22 @@ test("tampered storage cannot inject styles", async ({ page }) => {
       }),
     );
     const saved = JSON.parse(localStorage.getItem("dan.v1") ?? "{}");
-    saved.theme = { preset: "custom", custom: { paper: "red;display:none", ink: "#zzzzzz", accent: "expression(alert(1))", chrome: "everywhere" } };
+    saved.theme = {
+      preset: "custom",
+      custom: { paper: "red;display:none", ink: "#zzzzzz", accent: "expression(alert(1))", chrome: "everywhere" },
+      typeface: "Comic Sans MS, cursive; } body { display: none",
+    };
     localStorage.setItem("dan.v1", JSON.stringify(saved));
   });
-  await page.reload({ waitUntil: "commit" });
+  // The inline script ran and applied none of it.
+  await reloadWithoutReact(page);
   expect(await token(page, "--dan-paper")).toBe("");
   expect(await token(page, "--dan-ink")).toBe("");
+  expect(await page.locator("html").getAttribute("data-typeface")).toBeNull();
+  expect(await background(page)).toBe("rgb(245, 238, 220)");
+  await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");
+  await expect(page.locator("html")).toHaveAttribute("data-typeface", "plex");
   // Every bad value fell back to the Dan preset.
   expect(await token(page, "--dan-paper")).toBe("#f5eedc");
   expect(await token(page, "--dan-ink")).toBe("#1b1916");

@@ -15,9 +15,10 @@ export function applyTheme(choice: ThemeChoice) {
   for (const [name, value] of Object.entries(resolved.vars)) root.style.setProperty(name, value);
   root.style.colorScheme = resolved.scheme;
   root.dataset.theme = choice.preset;
+  root.dataset.typeface = choice.typeface;
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", resolved.page.paper);
   try {
-    window.localStorage.setItem(THEME_CACHE_KEY, serializeResolved(resolved));
+    window.localStorage.setItem(THEME_CACHE_KEY, serializeResolved(resolved, choice.typeface));
   } catch {
     // Private mode or a full disk. The theme still applies for this visit.
   }

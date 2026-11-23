@@ -8,7 +8,7 @@ export function Splash() {
     <div className="flex min-h-dvh items-center justify-center">
       <div className="flex items-center gap-3">
         <DanMark size={44} />
-        <p className="font-display text-4xl leading-none">Dan</p>
+        <p className="font-wordmark text-4xl leading-none">Dan</p>
       </div>
     </div>
   );

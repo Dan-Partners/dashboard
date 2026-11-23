@@ -7,7 +7,10 @@
  * unreadable text: derived colours are pushed apart until they meet a contrast
  * floor.
  *
- * The brand mark is not part of a theme. The seal stays vermilion.
+ * A typeface is chosen separately and works with any colours.
+ *
+ * The brand mark is not part of a theme. The seal stays vermilion and the
+ * word "Dan" stays in the brand serif.
  */
 
 export const BRAND = {
@@ -30,9 +33,28 @@ export type ThemeSpec = {
   chrome: ChromeMode;
 };
 
+/**
+ * Typefaces a person can pick. The font stacks live in globals.css under
+ * [data-typeface]; only the id is stored, so storage never carries a font name.
+ * `sample` is for drawing a typeface's own name in the picker.
+ */
+export const TYPEFACE_IDS = ["plex", "inter", "dm", "source", "classic"] as const;
+export type TypefaceId = (typeof TYPEFACE_IDS)[number];
+
+export const TYPEFACES: Record<TypefaceId, { name: string; sample: string; weight: number }> = {
+  plex: { name: "Plex", sample: "var(--font-plex-sans), sans-serif", weight: 500 },
+  inter: { name: "Inter", sample: "var(--font-inter), sans-serif", weight: 600 },
+  dm: { name: "DM Sans", sample: "var(--font-dm-sans), sans-serif", weight: 500 },
+  source: { name: "Source Serif", sample: "var(--font-source), serif", weight: 600 },
+  classic: { name: "Bodoni", sample: "var(--font-bodoni), serif", weight: 500 },
+};
+
+export const DEFAULT_TYPEFACE: TypefaceId = "plex";
+
 export type ThemeChoice = {
   preset: PresetId | "custom";
   custom: ThemeSpec;
+  typeface: TypefaceId;
 };
 
 export const PRESETS: Record<PresetId, ThemeSpec> = {
@@ -44,7 +66,7 @@ export const PRESETS: Record<PresetId, ThemeSpec> = {
   contrast: { paper: "#ffffff", ink: "#000000", accent: "#9e2a1f", chrome: "ink" },
 };
 
-export const DEFAULT_THEME: ThemeChoice = { preset: "dan", custom: PRESETS.dan };
+export const DEFAULT_THEME: ThemeChoice = { preset: "dan", custom: PRESETS.dan, typeface: DEFAULT_TYPEFACE };
 
 /**
  * Contrast floors, as WCAG ratios. Body text aims for 7:1 (AAA). Where the
@@ -61,6 +83,10 @@ export function isHex(value: unknown): value is string {
 
 function isPresetId(value: unknown): value is PresetId {
   return typeof value === "string" && (PRESET_IDS as readonly string[]).includes(value);
+}
+
+export function isTypefaceId(value: unknown): value is TypefaceId {
+  return typeof value === "string" && (TYPEFACE_IDS as readonly string[]).includes(value);
 }
 
 function isChromeMode(value: unknown): value is ChromeMode {
@@ -84,6 +110,7 @@ export function normalizeTheme(value: unknown): ThemeChoice {
   return {
     preset: record.preset === "custom" || isPresetId(record.preset) ? record.preset : "dan",
     custom: normalizeSpec(record.custom),
+    typeface: isTypefaceId(record.typeface) ? record.typeface : DEFAULT_TYPEFACE,
   };
 }
 
@@ -230,14 +257,17 @@ export function resolveTheme(input: ThemeSpec): ResolvedTheme {
  */
 export const THEME_CACHE_KEY = "dan.theme";
 
-export function serializeResolved(resolved: ResolvedTheme): string {
-  return JSON.stringify({ scheme: resolved.scheme, vars: resolved.vars });
+export function serializeResolved(resolved: ResolvedTheme, typeface: TypefaceId = DEFAULT_TYPEFACE): string {
+  return JSON.stringify({ scheme: resolved.scheme, vars: resolved.vars, typeface });
 }
 
 /**
  * Runs in <head> before first paint. It trusts nothing in storage: a property
- * is applied only if its name is a `--dan-` token and its value is a hex colour.
+ * is applied only if its name is a `--dan-` token and its value is a hex colour,
+ * and a typeface only if it is one of the known ids.
  */
 export const THEME_BOOT_SCRIPT = `(function(){try{var c=JSON.parse(localStorage.getItem(${JSON.stringify(
   THEME_CACHE_KEY,
-)})||"null");if(!c||typeof c.vars!=="object"||!c.vars)return;var s=document.documentElement.style;for(var k in c.vars){var v=c.vars[k];if(/^--dan-[a-z-]+$/.test(k)&&typeof v==="string"&&/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(v))s.setProperty(k,v)}if(c.scheme==="dark"||c.scheme==="light")s.colorScheme=c.scheme}catch(e){}})()`;
+)})||"null");if(!c||typeof c.vars!=="object"||!c.vars)return;var s=document.documentElement.style;for(var k in c.vars){var v=c.vars[k];if(/^--dan-[a-z-]+$/.test(k)&&typeof v==="string"&&/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(v))s.setProperty(k,v)}if(c.scheme==="dark"||c.scheme==="light")s.colorScheme=c.scheme;if(${JSON.stringify(
+  TYPEFACE_IDS,
+)}.indexOf(c.typeface)>=0)document.documentElement.setAttribute("data-typeface",c.typeface)}catch(e){}})()`;

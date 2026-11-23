@@ -9,6 +9,7 @@ import {
   PRESET_IDS,
   PRESETS,
   THEME_BOOT_SCRIPT,
+  TYPEFACE_IDS,
   contrast,
   ensureContrast,
   isHex,
@@ -132,29 +133,68 @@ describe("what storage is allowed to carry", () => {
 
   it("keeps a saved custom theme", () => {
     const custom = { paper: "#101820", ink: "#f2f2f2", accent: "#e0a030", chrome: "ink" };
-    expect(normalizePersisted({ theme: { preset: "custom", custom } }).theme).toEqual({ preset: "custom", custom });
+    expect(normalizePersisted({ theme: { preset: "custom", custom, typeface: "source" } }).theme).toEqual({
+      preset: "custom",
+      custom,
+      typeface: "source",
+    });
+  });
+});
+
+describe("typefaces", () => {
+  it("default to Plex, including for a theme saved before typefaces existed", () => {
+    expect(DEFAULT_THEME.typeface).toBe("plex");
+    expect(normalizeTheme({ preset: "ink", custom: PRESETS.ink }).typeface).toBe("plex");
+  });
+
+  it("only accept a known id, so storage cannot name a font", () => {
+    for (const typeface of ["comic", "plex; } body { display: none", "Plex", 3, null, ["plex"]]) {
+      expect(normalizeTheme({ preset: "dan", typeface }).typeface).toBe("plex");
+    }
+    expect(normalizeTheme({ preset: "dan", typeface: "classic" }).typeface).toBe("classic");
+  });
+
+  it("each have a block of font stacks in globals.css", () => {
+    const css = readFileSync(fileURLToPath(new URL("../app/globals.css", import.meta.url)), "utf8");
+    for (const id of TYPEFACE_IDS) expect(css, id).toContain(`[data-typeface="${id}"] {`);
+    expect(css.match(/\[data-typeface="[a-z]+"\]/g)).toHaveLength(TYPEFACE_IDS.length);
   });
 });
 
 describe("the script that paints before React loads", () => {
   function boot(stored: string | null) {
     const applied: Record<string, string> = {};
+    const attributes: Record<string, string> = {};
     const style = {
       colorScheme: "",
       setProperty(name: string, value: string) {
         applied[name] = value;
       },
     };
+    const documentElement = {
+      style,
+      setAttribute(name: string, value: string) {
+        attributes[name] = value;
+      },
+    };
     const run = new Function("localStorage", "document", THEME_BOOT_SCRIPT);
-    run({ getItem: () => stored }, { documentElement: { style } });
-    return { applied, scheme: style.colorScheme };
+    run({ getItem: () => stored }, { documentElement });
+    return { applied, scheme: style.colorScheme, typeface: attributes["data-typeface"] };
   }
 
-  it("applies a cached theme", () => {
+  it("applies a cached theme and typeface", () => {
     const resolved = resolveTheme(PRESETS.ink);
-    const { applied, scheme } = boot(serializeResolved(resolved));
+    const { applied, scheme, typeface } = boot(serializeResolved(resolved, "inter"));
     expect(applied).toEqual(resolved.vars);
     expect(scheme).toBe("dark");
+    expect(typeface).toBe("inter");
+  });
+
+  it("ignores a typeface it does not know", () => {
+    const resolved = resolveTheme(PRESETS.dan);
+    for (const typeface of ['x"]{} body{display:none}', "toString", 0, ["plex"]]) {
+      expect(boot(JSON.stringify({ scheme: "light", vars: resolved.vars, typeface })).typeface).toBeUndefined();
+    }
   });
 
   it("ignores properties and values that are not theme colours", () => {

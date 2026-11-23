@@ -7,6 +7,8 @@ import {
   DEFAULT_THEME,
   PRESET_IDS,
   PRESETS,
+  TYPEFACE_IDS,
+  TYPEFACES,
   isHex,
   resolveTheme,
   specOf,
@@ -65,6 +67,26 @@ export function ThemeDialog({ open, onClose }: { open: boolean; onClose: () => v
               />
             ))}
           </div>
+          <div className="mt-5">
+            <Kicker>{t("themeTypeface")}</Kicker>
+            <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-5" role="group" aria-label={t("themeTypeface")}>
+              {TYPEFACE_IDS.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={theme.typeface === id}
+                  data-testid={`typeface-${id}`}
+                  onClick={() => setTheme({ ...theme, typeface: id })}
+                  // Each option is drawn in its own typeface.
+                  style={{ fontFamily: TYPEFACES[id].sample, fontWeight: TYPEFACES[id].weight }}
+                  className={`min-h-16 cursor-pointer border px-1 py-2 text-center ${theme.typeface === id ? "border-ink bg-ink text-paper" : "border-rule hover:bg-paper-deep"}`}
+                >
+                  <span className="block text-2xl leading-none">Aa</span>
+                  <span className="mt-1.5 block text-xs leading-tight">{TYPEFACES[id].name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
           <p className="mt-4 text-sm text-ink-soft">{t("themeDeviceNote")}</p>
           <div className="mt-5 flex gap-2">
             <Button
@@ -83,9 +105,10 @@ export function ThemeDialog({ open, onClose }: { open: boolean; onClose: () => v
         // Customising starts from the theme on screen. It becomes "Custom" at the first change.
         <Customise
           spec={specOf(theme)}
-          onChange={(custom) => setTheme({ preset: "custom", custom })}
+          onChange={(custom) => setTheme({ ...theme, preset: "custom", custom })}
           onReset={() => {
-            setTheme(DEFAULT_THEME);
+            // Colours go back to Dan. The typeface is a separate choice and stays.
+            setTheme({ ...DEFAULT_THEME, typeface: theme.typeface });
             setView("choose");
           }}
           onBack={() => setView("choose")}

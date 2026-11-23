@@ -182,7 +182,7 @@ UI copy is English, with Chinese beside the labels that staff already say. The l
 
 | View | What it does |
 | --- | --- |
-| Choose | Six presets and Custom. A choice applies at once, so the counter behind the dialog is the preview. |
+| Choose | Six colour presets and Custom, and five typefaces. A choice applies at once, so the counter behind the dialog is the preview. |
 | Customise | Three colours (background, text, accent) and where the side menu sits (on the background, the accent, or the text colour). It starts from the theme on screen and becomes Custom at the first change. **Reset to Dan** puts the default back. |
 
 | Preset | Look |
@@ -203,7 +203,7 @@ How it works:
 - **The side menu is its own surface.** Inside an element with the `chrome` class the same roles resolve to the side menu's colours, so a button placed there needs no variant.
 - **Saved on the device.** The choice lives in `localStorage` with the rest of `dan.v1`. A small inline script paints a saved theme before React loads, so a reload does not flash the default. A theme shared by every tablet in a shop would need an endpoint on the shop server; it is not in `DanClient`.
 - **Storage is not trusted.** Only six-digit hex colours and known property names are applied, both in the app and in the inline script.
-- **Not themed.** The mark stays vermilion in every theme. The 80mm ticket stays black on white, on screen and in print.
+- **Not themed.** The mark stays vermilion and the word "Dan" stays in its serif in every theme. The 80mm ticket stays black on white, on screen and in print.
 
 ## Mark and icons
 
@@ -219,4 +219,24 @@ The brand masters (app icon, Instagram square and circle) and the design languag
 
 ## Fonts
 
-Bodoni Moda and Source Serif 4 are loaded through `next/font`. Traditional Chinese is a subset of [Noto Serif TC](https://fonts.google.com/noto/specimen/Noto+Serif+TC), shipped in `public/fonts/` under the SIL Open Font License (`public/fonts/OFL.txt`).
+A typeface is picked in the Theme dialog and works with any colours.
+
+| Typeface | Headings and text | Chinese |
+| --- | --- | --- |
+| Plex (default) | IBM Plex Sans | Noto Sans TC |
+| Inter | Inter | Noto Sans TC |
+| DM Sans | DM Sans | Noto Sans TC |
+| Source Serif | Source Serif 4 | Noto Serif TC |
+| Bodoni | Bodoni Moda headings, Source Serif 4 text | Noto Serif TC |
+
+- Components use `font-display` (headings and labels), the body font, and `font-zh`. Each typeface sets those three in a `[data-typeface]` block in [`src/app/globals.css`](src/app/globals.css). Only the typeface's id is stored.
+- **Not themed:** the word "Dan" is the brand wordmark and stays in Bodoni Moda (`font-wordmark`). The ticket stays in IBM Plex Mono (`font-ticket`).
+- Latin fonts are loaded through `next/font`. Only Plex and the wordmark are preloaded; the others are fetched when someone picks them.
+- Traditional Chinese is a subset of [Noto Sans TC](https://fonts.google.com/noto/specimen/Noto+Sans+TC) and [Noto Serif TC](https://fonts.google.com/noto/specimen/Noto+Serif+TC), shipped in `public/fonts/` under the SIL Open Font License (`OFL-noto-sans-tc.txt`, `OFL.txt`). The subsets hold the characters the app's own copy and demo menu use. Anything else a shop types falls back to the device's Chinese font. After adding Chinese copy, rebuild them:
+
+```bash
+pip install fonttools brotli
+python3 scripts/subset-zh-fonts.py "NotoSansTC[wght].ttf" "NotoSerifTC[wght].ttf"
+```
+
+To add a typeface: load it in `src/app/layout.tsx`, add its id to `TYPEFACE_IDS` in `src/lib/theme.ts`, and add its `[data-typeface]` block.

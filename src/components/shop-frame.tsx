@@ -53,7 +53,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
           <DanGlyph height={44} />
           <span>
             <span className="block font-zh text-[10px] tracking-[0.3em] opacity-90">{t("appPun")}</span>
-            <span className="block font-display text-4xl leading-none">Dan</span>
+            <span className="block font-wordmark text-4xl leading-none">Dan</span>
           </span>
         </Link>
         <div className="border-b-[3px] border-ink px-4 pt-5 pb-4">
@@ -96,7 +96,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
           <div className="flex min-w-0 items-center gap-3 md:hidden">
             <DanMark size={32} />
             <div className="min-w-0">
-              <p className="font-display text-2xl leading-none">Dan</p>
+              <p className="font-wordmark text-2xl leading-none">Dan</p>
               <p className="truncate text-sm text-ink-soft">
                 {session.shop.name} · {session.shop.nameZh}
               </p>
