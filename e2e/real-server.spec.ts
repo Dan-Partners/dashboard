@@ -17,6 +17,9 @@ const server = process.env.DAN_E2E_SERVER_URL;
 const ownerEmail = process.env.DAN_E2E_OWNER_EMAIL ?? "";
 const ownerPassword = process.env.DAN_E2E_OWNER_PASSWORD ?? "";
 const pin = process.env.DAN_E2E_PIN ?? "";
+/** The shop's public API and the customer site's address, for placing an online order. */
+const publicApi = process.env.DAN_E2E_PUBLIC_URL;
+const customerSite = process.env.DAN_E2E_CUSTOMER_ORIGIN ?? "http://localhost:3001";
 
 test.skip(!server, "Set DAN_E2E_SERVER_URL to run against a real shop server.");
 
@@ -145,4 +148,32 @@ test("the owner sees sales and edits a dish", async ({ page }) => {
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Saved.")).toBeVisible();
   await expect(page.getByRole("button", { name: /Boiled rice/ }).first()).toContainText("£3.20");
+});
+
+test("an online order reaches an open tablet live, with no refresh", async ({ page }) => {
+  test.skip(!publicApi, "Set DAN_E2E_PUBLIC_URL to the shop's public API to run this.");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await connect(page);
+  await page.getByRole("button", { name: "PIN", exact: true }).click();
+  await page.getByLabel("PIN").fill(pin);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
+  // Let the live channel open.
+  await page.waitForTimeout(1000);
+
+  const customer = `Live ${Date.now()}`;
+  const placed = await page.request.post(`${publicApi}/graphql`, {
+    headers: { origin: customerSite },
+    data: {
+      query: "mutation($i: PlaceOrderInput!) { placeOrder(input: $i) { order { number } } }",
+      variables: { i: { customerName: customer, phone: "07700 900555", lines: [{ number: 81, qty: 1 }], payWith: "at_shop", allergensConfirmed: true } },
+    },
+  });
+  const number = ((await placed.json()) as { data: { placeOrder: { order: { number: number } } } }).data.placeOrder.order.number;
+
+  // No reload, no waiting for a timer: it is pushed.
+  const docket = page.locator("article", { hasText: customer });
+  await expect(docket).toBeVisible({ timeout: 3000 });
+  await expect(docket.getByTestId("docket-payment")).toContainText("To pay at the shop");
+  await expect(page.getByText(`#${number}`).first()).toBeVisible();
 });

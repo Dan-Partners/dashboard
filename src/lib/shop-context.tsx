@@ -6,7 +6,8 @@ import { demoMutate, enterDemo, resetDemo } from "./demo-runtime";
 import { DanError, isDanError } from "./errors";
 import { formatPence } from "./format";
 import { summarizeSales } from "./sales";
-import { GraphQLDanClient } from "./graphql-client";
+import { GraphQLDanClient, ORDER_FIELDS } from "./graphql-client";
+import { live } from "./live";
 import type { ThemeChoice } from "./theme";
 import { editingThemeNow } from "./use-theme";
 import { nextOnlineDraft } from "./online-drafts";
@@ -102,6 +103,17 @@ async function pullRemote(baseUrl: string, token: string): Promise<Omit<ShopSnap
   };
 }
 
+/** What the shop server's live channel sends. */
+type ShopEvent = { kind: "order" | "menu" | "customers" | "theme" | "resync"; order: Order | null };
+
+const SHOP_EVENTS = `subscription ShopEvents { shopEvents { kind order { ${ORDER_FIELDS} } } }`;
+
+/** The orders currently on the board, read outside React. */
+let remoteOrders: Order[] = [];
+function getRemoteOrders() {
+  return remoteOrders;
+}
+
 /** Takes the shop's theme from the server, unless the owner is editing it on this tablet. */
 function adoptShopTheme(theme: ThemeChoice | undefined) {
   if (!theme || editingThemeNow()) return;
@@ -123,6 +135,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     try {
       const { theme, ...next } = await pullRemote(current.serverUrl, current.token);
       adoptShopTheme(theme);
+      remoteOrders = next.orders;
       setRemote({ ...next, shop: current.shop });
       setRemoteError(null);
     } catch (error) {
@@ -136,20 +149,78 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  /*
+   * The shop server's live channel. Each (re)connection fetches everything
+   * once, so nothing is missed while it was down. After that, an order change
+   * arrives in full and is put on the board; a menu, stamp card or theme
+   * notice fetches just that part. Nothing polls.
+   */
+  const liveMode = session?.mode;
+  const liveServer = session?.serverUrl;
+  const liveToken = session?.token;
   useEffect(() => {
-    if (!ready || session?.mode !== "remote") return;
-    let cancelled = false;
-    const run = () => {
-      if (!cancelled) void refreshRemote().catch(() => undefined);
-    };
-    const timer = window.setTimeout(run, 0);
-    const interval = window.setInterval(run, 8000);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-      window.clearInterval(interval);
-    };
-  }, [ready, session?.mode, session?.serverUrl, refreshRemote]);
+    if (!ready || liveMode !== "remote" || !liveServer || !liveToken) return;
+    const serverUrl = liveServer;
+    const token = liveToken;
+    const client = new GraphQLDanClient(serverUrl, token);
+    const seen = new Set<string>();
+    let first = true;
+    const stop = live<{ shopEvents: ShopEvent }>({
+      base: serverUrl,
+      payload: { token },
+      query: SHOP_EVENTS,
+      onOpen: () => {
+        void refreshRemote()
+          .then(() => {
+            // Orders already on the board when the channel opens are not news.
+            if (first) for (const order of getRemoteOrders()) seen.add(order.id);
+            first = false;
+          })
+          .catch(() => undefined);
+      },
+      onStatus: (status) => {
+        if (status === "offline") setRemoteError("offline");
+        if (status === "live") setRemoteError(null);
+      },
+      onRefused: (code) => {
+        if (code === "unauthorized") {
+          writePersisted({ session: null });
+          setRemote(null);
+        }
+      },
+      onData: ({ shopEvents: event }) => {
+        if (event.kind === "order" && event.order) {
+          const order = event.order;
+          setRemote((current) => {
+            if (!current) return current;
+            const others = current.orders.filter((entry) => entry.id !== order.id);
+            return { ...current, orders: [order, ...others] };
+          });
+          if (order.source === "online" && order.status === "new" && !seen.has(order.id)) {
+            setNotice({
+              id: order.id,
+              title: `#${order.number}`,
+              detail: `${order.fulfilment === "delivery" ? "Delivery" : "Collection"} · ${formatPence(order.totalPence)}`,
+              href: `/shop/ticket?order=${order.id}`,
+            });
+          }
+          seen.add(order.id);
+        } else if (event.kind === "menu") {
+          void client.getMenu().then((menu) => setRemote((current) => (current ? { ...current, ...menu } : current))).catch(() => undefined);
+        } else if (event.kind === "customers") {
+          void client
+            .getCustomers()
+            .then(({ customers }) => setRemote((current) => (current ? { ...current, customers } : current)))
+            .catch(() => undefined);
+        } else if (event.kind === "theme") {
+          void client.getTheme().then(adoptShopTheme).catch(() => undefined);
+        } else {
+          void refreshRemote().catch(() => undefined);
+        }
+      },
+    });
+    return stop;
+  }, [ready, liveMode, liveServer, liveToken, refreshRemote]);
 
   useEffect(() => {
     if (!ready || session?.mode !== "demo") return;

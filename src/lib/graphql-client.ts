@@ -31,7 +31,8 @@ const THEME = "preset typeface custom { paper ink accent chrome }";
 const STAFF = "id name role";
 const MENU_ITEM =
   "id number categoryId nameEn nameZh descriptionEn pricePence station allergens soldOut kind includes { number qty }";
-const ORDER = `id number createdAt source fulfilment status customerName phone address notes totalPence payment { method status }
+/** The order fields the dashboard uses, for queries and the live channel alike. */
+export const ORDER_FIELDS = `id number createdAt source fulfilment status customerName phone address notes totalPence payment { method status }
   lines { itemId number nameEn nameZh qty unitPricePence station kind components { number nameEn nameZh qty station } }`;
 const CUSTOMER = "id phone name stamps rewardsRedeemed createdAt";
 const SALES =
@@ -159,12 +160,12 @@ export class GraphQLDanClient implements DanClient {
   }
 
   async getOrders(): Promise<{ orders: Order[] }> {
-    return this.run<{ orders: Order[] }>(`query Orders { orders { ${ORDER} } }`);
+    return this.run<{ orders: Order[] }>(`query Orders { orders { ${ORDER_FIELDS} } }`);
   }
 
   async createOrder(input: CreateOrderInput): Promise<Order> {
     const data = await this.run<{ createOrder: Order }>(
-      `mutation CreateOrder($input: CreateOrderInput!) { createOrder(input: $input) { ${ORDER} } }`,
+      `mutation CreateOrder($input: CreateOrderInput!) { createOrder(input: $input) { ${ORDER_FIELDS} } }`,
       { input },
     );
     return data.createOrder;
@@ -172,7 +173,7 @@ export class GraphQLDanClient implements DanClient {
 
   async updateOrder(id: string, patch: { status: OrderStatus }): Promise<Order> {
     const data = await this.run<{ updateOrder: Order }>(
-      `mutation UpdateOrder($id: ID!, $status: OrderStatus!) { updateOrder(id: $id, status: $status) { ${ORDER} } }`,
+      `mutation UpdateOrder($id: ID!, $status: OrderStatus!) { updateOrder(id: $id, status: $status) { ${ORDER_FIELDS} } }`,
       { id, status: patch.status },
     );
     return data.updateOrder;
