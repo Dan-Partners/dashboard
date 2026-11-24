@@ -84,8 +84,11 @@ const en = {
   markReady: "Ready",
   collected: "Collected",
   delivered: "Delivered",
+  served: "Served",
   fulfilCollection: "Collection",
   fulfilDelivery: "Delivery",
+  fulfilEatIn: "Eat in",
+  table: "Table",
   sourceOnline: "Online",
   sourcePhone: "Phone",
   sourceCounter: "Counter",
@@ -167,7 +170,7 @@ const en = {
   salesTakings: "Takings",
   salesOrders: "Orders",
   salesAverage: "Average bill",
-  salesSplit: "Collection and delivery",
+  salesSplit: "Collection, delivery and eat in",
   salesTop: "Best sellers",
   salesEmpty: "Nothing in this period yet.",
   salesOpen: "still on the board",
@@ -240,6 +243,9 @@ const en = {
 } as const;
 
 export type CopyKey = keyof typeof en;
+
+/** English copy outside a component, for the toast that announces an online order. */
+export const english = (key: CopyKey): string => en[key];
 
 const zhHant: { [K in CopyKey]: string } = {
   skip: "跳到櫃檯",
@@ -321,8 +327,11 @@ const zhHant: { [K in CopyKey]: string } = {
   markReady: "好了",
   collected: "已取",
   delivered: "已送",
+  served: "已上菜",
   fulfilCollection: "自取",
   fulfilDelivery: "外送",
+  fulfilEatIn: "堂食",
+  table: "枱號",
   sourceOnline: "網上",
   sourcePhone: "電話",
   sourceCounter: "櫃檯",
@@ -404,7 +413,7 @@ const zhHant: { [K in CopyKey]: string } = {
   salesTakings: "營業額",
   salesOrders: "訂單",
   salesAverage: "平均每單",
-  salesSplit: "自取與外送",
+  salesSplit: "自取、外送與堂食",
   salesTop: "暢銷",
   salesEmpty: "這段時間還沒有單。",
   salesOpen: "仍在板上",

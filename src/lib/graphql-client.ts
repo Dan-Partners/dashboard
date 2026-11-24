@@ -32,11 +32,11 @@ const STAFF = "id name role";
 const MENU_ITEM =
   "id number categoryId nameEn nameZh descriptionEn pricePence station allergens soldOut kind includes { number qty }";
 /** The order fields the dashboard uses, for queries and the live channel alike. */
-export const ORDER_FIELDS = `id number createdAt source fulfilment status customerName phone address notes totalPence payment { method status }
+export const ORDER_FIELDS = `id number createdAt source fulfilment status customerName phone address notes table totalPence payment { method status }
   lines { itemId number nameEn nameZh qty unitPricePence station kind components { number nameEn nameZh qty station } }`;
 const CUSTOMER = "id phone name stamps rewardsRedeemed createdAt";
 const SALES =
-  "range orderCount totalPence averagePence collectionCount deliveryCount openCount topItems { number nameEn nameZh qty totalPence }";
+  "range orderCount totalPence averagePence collectionCount deliveryCount eatInCount openCount topItems { number nameEn nameZh qty totalPence }";
 
 type GraphQLError = { message?: string; extensions?: { code?: unknown } };
 type GraphQLBody<T> = { data?: T | null; errors?: GraphQLError[] };

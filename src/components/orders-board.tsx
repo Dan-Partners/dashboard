@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { isDanError } from "@/lib/errors";
-import { formatPence, phoneDigits, primaryName, secondaryName } from "@/lib/format";
+import { formatPence, fulfilmentLabel, phoneDigits, primaryName, secondaryName } from "@/lib/format";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
 import type { Order, OrderStatus } from "@/lib/types";
@@ -113,8 +113,13 @@ function Docket({
         <p className="mt-2 font-display text-[0.72rem] tracking-[0.16em] text-ink-soft uppercase">
           {t(order.source === "online" ? "sourceOnline" : order.source === "phone" ? "sourcePhone" : "sourceCounter")}
           {" · "}
-          {t(order.fulfilment === "delivery" ? "fulfilDelivery" : "fulfilCollection")}
+          {order.fulfilment === "eat_in" ? null : fulfilmentLabel(order, t)}
         </p>
+        {order.fulfilment === "eat_in" ? (
+          <p data-testid="docket-table" className="mt-1 font-display text-lg leading-tight">
+            {fulfilmentLabel(order, t)}
+          </p>
+        ) : null}
         {order.payment ? (
           <p
             data-testid="docket-payment"
@@ -194,7 +199,8 @@ function nextStep(order: Order, t: (key: CopyKey) => string): { status: OrderSta
   if (order.status === "new") return { status: "preparing", label: t("accept") };
   if (order.status === "preparing") return { status: "ready", label: t("markReady") };
   if (order.status === "ready") {
-    return { status: "completed", label: order.fulfilment === "delivery" ? t("delivered") : t("collected") };
+    const label = order.fulfilment === "delivery" ? t("delivered") : order.fulfilment === "eat_in" ? t("served") : t("collected");
+    return { status: "completed", label };
   }
   return null;
 }

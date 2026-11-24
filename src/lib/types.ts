@@ -40,7 +40,8 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const ORDER_SOURCES = ["counter", "phone", "online"] as const;
 export type OrderSource = (typeof ORDER_SOURCES)[number];
 
-export const FULFILMENTS = ["collection", "delivery"] as const;
+/** `eat_in` orders come from a table's link on the customer site and are brought to that table. */
+export const FULFILMENTS = ["collection", "delivery", "eat_in"] as const;
 export type Fulfilment = (typeof FULFILMENTS)[number];
 
 export type Shop = {
@@ -159,6 +160,8 @@ export type Order = {
   phone: string;
   address: string;
   notes: string;
+  /** The table an eat-in order is brought to, as the customer's link named it. */
+  table?: string | null;
   lines: OrderLine[];
   totalPence: number;
   /** Orders from the customer site say how they are paid. Counter and phone orders have none. */
@@ -182,6 +185,7 @@ export type CreateOrderInput = {
   phone?: string;
   address?: string;
   notes?: string;
+  table?: string | null;
   lines: CreateOrderLine[];
 };
 
@@ -211,6 +215,7 @@ export type SalesSummary = {
   averagePence: number;
   collectionCount: number;
   deliveryCount: number;
+  eatInCount: number;
   openCount: number;
   topItems: SalesTopItem[];
 };

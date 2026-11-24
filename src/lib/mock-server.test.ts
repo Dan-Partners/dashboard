@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { dayKey, weekStartKey } from "./format";
+import { dayKey, fulfilmentLabel, weekStartKey } from "./format";
 import { DanError } from "./errors";
+import { english } from "./i18n";
 import { GraphQLDanClient, pingServer } from "./graphql-client";
 import { MockDanServer } from "./mock-server";
 import { nextOnlineDraft } from "./online-drafts";
@@ -88,6 +89,19 @@ describe("mock shop", () => {
     await expect(shop.updateOrder(created.id, { status: "ready" })).rejects.toMatchObject({ code: "bad_status" });
     const preparing = await shop.updateOrder(created.id, { status: "preparing" });
     expect(preparing.status).toBe("preparing");
+  });
+
+  it("keeps an eat-in order's table, tidied, and refuses a table name a link should not carry", async () => {
+    const shop = server();
+    const order = await shop.createOrder({ source: "online", fulfilment: "eat_in", table: "  Patio   2 ", lines: [{ number: 71, qty: 1 }] });
+    expect(order).toMatchObject({ fulfilment: "eat_in", table: "Patio 2" });
+    expect(fulfilmentLabel(order, english)).toBe("Eat in · Table Patio 2");
+    expect(fulfilmentLabel({ fulfilment: "delivery" }, english)).toBe("Delivery");
+    for (const table of ["<script>", "Table number twelve", "1;2"]) {
+      await expect(
+        shop.createOrder({ source: "online", fulfilment: "eat_in", table, lines: [{ number: 71, qty: 1 }] }),
+      ).rejects.toMatchObject({ code: "bad_table" });
+    }
   });
 
   it("fills a stamp card and then asks for the reward to be redeemed", async () => {

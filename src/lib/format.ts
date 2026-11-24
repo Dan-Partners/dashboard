@@ -5,6 +5,14 @@ const gbp = new Intl.NumberFormat("en-GB", {
   currency: "GBP",
 });
 
+type FulfilmentKey = "fulfilCollection" | "fulfilDelivery" | "fulfilEatIn" | "table";
+
+/** "Collection", "Delivery", or "Eat in · Table 3" for an order brought to a table. */
+export function fulfilmentLabel(order: { fulfilment: string; table?: string | null }, t: (key: FulfilmentKey) => string): string {
+  if (order.fulfilment === "eat_in") return order.table ? `${t("fulfilEatIn")} · ${t("table")} ${order.table}` : t("fulfilEatIn");
+  return t(order.fulfilment === "delivery" ? "fulfilDelivery" : "fulfilCollection");
+}
+
 export function formatPence(pence: number): string {
   return gbp.format(pence / 100);
 }

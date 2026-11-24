@@ -58,6 +58,18 @@ export const onlineDrafts: CreateOrderInput[] = [
       { number: 90, qty: 1 },
     ],
   },
+  {
+    source: "online",
+    fulfilment: "eat_in",
+    table: "4",
+    customerName: "Tom Reid",
+    phone: "07700 900726",
+    lines: [
+      { number: 60, qty: 1 },
+      { number: 81, qty: 1 },
+      { number: 90, qty: 1 },
+    ],
+  },
 ];
 
 export function nextOnlineDraft(state: DemoState, random: () => number = Math.random): CreateOrderInput | null {

@@ -177,3 +177,30 @@ test("an online order reaches an open tablet live, with no refresh", async ({ pa
   await expect(docket.getByTestId("docket-payment")).toContainText("To pay at the shop");
   await expect(page.getByText(`#${number}`).first()).toBeVisible();
 });
+
+test("an order from a table's link shows its table and is marked served", async ({ page }) => {
+  test.skip(!publicApi, "Set DAN_E2E_PUBLIC_URL to the shop's public API to run this.");
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await connect(page);
+  await page.getByRole("button", { name: "PIN", exact: true }).click();
+  await page.getByLabel("PIN").fill(pin);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
+  await page.waitForTimeout(1000);
+
+  const customer = `Table ${Date.now()}`;
+  await page.request.post(`${publicApi}/graphql`, {
+    headers: { origin: customerSite },
+    data: {
+      query: "mutation($i: PlaceOrderInput!) { placeOrder(input: $i) { order { number } } }",
+      variables: { i: { customerName: customer, phone: "07700 900777", lines: [{ number: 81, qty: 1 }], payWith: "at_shop", allergensConfirmed: true, table: "7" } },
+    },
+  });
+
+  const docket = page.locator("article", { hasText: customer });
+  await expect(docket).toBeVisible({ timeout: 3000 });
+  await expect(docket.getByTestId("docket-table")).toHaveText("Eat in · Table 7");
+  await docket.getByRole("button", { name: "Accept", exact: true }).click();
+  await docket.getByRole("button", { name: "Ready", exact: true }).click();
+  await expect(docket.getByRole("button", { name: "Served", exact: true })).toBeVisible();
+});

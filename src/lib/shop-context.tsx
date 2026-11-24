@@ -4,7 +4,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, u
 import { useRouter } from "next/navigation";
 import { demoMutate, enterDemo, resetDemo } from "./demo-runtime";
 import { DanError, isDanError } from "./errors";
-import { formatPence } from "./format";
+import { formatPence, fulfilmentLabel } from "./format";
+import { english } from "./i18n";
 import { summarizeSales } from "./sales";
 import { GraphQLDanClient, ORDER_FIELDS } from "./graphql-client";
 import { live } from "./live";
@@ -200,7 +201,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
             setNotice({
               id: order.id,
               title: `#${order.number}`,
-              detail: `${order.fulfilment === "delivery" ? "Delivery" : "Collection"} · ${formatPence(order.totalPence)}`,
+              detail: `${fulfilmentLabel(order, english)} · ${formatPence(order.totalPence)}`,
               href: `/shop/ticket?order=${order.id}`,
             });
           }
@@ -237,7 +238,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
           })
             .then((order) => {
               if (cancelled) return;
-              const where = order.fulfilment === "delivery" ? "Delivery" : "Collection";
+              const where = fulfilmentLabel(order, english);
               setNotice({
                 id: order.id,
                 title: `#${order.number}`,

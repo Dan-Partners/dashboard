@@ -30,6 +30,7 @@ export function summarizeSales(orders: Order[], range: SalesRange, now: Date): S
     averagePence: picked.length ? Math.round(totalPence / picked.length) : 0,
     collectionCount: picked.filter((order) => order.fulfilment === "collection").length,
     deliveryCount: picked.filter((order) => order.fulfilment === "delivery").length,
+    eatInCount: picked.filter((order) => order.fulfilment === "eat_in").length,
     openCount: picked.filter((order) => order.status !== "completed").length,
     topItems,
   };

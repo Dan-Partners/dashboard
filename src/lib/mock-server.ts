@@ -170,6 +170,10 @@ export class MockDanServer implements DanClient {
     if (!ORDER_SOURCES.includes(input.source) || !FULFILMENTS.includes(input.fulfilment)) {
       return Promise.reject(new DanError("invalid", "Choose collection or delivery."));
     }
+    const table = input.table?.split(/\s+/).filter(Boolean).join(" ") || null;
+    if (table && ([...table].length > 10 || !/^[\p{L}\p{N} -]+$/u.test(table))) {
+      return Promise.reject(new DanError("bad_table", "A table name is up to 10 letters, numbers, spaces or hyphens."));
+    }
     if (!input.lines.length) {
       return Promise.reject(new DanError("invalid", "Add a dish before sending."));
     }
@@ -206,6 +210,7 @@ export class MockDanServer implements DanClient {
       phone: input.phone?.trim() ?? "",
       address: input.address?.trim() ?? "",
       notes: input.notes?.trim() ?? "",
+      table,
       lines,
       totalPence: lines.reduce((sum, line) => sum + line.qty * line.unitPricePence, 0),
       // Online orders in the demo alternate between paid by card and pay at the shop.

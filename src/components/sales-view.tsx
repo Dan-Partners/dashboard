@@ -57,11 +57,14 @@ export function SalesView() {
             <div className="mt-3 flex h-3 overflow-hidden border border-rule" aria-hidden>
               <span className="bg-ink" style={{ width: `${(summary.collectionCount / summary.orderCount) * 100}%` }} />
               <span className="bg-accent" style={{ width: `${(summary.deliveryCount / summary.orderCount) * 100}%` }} />
+              <span className="bg-ink-soft" style={{ width: `${(summary.eatInCount / summary.orderCount) * 100}%` }} />
             </div>
             <p className="mt-2 text-sm">
               {t("fulfilCollection")} {summary.collectionCount}
               <span className="mx-3 text-rule">|</span>
               {t("fulfilDelivery")} {summary.deliveryCount}
+              <span className="mx-3 text-rule">|</span>
+              {t("fulfilEatIn")} {summary.eatInCount}
             </p>
           </section>
           <section className="mt-10 max-w-xl">
