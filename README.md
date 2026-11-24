@@ -23,11 +23,11 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-- **Connect** asks for the shop server URL (`http://192.168.1.20:2283`, `https://goldendragon.dan.partners`, …), pings `GET /api/server/ping`, remembers recent servers, then asks for email and password or a counter PIN.
+- **Connect** asks for the shop server URL (`http://192.168.1.20:2283`, `https://goldendragon.dan.partners`, …), sends a GraphQL `ping` to `<server>/graphql`, remembers recent servers, then asks for email and password or a counter PIN.
 - **Try the demo / 試用示範** signs into Golden Dragon with no backend. Orders, the menu, stamp cards and today’s takings persist in `localStorage`. **Reset demo** in the side menu loads the shop again.
 
 ```bash
-npm test          # mock server, HTTP client, theme colours and contrast
+npm test          # mock server, GraphQL client, theme colours and contrast
 npm run test:e2e  # connect → demo → till → kitchen ticket, and themes
 npm run lint
 npm run build
@@ -37,129 +37,27 @@ npm run build
 
 The app is a Next.js project with no required environment variables. On Vercel, import this repository (framework preset Next.js) and attach the domain `my.dan.partners`. The demo works as soon as the deployment is live. A real shop appears when that shop’s server is reachable from the browser and allows this origin.
 
-## What the shop server implements
+## The shop server
 
-The dashboard speaks to one origin, the shop. Paths below are relative to that origin (no trailing slash; a base path is allowed, so `https://shop.example/dan` calls `https://shop.example/dan/api/server/ping`).
+A real shop runs [DanPartners/server](https://github.com/DanPartners/server): a Rust server with a local MongoDB, set up with `dan-server init` and run with Docker Compose. The dashboard talks to it over **GraphQL** at `<server>/graphql`. The wire contract is the server's [`schema.graphql`](https://github.com/DanPartners/server/blob/main/schema.graphql); this repo's side is [`src/lib/graphql-client.ts`](src/lib/graphql-client.ts), which implements `DanClient` from [`src/lib/types.ts`](src/lib/types.ts). Screens only see `DanClient`, so the browser demo and a real server look the same to them.
 
-Requests and responses are JSON. Authenticated routes expect `Authorization: Bearer <token>`. The browser calls the server directly, so the server must send CORS headers for the dashboard origin (`https://my.dan.partners` in production), including `Authorization` and `Content-Type`, and answer `OPTIONS` preflights.
+- **Connect** sends `ping`. The answer must say `product: "dan"`. A server that has not run `init` answers `not_set_up`, and the connect screen says so.
+- **Sign in** with the owner's email and password, or the counter PIN. The token goes in `Authorization: Bearer <token>`.
+- **The counter PIN runs service**: orders, the till, tickets, stamp cards, and marking dishes sold out. Only the owner edits dishes and prices or sees sales. The server enforces this. The dashboard hides the Sales link, makes dish rows read-only and explains why, so nobody hits an error mid-rush. The side menu shows who is signed in.
+- **Errors** carry the server's code (`forbidden`, `locked`, `sold_out` …), and [`src/lib/i18n.ts`](src/lib/i18n.ts) turns it into copy.
+- The server must list the dashboard's address in `DAN_ALLOWED_ORIGINS`, or the browser refuses to connect.
 
-Errors use:
+Prices are integer pence. Times are ISO-8601. The sales day and week are calendar days in `Europe/London`, Monday-start.
 
-```json
-{ "error": { "code": "sold_out", "message": "23 Kung po chicken is sold out." } }
+**Known gap:** the hosted dashboard is HTTPS, and browsers block an HTTPS page from calling a plain `http://` address on the shop's network. Until the shop server has HTTPS, connect from a dashboard served over HTTP on the same network (for example `npm run dev` on a laptop in the shop).
+
+### Testing against a real server
+
+`e2e/real-server.spec.ts` drives the dashboard against a running server, as the counter and as the owner. It is skipped unless you point it at one, and it changes data, so never use a shop in service. Set the server up with `dan-server init --demo`, with `DAN_ALLOWED_ORIGINS=http://localhost:3000`, then:
+
+```bash
+DAN_E2E_SERVER_URL=http://127.0.0.1:2283 DAN_E2E_OWNER_EMAIL=you@example.com DAN_E2E_OWNER_PASSWORD='…' DAN_E2E_PIN='…' npx playwright test real-server
 ```
-
-The TypeScript contract is `DanClient` in [`src/lib/types.ts`](src/lib/types.ts). Prices are integer pence. Times are ISO-8601. The sales day and week are calendar days in `Europe/London`, Monday-start.
-
-### `GET /api/server/ping`
-
-No auth. Used by the connect screen.
-
-```json
-{
-  "ok": true,
-  "product": "dan",
-  "version": "0.1.0",
-  "shop": {
-    "id": "golden-dragon",
-    "name": "Golden Dragon",
-    "nameZh": "金龍",
-    "address": "48 High Street, Watford WD17 2BS",
-    "city": "Watford",
-    "phone": "01923 220418"
-  },
-  "auth": { "password": true, "pin": true }
-}
-```
-
-`product` must be `"dan"`. Anything else is treated as the wrong server.
-
-### `POST /api/auth/login`
-
-```json
-{ "email": "mei@goldendragon.example", "password": "dragon" }
-```
-
-or
-
-```json
-{ "pin": "2580" }
-```
-
-```json
-{
-  "token": "…",
-  "staff": { "id": "mei", "name": "Mei", "role": "owner" },
-  "shop": { "id": "golden-dragon", "name": "Golden Dragon", "nameZh": "金龍", "address": "…", "city": "Watford", "phone": "…" }
-}
-```
-
-`401` with code `unauthorized` when the details are wrong. `POST /api/auth/logout` drops the token.
-
-The password and PIN above belong to the in-browser demo only.
-
-### Menu
-
-`GET /api/menu` → `{ "categories": Category[], "items": MenuItem[] }`
-
-`PATCH /api/menu/items/:id` with any of `number`, `nameEn`, `nameZh`, `descriptionEn`, `pricePence`, `categoryId`, `station`, `allergens`, `soldOut`.
-
-Stations are `wok`, `fryer`, `rice`, `counter`. Allergens are the UK fourteen: `celery`, `gluten`, `crustaceans`, `eggs`, `fish`, `lupin`, `milk`, `molluscs`, `mustard`, `nuts`, `peanuts`, `sesame`, `soya`, `sulphites`.
-
-A set meal has `kind: "set"` and `includes: [{ "number": 25, "qty": 1 }]`. The set has its own price. The kitchen ticket prints the included dishes on their stations.
-
-### Orders
-
-`GET /api/orders` → `{ "orders": Order[] }`
-
-`POST /api/orders`
-
-```json
-{
-  "source": "counter",
-  "fulfilment": "collection",
-  "customerName": "Mrs Wong",
-  "phone": "07700 900441",
-  "address": "",
-  "notes": "No onion",
-  "lines": [{ "number": 81, "qty": 2 }]
-}
-```
-
-`source` is `counter`, `phone`, or `online`. `fulfilment` is `collection` or `delivery`. Online orders start as `new`; counter and phone orders start as `preparing`. The server prices the lines. Sold-out dishes return `sold_out`.
-
-`PATCH /api/orders/:id` with `{ "status": "preparing" | "ready" | "completed" }`. Status only moves one step: `new → preparing → ready → completed`.
-
-### Customers and stamps
-
-`GET /api/customers` and `GET /api/customers?phone=07700900441`
-
-`POST /api/customers` with `{ "phone": "07700 900123", "name": "Alex" }` opens a card, or updates the name if that phone already has one.
-
-`POST /api/customers/:phone/stamps` adds one stamp, up to 10. A full card returns `reward_pending`.
-
-`POST /api/customers/:phone/redeem` clears a full card and counts a reward (in the demo, mini spring rolls).
-
-### Sales
-
-`GET /api/sales?range=today` or `range=week`
-
-```json
-{
-  "range": "today",
-  "orderCount": 6,
-  "totalPence": 8420,
-  "averagePence": 1403,
-  "collectionCount": 4,
-  "deliveryCount": 2,
-  "openCount": 3,
-  "topItems": [
-    { "number": 81, "nameEn": "Egg fried rice", "nameZh": "蛋炒飯", "qty": 4, "totalPence": 1560 }
-  ]
-}
-```
-
-Takings are every order placed in the period, including ones still on the board. `openCount` is those not yet `completed`.
 
 ## In the browser
 

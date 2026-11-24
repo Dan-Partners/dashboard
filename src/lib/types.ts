@@ -3,7 +3,9 @@
  *
  * A Dan server (the box in the shop) implements these shapes.
  * The dashboard never invents a second protocol: both the browser demo
- * and {@link import("./http-client").HttpDanClient} speak this interface.
+ * and {@link import("./graphql-client").GraphQLDanClient} speak this
+ * interface. The shop server's wire contract is `schema.graphql` in
+ * https://github.com/DanPartners/server.
  */
 
 export const DAN_PRODUCT = "dan" as const;
@@ -202,16 +204,9 @@ export type SalesSummary = {
   topItems: SalesTopItem[];
 };
 
-export type ApiErrorBody = {
-  error: {
-    code: string;
-    message: string;
-  };
-};
-
 /**
- * What a shop server implements, and what the dashboard calls.
- * Paths are listed in README under "Server API".
+ * What a shop server implements, and what the dashboard calls. Each method
+ * is one GraphQL operation; see graphql-client.ts.
  */
 export interface DanClient {
   ping(): Promise<ServerPing>;

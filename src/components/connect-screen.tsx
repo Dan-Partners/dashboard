@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { isDanError } from "@/lib/errors";
 import { messageForError, useI18n } from "@/lib/i18n";
-import { pingServer } from "@/lib/http-client";
+import { pingServer } from "@/lib/graphql-client";
 import { useSessionRedirect, useShop } from "@/lib/shop-context";
 import { normalizeServerUrl } from "@/lib/url";
 import type { ServerPing } from "@/lib/types";

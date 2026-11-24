@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { isDanError } from "@/lib/errors";
 import { formatPence, parsePoundsToPence, primaryName, secondaryName } from "@/lib/format";
 import { messageForError, useI18n, type CopyKey } from "@/lib/i18n";
-import { useShop } from "@/lib/shop-context";
+import { useIsOwner, useShop } from "@/lib/shop-context";
 import { ALLERGENS, STATIONS, type Allergen, type MenuItem, type Station } from "@/lib/types";
 import { Button, Dialog, PageTitle } from "./ui";
 
@@ -35,6 +35,7 @@ const STATION_KEY: Record<Station, CopyKey> = {
 export function MenuBoard() {
   const { t, locale } = useI18n();
   const shop = useShop();
+  const isOwner = useIsOwner();
   const categories = shop.snapshot?.categories ?? [];
   const [categoryId, setCategoryId] = useState(categories[0]?.id ?? "");
   const [editing, setEditing] = useState<MenuItem | null>(null);
@@ -48,6 +49,7 @@ export function MenuBoard() {
   return (
     <div>
       <PageTitle title={t("menuTitle")} gloss={locale === "zh-Hant" ? "Menu" : "餐牌"} />
+      {!isOwner ? <p className="mb-4 max-w-xl text-sm text-ink-soft" data-testid="menu-counter-note">{t("menuCounterNote")}</p> : null}
       {notice ? <p className="mb-4 text-sm text-accent-ink">{notice}</p> : null}
       <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
         {categories.map((category) => (
@@ -67,7 +69,13 @@ export function MenuBoard() {
         {visible.map((item) => (
           <li key={item.id} className={item.soldOut ? "opacity-70" : undefined}>
             <div className="flex items-start gap-3 py-3">
-              <button type="button" className="min-w-0 flex-1 cursor-pointer text-left" onClick={() => setEditing(item)}>
+              {/* Only the owner edits a dish. With the PIN the row is read-only, and the sold-out switch still works. */}
+              <button
+                type="button"
+                className={`min-w-0 flex-1 text-left ${isOwner ? "cursor-pointer" : "cursor-default"}`}
+                disabled={!isOwner}
+                onClick={() => setEditing(item)}
+              >
                 <span className="flex items-baseline gap-3">
                   <span className="w-10 shrink-0 font-display text-xl text-accent-ink">{item.number}</span>
                   <span className={item.soldOut ? "line-through" : undefined}>{primaryName(item.nameEn, item.nameZh, locale)}</span>

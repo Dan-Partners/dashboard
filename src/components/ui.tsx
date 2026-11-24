@@ -105,14 +105,23 @@ export function Dialog({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  // Set when this component closes the dialog itself. The browser still fires
+  // a "close" event for that, and it must not read as the person cancelling:
+  // in development React mounts twice, and the first unmount's close used to
+  // shut the dish editor the moment it opened.
+  const closingQuietly = useRef(false);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    const closeQuietly = () => {
+      closingQuietly.current = true;
+      el.close();
+    };
     if (open && !el.open) el.showModal();
-    if (!open && el.open) el.close();
+    if (!open && el.open) closeQuietly();
     return () => {
-      if (el.open) el.close();
+      if (el.open) closeQuietly();
     };
   }, [open]);
 
@@ -121,7 +130,13 @@ export function Dialog({
       ref={ref}
       className="sheet"
       aria-labelledby={titleId}
-      onClose={onClose}
+      onClose={() => {
+        if (closingQuietly.current) {
+          closingQuietly.current = false;
+          return;
+        }
+        onClose();
+      }}
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}

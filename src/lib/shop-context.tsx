@@ -6,7 +6,7 @@ import { demoMutate, enterDemo, resetDemo } from "./demo-runtime";
 import { DanError, isDanError } from "./errors";
 import { formatPence } from "./format";
 import { summarizeSales } from "./sales";
-import { HttpDanClient } from "./http-client";
+import { GraphQLDanClient } from "./graphql-client";
 import { nextOnlineDraft } from "./online-drafts";
 import {
   forgetServer,
@@ -84,7 +84,7 @@ function snapshotFromPersisted(persisted: Persisted): ShopSnapshot | null {
 }
 
 async function pullRemote(baseUrl: string, token: string): Promise<Omit<ShopSnapshot, "shop">> {
-  const client = new HttpDanClient(baseUrl, token);
+  const client = new GraphQLDanClient(baseUrl, token);
   const [menu, orders, customers] = await Promise.all([client.getMenu(), client.getOrders(), client.getCustomers()]);
   return {
     categories: menu.categories,
@@ -202,7 +202,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       rememberServer,
       forgetServer,
       async loginRemote(baseUrl, input, ping) {
-        const client = new HttpDanClient(baseUrl);
+        const client = new GraphQLDanClient(baseUrl);
         const result = await client.login(input);
         writePersisted({
           session: {
@@ -213,7 +213,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
             staff: result.staff,
           },
         });
-        const authed = new HttpDanClient(baseUrl, result.token);
+        const authed = new GraphQLDanClient(baseUrl, result.token);
         const [menu, orders, customers] = await Promise.all([
           authed.getMenu(),
           authed.getOrders(),
@@ -236,7 +236,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       logout() {
         const current = getSnapshot().session;
         if (current?.mode === "remote" && current.serverUrl && current.token) {
-          void new HttpDanClient(current.serverUrl, current.token).logout().catch(() => undefined);
+          void new GraphQLDanClient(current.serverUrl, current.token).logout().catch(() => undefined);
         }
         writePersisted({ session: null });
         setRemote(null);
@@ -252,7 +252,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         }
         const current = getSnapshot().session;
         if (!current?.serverUrl || !current.token) return;
-        await new HttpDanClient(current.serverUrl, current.token).updateMenuItem(id, patch);
+        await new GraphQLDanClient(current.serverUrl, current.token).updateMenuItem(id, patch);
         await refreshRemote();
       },
       async placeOrder(input) {
@@ -265,7 +265,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         if (!current?.serverUrl || !current.token) {
           throw new Error("Sign in first.");
         }
-        const order = await new HttpDanClient(current.serverUrl, current.token).createOrder(input);
+        const order = await new GraphQLDanClient(current.serverUrl, current.token).createOrder(input);
         writePersisted({ activeOrderId: order.id });
         await refreshRemote();
         return order;
@@ -277,7 +277,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         }
         const current = getSnapshot().session;
         if (!current?.serverUrl || !current.token) return;
-        await new HttpDanClient(current.serverUrl, current.token).updateOrder(id, { status });
+        await new GraphQLDanClient(current.serverUrl, current.token).updateOrder(id, { status });
         await refreshRemote();
       },
       async createCustomer(input) {
@@ -286,7 +286,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         }
         const current = getSnapshot().session;
         if (!current?.serverUrl || !current.token) throw new Error("Sign in first.");
-        const customer = await new HttpDanClient(current.serverUrl, current.token).createCustomer(input);
+        const customer = await new GraphQLDanClient(current.serverUrl, current.token).createCustomer(input);
         await refreshRemote();
         return customer;
       },
@@ -296,7 +296,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         }
         const current = getSnapshot().session;
         if (!current?.serverUrl || !current.token) throw new Error("Sign in first.");
-        const customer = await new HttpDanClient(current.serverUrl, current.token).addStamp(phone);
+        const customer = await new GraphQLDanClient(current.serverUrl, current.token).addStamp(phone);
         await refreshRemote();
         return customer;
       },
@@ -306,7 +306,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         }
         const current = getSnapshot().session;
         if (!current?.serverUrl || !current.token) throw new Error("Sign in first.");
-        const customer = await new HttpDanClient(current.serverUrl, current.token).redeemReward(phone);
+        const customer = await new GraphQLDanClient(current.serverUrl, current.token).redeemReward(phone);
         await refreshRemote();
         return customer;
       },
@@ -318,7 +318,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         }
         const current = getSnapshot().session;
         if (!current?.serverUrl || !current.token) throw new Error("Sign in first.");
-        return new HttpDanClient(current.serverUrl, current.token).getSales(range);
+        return new GraphQLDanClient(current.serverUrl, current.token).getSales(range);
       },
       setActiveOrderId(id) {
         writePersisted({ activeOrderId: id });
@@ -336,6 +336,16 @@ export function useShop() {
   const value = useContext(ShopContext);
   if (!value) throw new Error("useShop must be used inside ShopProvider");
   return value;
+}
+
+/**
+ * True when the owner is signed in. The counter PIN runs service but cannot
+ * change the menu or see sales; the shop server enforces this, and screens
+ * use this to hide what a PIN user cannot do. The demo signs in as the owner.
+ */
+export function useIsOwner(): boolean {
+  const { ready, persisted } = useShop();
+  return ready && persisted.session?.staff.role === "owner";
 }
 
 export function useSessionRedirect(destination: "home" | "shop") {

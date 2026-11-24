@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { dayKey, weekStartKey } from "./format";
 import { DanError } from "./errors";
-import { HttpDanClient, pingServer } from "./http-client";
+import { GraphQLDanClient, pingServer } from "./graphql-client";
 import { MockDanServer } from "./mock-server";
 import { nextOnlineDraft } from "./online-drafts";
 import { DEMO_EMAIL, DEMO_PASSWORD, DEMO_PIN, STAMP_GOAL } from "./seed";
@@ -147,35 +147,95 @@ describe("mock shop", () => {
   });
 });
 
-describe("http client", () => {
+describe("graphql client", () => {
+  const shop = { id: "g", name: "Golden Dragon", nameZh: "金龍", address: "", city: "Watford", phone: "" };
+
+  function answer(body: unknown, status = 200) {
+    return Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } }));
+  }
+
+  /** Records each request and replies with the next body. */
+  function fake(...bodies: { body: unknown; status?: number }[]) {
+    const seen: { url: string; headers: Record<string, string>; query: string; variables: Record<string, unknown> }[] = [];
+    const fetchImpl = (input: RequestInfo | URL, init?: RequestInit) => {
+      const sent = JSON.parse(String(init?.body)) as { query: string; variables: Record<string, unknown> };
+      expect(init?.method).toBe("POST");
+      seen.push({ url: String(input), headers: init?.headers as Record<string, string>, ...sent });
+      const next = bodies.shift() ?? { body: {} };
+      return answer(next.body, next.status);
+    };
+    return { fetchImpl, seen };
+  }
+
   it("treats a refused connection as unreachable and a foreign page as not Dan", async () => {
     await expect(
       pingServer("http://192.168.1.20:2283", () => Promise.reject(new TypeError("failed to fetch"))),
     ).rejects.toMatchObject({ code: "unreachable" });
 
-    const fetchImpl = () =>
-      Promise.resolve(
-        new Response("<html>nope</html>", { status: 404, headers: { "content-type": "text/html" } }),
-      );
-    await expect(pingServer("https://example.com", fetchImpl)).rejects.toMatchObject({ code: "not_dan" });
+    const html = () =>
+      Promise.resolve(new Response("<html>nope</html>", { status: 404, headers: { "content-type": "text/html" } }));
+    await expect(pingServer("https://example.com", html)).rejects.toMatchObject({ code: "not_dan" });
+
+    const otherGraphQL = fake({ body: { errors: [{ message: "Cannot query field ping" }] }, status: 400 });
+    await expect(pingServer("https://example.com", otherGraphQL.fetchImpl)).rejects.toMatchObject({ code: "not_dan" });
+
+    const wrongProduct = fake({ body: { data: { ping: { ok: true, product: "immich", version: "1", shop, auth: { password: true, pin: true } } } } });
+    await expect(pingServer("https://example.com", wrongProduct.fetchImpl)).rejects.toMatchObject({ code: "not_dan" });
   });
 
-  it("posts login to the shop server", async () => {
-    let seen = "";
-    const fetchImpl = (input: RequestInfo | URL, init?: RequestInit) => {
-      seen = String(input);
-      expect(init?.method).toBe("POST");
-      expect(init?.body).toBe(JSON.stringify({ pin: "2580" }));
-      return Promise.resolve(
-        new Response(JSON.stringify({ token: "tok", staff: { id: "mei", name: "Mei", role: "owner" }, shop: { id: "g", name: "Golden Dragon", nameZh: "金龍", address: "", city: "Watford", phone: "" } }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      );
-    };
-    const client = new HttpDanClient("https://goldendragon.dan.partners", null, fetchImpl);
-    const result = await client.login({ pin: "2580" });
-    expect(seen).toBe("https://goldendragon.dan.partners/api/auth/login");
-    expect(result.token).toBe("tok");
+  it("pings at /graphql, under a base path too, and says when a server is not set up", async () => {
+    const ok = fake({ body: { data: { ping: { ok: true, product: "dan", version: "0.1.0", shop, auth: { password: true, pin: true } } } } });
+    const ping = await pingServer("https://shop.example/dan/", ok.fetchImpl);
+    expect(ok.seen[0].url).toBe("https://shop.example/dan/graphql");
+    expect(ok.seen[0].query).toContain("ping");
+    expect(ping.shop.name).toBe("Golden Dragon");
+
+    const fresh = fake({ body: { data: null, errors: [{ message: "Run dan-server init.", extensions: { code: "not_set_up" } }] } });
+    await expect(pingServer("http://192.168.1.20:2283", fresh.fetchImpl)).rejects.toMatchObject({ code: "not_set_up" });
+  });
+
+  it("signs in with the PIN alone, then sends the token", async () => {
+    const { fetchImpl, seen } = fake(
+      { body: { data: { login: { token: "tok", staff: { id: "counter", name: "Counter", role: "counter" }, shop } } } },
+      { body: { data: { orders: [] } } },
+    );
+    const result = await new GraphQLDanClient("https://goldendragon.dan.partners", null, fetchImpl).login({ pin: "2580" });
+    expect(seen[0].url).toBe("https://goldendragon.dan.partners/graphql");
+    expect(seen[0].variables).toEqual({ input: { pin: "2580" } });
+    expect(seen[0].headers.authorization).toBeUndefined();
+    expect(result).toMatchObject({ token: "tok", staff: { role: "counter" } });
+
+    await new GraphQLDanClient("https://goldendragon.dan.partners", result.token, fetchImpl).getOrders();
+    expect(seen[1].headers.authorization).toBe("Bearer tok");
+  });
+
+  it("passes the server's error code through", async () => {
+    const { fetchImpl } = fake(
+      { body: { data: null, errors: [{ message: "Only the owner can do that.", extensions: { code: "forbidden" } }] } },
+      { body: { errors: [{ message: "That request is too large.", extensions: { code: "too_large" } }] }, status: 413 },
+      { body: { data: null, errors: [{ message: "Something odd" }] } },
+    );
+    const client = new GraphQLDanClient("http://192.168.1.20:2283", "tok", fetchImpl);
+    await expect(client.getSales("today")).rejects.toEqual(new DanError("forbidden", "Only the owner can do that."));
+    await expect(client.getSales("today")).rejects.toMatchObject({ code: "too_large" });
+    await expect(client.getSales("today")).rejects.toMatchObject({ code: "bad_response" });
+  });
+
+  it("sends each operation's variables as the schema names them", async () => {
+    const { fetchImpl, seen } = fake(
+      { body: { data: { updateOrder: { id: "o1" } } } },
+      { body: { data: { updateMenuItem: { id: "item-81" } } } },
+      { body: { data: { customers: [] } } },
+      { body: { data: { createOrder: { id: "o2" } } } },
+    );
+    const client = new GraphQLDanClient("http://192.168.1.20:2283", "tok", fetchImpl);
+    await client.updateOrder("o1", { status: "ready" });
+    await client.updateMenuItem("item-81", { soldOut: true });
+    await client.getCustomers();
+    await client.createOrder({ source: "counter", fulfilment: "collection", lines: [{ number: 81, qty: 2 }] });
+    expect(seen[0].variables).toEqual({ id: "o1", status: "ready" });
+    expect(seen[1].variables).toEqual({ id: "item-81", patch: { soldOut: true } });
+    expect(seen[2].variables).toEqual({ phone: null });
+    expect(seen[3].variables).toEqual({ input: { source: "counter", fulfilment: "collection", lines: [{ number: 81, qty: 2 }] } });
   });
 });

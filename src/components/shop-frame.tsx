@@ -5,23 +5,24 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { formatStamp } from "@/lib/format";
 import { useI18n, type CopyKey } from "@/lib/i18n";
-import { useSessionRedirect, useShop } from "@/lib/shop-context";
+import { useIsOwner, useSessionRedirect, useShop } from "@/lib/shop-context";
 import { DanGlyph, DanMark } from "./mark";
 import { ThemeButton, ThemeDialog } from "./theme-dialog";
 import { Button, Dialog, Splash } from "./ui";
 
-const LINKS: { href: string; label: CopyKey; gloss: CopyKey }[] = [
+const LINKS: { href: string; label: CopyKey; gloss: CopyKey; ownerOnly?: boolean }[] = [
   { href: "/shop/orders", label: "navOrders", gloss: "navOrdersZh" },
   { href: "/shop/till", label: "navTill", gloss: "navTillZh" },
   { href: "/shop/menu", label: "navMenu", gloss: "navMenuZh" },
   { href: "/shop/ticket", label: "navTicket", gloss: "navTicketZh" },
   { href: "/shop/loyalty", label: "navStamps", gloss: "navStampsZh" },
-  { href: "/shop/sales", label: "navSales", gloss: "navSalesZh" },
+  { href: "/shop/sales", label: "navSales", gloss: "navSalesZh", ownerOnly: true },
 ];
 
 export function ShopFrame({ children }: { children: React.ReactNode }) {
   const { t, locale, setLocale } = useI18n();
   const shop = useShop();
+  const isOwner = useIsOwner();
   const { ready, session } = useSessionRedirect("home");
   const pathname = usePathname();
   const [more, setMore] = useState(false);
@@ -43,7 +44,8 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const mobile = LINKS.filter((link) => ["/shop/orders", "/shop/till", "/shop/menu", "/shop/loyalty"].includes(link.href));
+  const links = LINKS.filter((link) => isOwner || !link.ownerOnly);
+  const mobile = links.filter((link) => ["/shop/orders", "/shop/till", "/shop/menu", "/shop/loyalty"].includes(link.href));
 
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[13.75rem_minmax(0,1fr)]">
@@ -60,9 +62,12 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
           <p className="font-display text-2xl leading-tight">{session.shop.name}</p>
           <p className="font-zh text-accent-ink">{session.shop.nameZh}</p>
           <p className="text-sm text-ink-soft">{session.shop.city}</p>
+          <p className="mt-2 text-sm text-ink-soft" data-testid="signed-in-as">
+            {t("signedInAs")} <span className="font-display text-ink">{t(session.staff.role === "owner" ? "roleOwner" : "roleCounter")}</span>
+          </p>
         </div>
         <nav className="flex flex-col px-2 pt-3" aria-label="Dan">
-          {LINKS.map((link) => {
+          {links.map((link) => {
             const active = pathname === link.href;
             return (
               <Link
@@ -167,7 +172,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
 
       <Dialog open={more} title={t("moreTitle")} onClose={() => setMore(false)}>
         <div className="flex flex-col">
-          {LINKS.filter((link) => link.href === "/shop/ticket" || link.href === "/shop/sales").map((link) => (
+          {links.filter((link) => link.href === "/shop/ticket" || link.href === "/shop/sales").map((link) => (
             <Link
               key={link.href}
               href={link.href}

@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { formatPence, primaryName, secondaryName } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
-import { useShop } from "@/lib/shop-context";
+import { useIsOwner, useShop } from "@/lib/shop-context";
 import type { SalesRange, SalesSummary } from "@/lib/types";
 import { PageTitle } from "./ui";
 
 export function SalesView() {
   const { t, locale } = useI18n();
   const shop = useShop();
+  const isOwner = useIsOwner();
   const [range, setRange] = useState<SalesRange>("today");
   const [summary, setSummary] = useState<SalesSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +19,7 @@ export function SalesView() {
   const loadSales = shop.loadSales;
 
   useEffect(() => {
+    if (!isOwner) return;
     let cancelled = false;
     loadSales(range)
       .then((next) => {
@@ -29,14 +31,15 @@ export function SalesView() {
     return () => {
       cancelled = true;
     };
-  }, [range, orderCount, loadSales]);
+  }, [range, orderCount, loadSales, isOwner]);
 
   const maxQty = summary?.topItems[0]?.qty ?? 1;
 
   return (
     <div>
       <PageTitle title={t("salesTitle")} gloss={locale === "zh-Hant" ? "Sales" : "營業"} />
-      <div className="flex gap-2">
+      {!isOwner ? <p className="max-w-xl text-ink-soft" data-testid="sales-owner-only">{t("salesOwnerOnly")}</p> : null}
+      <div className={isOwner ? "flex gap-2" : "hidden"}>
         <RangeButton pressed={range === "today"} label={t("salesToday")} onClick={() => setRange("today")} />
         <RangeButton pressed={range === "week"} label={t("salesWeek")} onClick={() => setRange("week")} />
       </div>
