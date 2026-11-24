@@ -8,6 +8,8 @@
  * https://github.com/DanPartners/server.
  */
 
+import type { ThemeChoice } from "./theme";
+
 export const DAN_PRODUCT = "dan" as const;
 
 export const ALLERGENS = [
@@ -65,6 +67,8 @@ export type ServerPing = {
     password: boolean;
     pin: boolean;
   };
+  /** The shop's theme. Older servers may not send it. */
+  theme?: ThemeChoice;
 };
 
 export type LoginInput =
@@ -157,6 +161,13 @@ export type Order = {
   notes: string;
   lines: OrderLine[];
   totalPence: number;
+  /** Orders from the customer site say how they are paid. Counter and phone orders have none. */
+  payment?: OrderPayment | null;
+};
+
+export type OrderPayment = {
+  method: "card" | "at_shop";
+  status: "due" | "paid";
 };
 
 export type CreateOrderLine = {
@@ -222,6 +233,10 @@ export interface DanClient {
   addStamp(phone: string): Promise<Customer>;
   redeemReward(phone: string): Promise<Customer>;
   getSales(range: SalesRange): Promise<SalesSummary>;
+  /** The shop's theme, stored on the server. */
+  getTheme(): Promise<ThemeChoice>;
+  /** Owner only. */
+  updateTheme(theme: ThemeChoice): Promise<ThemeChoice>;
 }
 
 export type SessionMode = "demo" | "remote";

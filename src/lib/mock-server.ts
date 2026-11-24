@@ -26,6 +26,7 @@ import type {
   TicketComponent,
 } from "./types";
 import { ALLERGENS, FULFILMENTS, ORDER_SOURCES, ORDER_STATUSES, STATIONS } from "./types";
+import { normalizeTheme, type ThemeChoice } from "./theme";
 
 const NEXT_STATUS: Record<OrderStatus, OrderStatus | null> = {
   new: "preparing",
@@ -207,6 +208,13 @@ export class MockDanServer implements DanClient {
       notes: input.notes?.trim() ?? "",
       lines,
       totalPence: lines.reduce((sum, line) => sum + line.qty * line.unitPricePence, 0),
+      // Online orders in the demo alternate between paid by card and pay at the shop.
+      payment:
+        input.source === "online"
+          ? number % 2 === 0
+            ? { method: "card", status: "paid" }
+            : { method: "at_shop", status: "due" }
+          : null,
     };
     this.state.orders.unshift(order);
     return Promise.resolve(clone(order));
@@ -279,6 +287,15 @@ export class MockDanServer implements DanClient {
     customer.stamps = 0;
     customer.rewardsRedeemed += 1;
     return Promise.resolve(clone(customer));
+  }
+
+  getTheme(): Promise<ThemeChoice> {
+    return Promise.resolve(normalizeTheme(this.state.theme));
+  }
+
+  updateTheme(theme: ThemeChoice): Promise<ThemeChoice> {
+    this.state.theme = normalizeTheme(theme);
+    return Promise.resolve(clone(this.state.theme));
   }
 
   getSales(range: SalesRange) {

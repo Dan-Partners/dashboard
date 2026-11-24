@@ -116,6 +116,11 @@ function Slip({ order, shopInfo, sections }: { order: Order; shopInfo: Shop; sec
           <span>{t("tillTotal").toUpperCase()}</span>
           <span>{formatPence(order.totalPence)}</span>
         </p>
+        {order.payment ? (
+          <p className="mt-1 border border-slip-ink px-2 py-1 text-center font-display text-base tracking-[0.12em]" data-testid="ticket-payment">
+            {order.payment.status === "paid" ? t("ticketPaidCard") : `${t("ticketToPay")} ${formatPence(order.totalPence)}`}
+          </p>
+        ) : null}
         <p className="mt-3 text-center font-zh">{t("ticketThanks")}</p>
         <p className="text-center font-display text-[0.68rem] tracking-[0.18em] uppercase">{primaryName(t("ticketBill"), "帳單", locale)}</p>
       </article>

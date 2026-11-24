@@ -44,6 +44,7 @@ A real shop runs [DanPartners/server](https://github.com/DanPartners/server): a 
 - **Connect** sends `ping`. The answer must say `product: "dan"`. A server that has not run `init` answers `not_set_up`, and the connect screen says so.
 - **Sign in** with the owner's email and password, or the counter PIN. The token goes in `Authorization: Bearer <token>`.
 - **The counter PIN runs service**: orders, the till, tickets, stamp cards, and marking dishes sold out. Only the owner edits dishes and prices or sees sales. The server enforces this. The dashboard hides the Sales link, makes dish rows read-only and explains why, so nobody hits an error mid-rush. The side menu shows who is signed in.
+- **Online orders** from the customer site show how they are paid: "Paid by card", or "To pay at the shop" with the amount, on the docket and on the ticket.
 - **Errors** carry the server's code (`forbidden`, `locked`, `sold_out` …), and [`src/lib/i18n.ts`](src/lib/i18n.ts) turns it into copy.
 - The server must list the dashboard's address in `DAN_ALLOWED_ORIGINS`, or the browser refuses to connect.
 
@@ -76,7 +77,7 @@ UI copy is English, with Chinese beside the labels that staff already say. The l
 
 ## Themes
 
-**Theme / 主題** is in the side menu, in **More** on a phone, and on the connect screen. It opens a dialog with two views.
+The theme belongs to the **shop**. It is stored on the shop server, and every tablet and the shop's [customer site](https://github.com/DanPartners/customer) use it. **Theme / 主題** is in the side menu and in **More** on a phone. Only the owner can change it, because customers see it; with the counter PIN the dialog shows the current theme without letting anyone change it. In the browser demo it stays in the browser.
 
 | View | What it does |
 | --- | --- |
@@ -99,7 +100,9 @@ How it works:
 - **Roles, not colours.** Components paint with `paper`, `paper-raised`, `paper-deep`, `ink`, `ink-soft`, `accent`, `accent-deep`, `accent-ink`, `on-accent` and `rule` (for example `bg-paper`, `text-accent-ink`). Do not put a hex value in a component. The roles are declared in [`src/app/globals.css`](src/app/globals.css).
 - **Derived and checked.** [`src/lib/theme.ts`](src/lib/theme.ts) derives every role from the three chosen colours and moves any that would be hard to read: body text aims for 7:1 against its background and nothing falls below 4.5:1. The Customise view says when it has done this.
 - **The side menu is its own surface.** Inside an element with the `chrome` class the same roles resolve to the side menu's colours, so a button placed there needs no variant.
-- **Saved on the device.** The choice lives in `localStorage` with the rest of `dan.v1`. A small inline script paints a saved theme before React loads, so a reload does not flash the default. A theme shared by every tablet in a shop would need an endpoint on the shop server; it is not in `DanClient`.
+- **Saved on the shop server.** `updateTheme` (owner only) stores it; every tablet picks it up with its regular refresh, and the connect screen gets it from `ping`. An owner's edit shows at once and is saved half a second after the last change, so dragging a colour picker sends one save. [`src/lib/use-theme.ts`](src/lib/use-theme.ts) holds this.
+- **A copy on each tablet.** The last theme is kept in `localStorage` with the rest of `dan.v1`, and a small inline script paints it before React loads, so a reload does not flash the default.
+- **Shared with the customer site.** The customer site uses the same `theme.ts` rules and colour roles, so a shop looks the same to staff and customers.
 - **Storage is not trusted.** Only six-digit hex colours and known property names are applied, both in the app and in the inline script.
 - **Not themed.** The mark stays vermilion and the word "Dan" stays in its serif in every theme. The 80mm ticket stays black on white, on screen and in print.
 

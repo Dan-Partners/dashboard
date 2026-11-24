@@ -16,6 +16,7 @@ import type {
   ServerPing,
 } from "./types";
 import { DAN_PRODUCT } from "./types";
+import { normalizeTheme, type ThemeChoice } from "./theme";
 
 /**
  * Talks to a Dan shop server over GraphQL. The wire contract is
@@ -26,10 +27,11 @@ import { DAN_PRODUCT } from "./types";
 const PING_TIMEOUT_MS = 6000;
 
 const SHOP = "id name nameZh address city phone";
+const THEME = "preset typeface custom { paper ink accent chrome }";
 const STAFF = "id name role";
 const MENU_ITEM =
   "id number categoryId nameEn nameZh descriptionEn pricePence station allergens soldOut kind includes { number qty }";
-const ORDER = `id number createdAt source fulfilment status customerName phone address notes totalPence
+const ORDER = `id number createdAt source fulfilment status customerName phone address notes totalPence payment { method status }
   lines { itemId number nameEn nameZh qty unitPricePence station kind components { number nameEn nameZh qty station } }`;
 const CUSTOMER = "id phone name stamps rewardsRedeemed createdAt";
 const SALES =
@@ -91,11 +93,12 @@ export async function pingServer(input: string, fetchImpl: typeof fetch = fetch)
   try {
     const data = await graphql<{ ping: ServerPing }>(
       base,
-      `query Ping { ping { ok product version shop { ${SHOP} } auth { password pin } } }`,
+      `query Ping { ping { ok product version shop { ${SHOP} } auth { password pin } theme { ${THEME} } } }`,
       {},
       { fetchImpl, signal: controller.signal },
     );
     const ping = data.ping;
+    if (ping?.theme) ping.theme = normalizeTheme(ping.theme);
     if (!ping || ping.ok !== true || ping.product !== DAN_PRODUCT || !ping.shop?.name) {
       throw new DanError("not_dan", "That address answered, but it is not a Dan server.");
     }
@@ -204,6 +207,19 @@ export class GraphQLDanClient implements DanClient {
       { phone },
     );
     return data.redeemReward;
+  }
+
+  async getTheme(): Promise<ThemeChoice> {
+    const data = await this.run<{ theme: ThemeChoice }>(`query Theme { theme { ${THEME} } }`);
+    return normalizeTheme(data.theme);
+  }
+
+  async updateTheme(theme: ThemeChoice): Promise<ThemeChoice> {
+    const data = await this.run<{ updateTheme: ThemeChoice }>(
+      `mutation UpdateTheme($theme: ThemeInput!) { updateTheme(theme: $theme) { ${THEME} } }`,
+      { theme: { preset: theme.preset, typeface: theme.typeface, custom: theme.custom } },
+    );
+    return normalizeTheme(data.updateTheme);
   }
 
   async getSales(range: SalesRange): Promise<SalesSummary> {

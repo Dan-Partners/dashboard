@@ -16,7 +16,8 @@ import {
   type PresetId,
   type ThemeSpec,
 } from "@/lib/theme";
-import { useTheme } from "@/lib/use-theme";
+import { useShop } from "@/lib/shop-context";
+import { useTheme, type ThemeSave } from "@/lib/use-theme";
 import { Button, Dialog, Kicker } from "./ui";
 
 const PRESET_COPY: Record<PresetId | "custom", { name: CopyKey; gloss: CopyKey }> = {
@@ -41,7 +42,9 @@ const CHROME_COPY: Record<ChromeMode, CopyKey> = {
  */
 export function ThemeDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useI18n();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, canEdit, save } = useTheme();
+  const { persisted } = useShop();
+  const demo = persisted.session?.mode === "demo";
   const [view, setView] = useState<"choose" | "customise">("choose");
 
   function close() {
@@ -54,6 +57,11 @@ export function ThemeDialog({ open, onClose }: { open: boolean; onClose: () => v
       {view === "choose" ? (
         <div data-testid="theme-choose">
           <p className="text-ink-soft">{t("themeLede")}</p>
+          {!canEdit ? (
+            <p className="mt-3 border-l-2 border-accent pl-3 text-sm" data-testid="theme-owner-only">
+              {t("themeOwnerOnly")}
+            </p>
+          ) : null}
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {[...PRESET_IDS, "custom" as const].map((id) => (
               <PresetTile
@@ -63,6 +71,7 @@ export function ThemeDialog({ open, onClose }: { open: boolean; onClose: () => v
                 gloss={t(PRESET_COPY[id].gloss)}
                 selected={theme.preset === id}
                 testId={`theme-${id}`}
+                disabled={!canEdit}
                 onSelect={() => setTheme({ ...theme, preset: id })}
               />
             ))}
@@ -76,10 +85,11 @@ export function ThemeDialog({ open, onClose }: { open: boolean; onClose: () => v
                   type="button"
                   aria-pressed={theme.typeface === id}
                   data-testid={`typeface-${id}`}
+                  disabled={!canEdit}
                   onClick={() => setTheme({ ...theme, typeface: id })}
                   // Each option is drawn in its own typeface.
                   style={{ fontFamily: TYPEFACES[id].sample, fontWeight: TYPEFACES[id].weight }}
-                  className={`min-h-16 cursor-pointer border px-1 py-2 text-center ${theme.typeface === id ? "border-ink bg-ink text-paper" : "border-rule hover:bg-paper-deep"}`}
+                  className={`min-h-16 border px-1 py-2 text-center disabled:cursor-default ${canEdit ? "cursor-pointer" : ""} ${theme.typeface === id ? "border-ink bg-ink text-paper" : `border-rule ${canEdit ? "hover:bg-paper-deep" : ""}`}`}
                 >
                   <span className="block text-2xl leading-none">Aa</span>
                   <span className="mt-1.5 block text-xs leading-tight">{TYPEFACES[id].name}</span>
@@ -87,15 +97,14 @@ export function ThemeDialog({ open, onClose }: { open: boolean; onClose: () => v
               ))}
             </div>
           </div>
-          <p className="mt-4 text-sm text-ink-soft">{t("themeDeviceNote")}</p>
+          <p className="mt-4 text-sm text-ink-soft">{t(demo ? "themeDemoNote" : "themeDeviceNote")}</p>
+          <SaveStatus save={save} />
           <div className="mt-5 flex gap-2">
-            <Button
-              variant="line"
-              className="flex-1"
-              onClick={() => setView("customise")}
-            >
-              {t("themeCustomise")}
-            </Button>
+            {canEdit ? (
+              <Button variant="line" className="flex-1" onClick={() => setView("customise")}>
+                {t("themeCustomise")}
+              </Button>
+            ) : null}
             <Button className="flex-1" onClick={close}>
               {t("themeDone")}
             </Button>
@@ -151,12 +160,30 @@ export function ThemeButton({
   );
 }
 
+/** Says when the shop's theme is being saved, or could not be. */
+function SaveStatus({ save }: { save: ThemeSave }) {
+  const { t } = useI18n();
+  if (save.failed) {
+    return (
+      <p className="mt-2 text-sm text-accent-ink" role="alert" data-testid="theme-save-failed">
+        {t("themeSaveFailed")}
+      </p>
+    );
+  }
+  return (
+    <p className="mt-2 min-h-5 text-sm text-ink-soft" aria-live="polite" data-testid="theme-save-status">
+      {save.saving ? t("themeSaving") : ""}
+    </p>
+  );
+}
+
 function PresetTile({
   spec,
   name,
   gloss,
   selected,
   testId,
+  disabled = false,
   onSelect,
 }: {
   spec: ThemeSpec;
@@ -164,6 +191,7 @@ function PresetTile({
   gloss: string;
   selected: boolean;
   testId: string;
+  disabled?: boolean;
   onSelect: () => void;
 }) {
   // A tile shows another theme's colours, so it paints from data, not from the roles.
@@ -173,8 +201,9 @@ function PresetTile({
       type="button"
       aria-pressed={selected}
       data-testid={testId}
+      disabled={disabled}
       onClick={onSelect}
-      className={`cursor-pointer border p-1.5 text-left ${selected ? "border-ink bg-paper-raised outline-2 outline-ink" : "border-rule hover:bg-paper-deep"}`}
+      className={`border p-1.5 text-left ${disabled ? "cursor-default" : "cursor-pointer"} ${selected ? "border-ink bg-paper-raised outline-2 outline-ink" : `border-rule ${disabled ? "" : "hover:bg-paper-deep"}`}`}
     >
       <span className="flex h-16 overflow-hidden" style={{ background: page.paper, boxShadow: `inset 0 0 0 1px ${page.rule}` }} aria-hidden>
         <span className="flex w-1/4 flex-col gap-1 p-1.5" style={{ background: chrome.paper, boxShadow: `inset -1px 0 0 ${chrome.rule}` }}>
@@ -214,6 +243,7 @@ function Customise({
 }) {
   const { t } = useI18n();
   const { adjusted } = resolveTheme(spec);
+  const { save } = useTheme();
 
   return (
     <div data-testid="theme-customise">
@@ -223,6 +253,7 @@ function Customise({
         <ColourField label={t("themeInk")} name="ink" value={spec.ink} onChange={(ink) => onChange({ ...spec, ink })} />
         <ColourField label={t("themeAccent")} name="accent" value={spec.accent} onChange={(accent) => onChange({ ...spec, accent })} />
       </div>
+      <SaveStatus save={save} />
       {adjusted.ink || adjusted.accent ? (
         <div className="mt-3 space-y-1 border-l-2 border-accent pl-3 text-sm" role="status" data-testid="theme-adjusted">
           {adjusted.ink ? <p>{t("themeAdjustedInk")}</p> : null}

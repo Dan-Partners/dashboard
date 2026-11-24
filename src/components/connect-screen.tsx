@@ -9,7 +9,6 @@ import { useSessionRedirect, useShop } from "@/lib/shop-context";
 import { normalizeServerUrl } from "@/lib/url";
 import type { ServerPing } from "@/lib/types";
 import { DanMark } from "./mark";
-import { ThemeButton, ThemeDialog } from "./theme-dialog";
 import { Button, Kicker, Splash, TextField } from "./ui";
 
 type Phase = { name: "url" } | { name: "login"; baseUrl: string; ping: ServerPing };
@@ -27,7 +26,6 @@ export function ConnectScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pin, setPin] = useState("");
-  const [themeOpen, setThemeOpen] = useState(false);
 
   if (ready && session) return <Splash />;
 
@@ -258,10 +256,6 @@ export function ConnectScreen() {
         <p className="mt-3 text-center text-sm text-ink-soft">{t("connectDemoHint")}</p>
       </div>
 
-      <div className="mt-8 flex justify-center">
-        <ThemeButton className="gap-4" label={t("theme")} gloss={t("themeZh")} onClick={() => setThemeOpen(true)} />
-      </div>
-      <ThemeDialog open={themeOpen} onClose={() => setThemeOpen(false)} />
     </div>
   );
 }

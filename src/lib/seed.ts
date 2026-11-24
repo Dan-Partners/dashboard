@@ -1,3 +1,4 @@
+import type { ThemeChoice } from "./theme";
 import type {
   Allergen,
   Category,
@@ -680,6 +681,8 @@ export type DemoState = {
   orders: Order[];
   customers: Customer[];
   nextOrderNumber: number;
+  /** The demo shop's theme. The demo keeps it in this browser. */
+  theme?: ThemeChoice;
 };
 
 function buildItems(): MenuItem[] {
@@ -897,6 +900,12 @@ function buildOrders(menu: MenuItem[], now: Date): Order[] {
         notes: draft.notes ?? "",
         lines,
         totalPence: lines.reduce((sum, entry) => sum + entry.qty * entry.unitPricePence, 0),
+        payment:
+          draft.source === "online"
+            ? draft.number % 2 === 0
+              ? { method: "card", status: "paid" }
+              : { method: "at_shop", status: "due" }
+            : null,
       };
       return order;
     })

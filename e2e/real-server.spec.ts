@@ -71,6 +71,57 @@ test("the counter PIN runs service but cannot see sales or edit dishes", async (
 
   await page.goto("/shop/sales");
   await expect(page.getByTestId("sales-owner-only")).toBeVisible();
+
+  // The shop's theme is shown, not changeable, with the PIN.
+  await page.goto("/shop/orders");
+  await page.getByTestId("theme-button").first().click();
+  await expect(page.getByTestId("theme-owner-only")).toBeVisible();
+  await expect(page.getByTestId("theme-jade")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Customise" })).toHaveCount(0);
+});
+
+/** Asks the shop server for its theme directly, as another tablet would. */
+async function serverTheme(page: Page): Promise<string> {
+  const response = await page.request.post(`${server}/graphql`, {
+    data: { query: "{ ping { theme { preset typeface } } }" },
+  });
+  const body = (await response.json()) as { data: { ping: { theme: { preset: string; typeface: string } } } };
+  return `${body.data.ping.theme.preset}/${body.data.ping.theme.typeface}`;
+}
+
+test("the owner's theme is saved on the shop server for every tablet", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await connect(page);
+  await page.getByLabel("Email").fill(ownerEmail);
+  await page.getByLabel("Password").fill(ownerPassword);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
+
+  await page.getByTestId("theme-button").first().click();
+  await expect(page.getByText("Saved on the shop server")).toBeVisible();
+  await page.getByTestId("theme-jade").click();
+  await page.getByTestId("typeface-source").click();
+  await expect.poll(() => serverTheme(page)).toBe("jade/source");
+
+  // Another tablet, signing in fresh, paints in the shop's theme.
+  const tablet = await page.context().browser()!.newPage();
+  await tablet.goto("/");
+  await tablet.evaluate(() => localStorage.clear());
+  await tablet.reload();
+  await tablet.waitForFunction(() => document.documentElement.dataset.dan === "ready");
+  await tablet.getByLabel("Server URL").fill(server!);
+  await tablet.getByRole("button", { name: "Connect", exact: true }).click();
+  await tablet.getByRole("button", { name: "PIN", exact: true }).click();
+  await tablet.getByLabel("PIN").fill(pin);
+  await tablet.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(tablet.locator("html")).toHaveAttribute("data-theme", "jade");
+  await expect(tablet.locator("html")).toHaveAttribute("data-typeface", "source");
+  await tablet.close();
+
+  // Put the shop back to Dan for the next run.
+  await page.getByTestId("theme-dan").click();
+  await page.getByTestId("typeface-plex").click();
+  await expect.poll(() => serverTheme(page)).toBe("dan/plex");
 });
 
 test("the owner sees sales and edits a dish", async ({ page }) => {

@@ -7,6 +7,8 @@ import { DanError, isDanError } from "./errors";
 import { formatPence } from "./format";
 import { summarizeSales } from "./sales";
 import { GraphQLDanClient } from "./graphql-client";
+import type { ThemeChoice } from "./theme";
+import { editingThemeNow } from "./use-theme";
 import { nextOnlineDraft } from "./online-drafts";
 import {
   forgetServer,
@@ -83,15 +85,27 @@ function snapshotFromPersisted(persisted: Persisted): ShopSnapshot | null {
   };
 }
 
-async function pullRemote(baseUrl: string, token: string): Promise<Omit<ShopSnapshot, "shop">> {
+async function pullRemote(baseUrl: string, token: string): Promise<Omit<ShopSnapshot, "shop"> & { theme: ThemeChoice }> {
   const client = new GraphQLDanClient(baseUrl, token);
-  const [menu, orders, customers] = await Promise.all([client.getMenu(), client.getOrders(), client.getCustomers()]);
+  const [menu, orders, customers, theme] = await Promise.all([
+    client.getMenu(),
+    client.getOrders(),
+    client.getCustomers(),
+    client.getTheme(),
+  ]);
   return {
     categories: menu.categories,
     items: menu.items,
     orders: orders.orders,
     customers: customers.customers,
+    theme,
   };
+}
+
+/** Takes the shop's theme from the server, unless the owner is editing it on this tablet. */
+function adoptShopTheme(theme: ThemeChoice | undefined) {
+  if (!theme || editingThemeNow()) return;
+  if (JSON.stringify(theme) !== JSON.stringify(getSnapshot().theme)) writePersisted({ theme });
 }
 
 export function ShopProvider({ children }: { children: React.ReactNode }) {
@@ -107,7 +121,8 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     const current = getSnapshot().session;
     if (current?.mode !== "remote" || !current.serverUrl || !current.token) return;
     try {
-      const next = await pullRemote(current.serverUrl, current.token);
+      const { theme, ...next } = await pullRemote(current.serverUrl, current.token);
+      adoptShopTheme(theme);
       setRemote({ ...next, shop: current.shop });
       setRemoteError(null);
     } catch (error) {
@@ -213,6 +228,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
             staff: result.staff,
           },
         });
+        adoptShopTheme(ping.theme);
         const authed = new GraphQLDanClient(baseUrl, result.token);
         const [menu, orders, customers] = await Promise.all([
           authed.getMenu(),

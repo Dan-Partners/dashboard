@@ -115,6 +115,14 @@ function Docket({
           {" · "}
           {t(order.fulfilment === "delivery" ? "fulfilDelivery" : "fulfilCollection")}
         </p>
+        {order.payment ? (
+          <p
+            data-testid="docket-payment"
+            className={`mt-2 inline-block px-1.5 py-0.5 font-display text-sm leading-tight ${order.payment.status === "paid" ? "bg-ink text-paper" : "border border-accent text-accent-ink"}`}
+          >
+            {order.payment.status === "paid" ? t("paymentPaidCard") : `${t("paymentDueShop")} · ${formatPence(order.totalPence)}`}
+          </p>
+        ) : null}
         <ul className="mt-3 space-y-1">
           {order.lines.map((line) => (
             <li key={`${line.number}-${line.nameEn}`} className="flex gap-2 text-sm">
