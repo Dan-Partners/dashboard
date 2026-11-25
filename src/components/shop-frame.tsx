@@ -13,13 +13,14 @@ import { DanGlyph, DanMark } from "./mark";
 import { ThemeButton, ThemeDialog } from "./theme-dialog";
 import { Button, Dialog, Splash } from "./ui";
 
-const LINKS: { href: string; label: CopyKey; gloss: CopyKey; ownerOnly?: boolean }[] = [
+const LINKS: { href: string; label: CopyKey; gloss: CopyKey; ownerOnly?: boolean; cloudOnly?: boolean }[] = [
   { href: "/shop/orders", label: "navOrders", gloss: "navOrdersZh" },
   { href: "/shop/till", label: "navTill", gloss: "navTillZh" },
   { href: "/shop/menu", label: "navMenu", gloss: "navMenuZh" },
   { href: "/shop/ticket", label: "navTicket", gloss: "navTicketZh" },
   ...(FEATURES.stamps ? [{ href: "/shop/loyalty", label: "navStamps" as CopyKey, gloss: "navStampsZh" as CopyKey }] : []),
   { href: "/shop/sales", label: "navSales", gloss: "navSalesZh", ownerOnly: true },
+  { href: "/shop/payments", label: "navPayments", gloss: "navPaymentsZh", ownerOnly: true, cloudOnly: true },
 ];
 
 export function ShopFrame({ children }: { children: React.ReactNode }) {
@@ -47,7 +48,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const links = LINKS.filter((link) => isOwner || !link.ownerOnly);
+  const links = LINKS.filter((link) => (isOwner || !link.ownerOnly) && (!link.cloudOnly || Boolean(session.cloudUrl)));
   const mobile = links.filter((link) => ["/shop/orders", "/shop/till", "/shop/menu", "/shop/loyalty"].includes(link.href));
 
   return (
@@ -181,7 +182,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
 
       <Dialog open={more} title={t("moreTitle")} onClose={() => setMore(false)}>
         <div className="flex flex-col">
-          {links.filter((link) => link.href === "/shop/ticket" || link.href === "/shop/sales").map((link) => (
+          {links.filter((link) => ["/shop/ticket", "/shop/sales", "/shop/payments"].includes(link.href)).map((link) => (
             <Link
               key={link.href}
               href={link.href}

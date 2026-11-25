@@ -291,12 +291,21 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       async loginRemote(baseUrl, input, ping, cloudUrl = null) {
         const client = new GraphQLDanClient(baseUrl);
         const result = await client.login(input);
+        // The same details sign in to the cloud as well (staff accounts sync). Not
+        // being able to reach it is fine: the counter works on the shop server.
+        const cloudToken = cloudUrl
+          ? await new GraphQLDanClient(cloudUrl)
+              .login(input)
+              .then((signedIn) => signedIn.token)
+              .catch(() => null)
+          : null;
         writePersisted({
           lastCloudUrl: cloudUrl,
           session: {
             mode: "remote",
             serverUrl: baseUrl,
             cloudUrl,
+            cloudToken,
             token: result.token,
             shop: result.shop ?? ping.shop,
             staff: result.staff,
@@ -327,6 +336,9 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         const current = getSnapshot().session;
         if (current?.mode === "remote" && current.serverUrl && current.token) {
           void new GraphQLDanClient(current.serverUrl, current.token).logout().catch(() => undefined);
+        }
+        if (current?.cloudUrl && current.cloudToken) {
+          void new GraphQLDanClient(current.cloudUrl, current.cloudToken).logout().catch(() => undefined);
         }
         writePersisted({ session: null });
         setRemote(null);

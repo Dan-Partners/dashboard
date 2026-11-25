@@ -274,6 +274,8 @@ export type Session = {
   token: string | null;
   /** The Dan cloud, the counter's second server. Optional. */
   cloudUrl?: string | null;
+  /** Signed in to the cloud too, with the same details. Missing when it could not be reached. */
+  cloudToken?: string | null;
   shop: Shop;
   staff: Staff;
 };
