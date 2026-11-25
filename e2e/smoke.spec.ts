@@ -34,3 +34,15 @@ test("an unreachable server gets a clear error, then the demo can take an order"
   await expect(slip).toContainText("蛋炒飯");
   await expect(slip).toContainText("WOK");
 });
+
+test("a link with ?demo=1 opens the demo straight on the orders board", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.goto("/shop/orders?demo=1");
+  await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
+  await expect(page.getByTestId("connection-status")).toContainText("Demo");
+  // Without it, nobody signed in is sent to the sign-in page.
+  await page.evaluate(() => localStorage.clear());
+  await page.goto("/shop/orders");
+  await expect(page.getByLabel("Shop server")).toBeVisible();
+});

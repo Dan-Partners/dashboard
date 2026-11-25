@@ -450,14 +450,27 @@ export function useIsOwner(): boolean {
   return ready && persisted.session?.staff.role === "owner";
 }
 
+/** A link that should open the demo straight away (the website's "Try the demo"). */
+function wantsDemo(): boolean {
+  if (typeof window === "undefined") return false;
+  const value = new URLSearchParams(window.location.search).get("demo");
+  return value === "1" || value === "true";
+}
+
 export function useSessionRedirect(destination: "home" | "shop") {
-  const { ready, persisted } = useShop();
+  const { ready, persisted, enterDemo } = useShop();
   const router = useRouter();
   const session = ready ? persisted.session : null;
   useEffect(() => {
     if (!ready) return;
+    // /shop/orders?demo=1 with nobody signed in opens the demo there. Someone
+    // already signed in to a real shop stays signed in.
+    if (destination === "home" && !session && wantsDemo()) {
+      enterDemo();
+      return;
+    }
     if (destination === "home" && !session) router.replace("/");
     if (destination === "shop" && session) router.replace("/shop/orders");
-  }, [destination, ready, router, session]);
+  }, [destination, ready, router, session, enterDemo]);
   return { ready, session };
 }
