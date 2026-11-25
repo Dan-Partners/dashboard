@@ -8,6 +8,8 @@ export type Persisted = {
   version: 1;
   session: Session | null;
   recentServers: string[];
+  /** The Dan cloud address last used on this device, to fill the sign-in page. */
+  lastCloudUrl: string | null;
   locale: Locale;
   demoState: DemoState | null;
   activeOrderId: string | null;
@@ -21,6 +23,7 @@ export const EMPTY_PERSISTED: Persisted = {
   version: 1,
   session: null,
   recentServers: [],
+  lastCloudUrl: null,
   locale: "en",
   demoState: null,
   activeOrderId: null,
@@ -47,6 +50,7 @@ export function normalizePersisted(value: unknown): Persisted {
     recentServers: Array.isArray(record.recentServers)
       ? record.recentServers.filter((entry): entry is string => typeof entry === "string").slice(0, 5)
       : [],
+    lastCloudUrl: typeof record.lastCloudUrl === "string" ? record.lastCloudUrl : null,
     locale: isLocale(record.locale) ? record.locale : "en",
     demoState: demo,
     activeOrderId: typeof record.activeOrderId === "string" ? record.activeOrderId : null,

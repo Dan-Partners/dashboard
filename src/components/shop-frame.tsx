@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { FEATURES } from "@/lib/features";
 import { formatStamp } from "@/lib/format";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useIsOwner, useSessionRedirect, useShop } from "@/lib/shop-context";
 import { BackupNotice } from "./backup-notice";
+import { ConnectionStatus } from "./connection-status";
 import { DanGlyph, DanMark } from "./mark";
 import { ThemeButton, ThemeDialog } from "./theme-dialog";
 import { Button, Dialog, Splash } from "./ui";
@@ -16,7 +18,7 @@ const LINKS: { href: string; label: CopyKey; gloss: CopyKey; ownerOnly?: boolean
   { href: "/shop/till", label: "navTill", gloss: "navTillZh" },
   { href: "/shop/menu", label: "navMenu", gloss: "navMenuZh" },
   { href: "/shop/ticket", label: "navTicket", gloss: "navTicketZh" },
-  { href: "/shop/loyalty", label: "navStamps", gloss: "navStampsZh" },
+  ...(FEATURES.stamps ? [{ href: "/shop/loyalty", label: "navStamps" as CopyKey, gloss: "navStampsZh" as CopyKey }] : []),
   { href: "/shop/sales", label: "navSales", gloss: "navSalesZh", ownerOnly: true },
 ];
 
@@ -112,7 +114,10 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
             {session.shop.name}
             <span className="ml-3 font-zh text-base text-accent-ink">{session.shop.nameZh}</span>
           </p>
-          <p className="font-display text-sm tracking-[0.14em] text-ink-soft uppercase">{formatStamp(now)}</p>
+          <div className="flex shrink-0 items-center gap-5">
+            <ConnectionStatus session={session} />
+            <p className="hidden font-display text-sm tracking-[0.14em] text-ink-soft uppercase sm:block">{formatStamp(now)}</p>
+          </div>
         </header>
 
         {shop.notice ? (
@@ -145,7 +150,8 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
         </main>
 
         <nav
-          className="no-print fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-rule bg-paper pb-[env(safe-area-inset-bottom)] md:hidden"
+          className="no-print fixed inset-x-0 bottom-0 z-20 grid border-t border-rule bg-paper pb-[env(safe-area-inset-bottom)] md:hidden"
+          style={{ gridTemplateColumns: `repeat(${mobile.length + 1}, minmax(0, 1fr))` }}
           aria-label="Dan"
         >
           {mobile.map((link) => {

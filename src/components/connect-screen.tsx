@@ -1,17 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isDanError } from "@/lib/errors";
 import { messageForError, useI18n } from "@/lib/i18n";
-import { pingServer } from "@/lib/graphql-client";
+import { checkCloud, pingServer } from "@/lib/graphql-client";
 import { useSessionRedirect, useShop } from "@/lib/shop-context";
-import { normalizeServerUrl } from "@/lib/url";
+import { normalizeCloudUrl, normalizeServerUrl } from "@/lib/url";
 import type { ServerPing } from "@/lib/types";
 import { DanMark } from "./mark";
 import { Button, Kicker, Splash, TextField } from "./ui";
 
-type Phase = { name: "url" } | { name: "login"; baseUrl: string; ping: ServerPing };
+type Phase =
+  | { name: "url" }
+  | { name: "login"; baseUrl: string; ping: ServerPing; cloudUrl: string | null; cloudReachable: boolean };
 
 export function ConnectScreen() {
   const { t } = useI18n();
@@ -19,6 +21,8 @@ export function ConnectScreen() {
   const shop = useShop();
   const router = useRouter();
   const [url, setUrl] = useState("");
+  const [cloud, setCloud] = useState(() => shop.persisted.lastCloudUrl ?? "");
+  const [cloudError, setCloudError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>({ name: "url" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,18 +31,46 @@ export function ConnectScreen() {
   const [password, setPassword] = useState("");
   const [pin, setPin] = useState("");
 
+  // Opened from the shop's machine itself (the counter address on the shop Wi-Fi):
+  // that machine is the shop server, so fill it in.
+  useEffect(() => {
+    if (typeof window === "undefined" || !/^https?:$/.test(window.location.protocol)) return;
+    const here = window.location.origin;
+    let cancelled = false;
+    pingServer(here)
+      .then(() => {
+        if (!cancelled) setUrl((current) => current || here);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   if (ready && session) return <Splash />;
 
   async function connect(raw: string) {
     setBusy(true);
     setError(null);
+    setCloudError(null);
+    let cloudUrl: string | null;
+    try {
+      cloudUrl = normalizeCloudUrl(cloud);
+    } catch (caught) {
+      setCloudError(caught instanceof Error ? caught.message : t("errGeneric"));
+      setBusy(false);
+      return;
+    }
     try {
       const canonical = normalizeServerUrl(raw);
-      const ping = await pingServer(canonical);
+      const [ping, cloudReachable] = await Promise.all([
+        pingServer(canonical),
+        cloudUrl ? checkCloud(cloudUrl) : Promise.resolve(false),
+      ]);
       shop.rememberServer(canonical);
       setUrl(canonical);
       setAuthMode(ping.auth.password ? "email" : "pin");
-      setPhase({ name: "login", baseUrl: canonical, ping });
+      setPhase({ name: "login", baseUrl: canonical, ping, cloudUrl, cloudReachable });
     } catch (caught) {
       const code = isDanError(caught) ? caught.code : undefined;
       setError(messageForError(code, t, caught instanceof Error ? caught.message : undefined));
@@ -70,6 +102,7 @@ export function ConnectScreen() {
         phase.baseUrl,
         authMode === "email" ? { email: email.trim(), password } : { pin },
         phase.ping,
+        phase.cloudUrl,
       );
       router.push("/shop/orders");
     } catch (caught) {
@@ -132,6 +165,21 @@ export function ConnectScreen() {
               required
             />
           </div>
+          <div className="mt-4">
+            <TextField
+              label={t("connectCloud")}
+              name="cloud-url"
+              value={cloud}
+              onChange={(event) => setCloud(event.target.value)}
+              placeholder={t("connectCloudPlaceholder")}
+              hint={cloudError ? undefined : t("connectCloudHint")}
+              error={cloudError ?? undefined}
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              inputMode="url"
+            />
+          </div>
           <Button type="submit" className="mt-4 w-full" disabled={busy}>
             {busy ? t("connectSubmitting") : t("connectSubmit")}
           </Button>
@@ -169,7 +217,21 @@ export function ConnectScreen() {
           <Kicker>{phase.ping.shop.city}</Kicker>
           <h1 className="mt-1 font-display text-4xl leading-none">{phase.ping.shop.name}</h1>
           <p className="font-zh text-lg text-accent-ink">{phase.ping.shop.nameZh}</p>
-          <p className="mt-2 truncate text-sm text-ink-soft">{phase.baseUrl}</p>
+          <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 text-sm text-ink-soft" data-testid="connect-servers">
+            <dt>{t("statusShop")}</dt>
+            <dd className="truncate">{phase.baseUrl}</dd>
+            {phase.cloudUrl ? (
+              <>
+                <dt>{t("statusCloud")}</dt>
+                <dd className="truncate">{phase.cloudUrl}</dd>
+              </>
+            ) : null}
+          </dl>
+          {phase.cloudUrl && !phase.cloudReachable ? (
+            <p className="mt-2 border-l-2 border-accent pl-3 text-sm" data-testid="connect-cloud-down">
+              {t("connectCloudDown")}
+            </p>
+          ) : null}
           <button
             type="button"
             className="mt-2 min-h-11 cursor-pointer font-display text-sm tracking-[0.14em] text-accent-ink uppercase"

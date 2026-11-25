@@ -1,3 +1,4 @@
+import { FEATURES } from "../src/lib/features";
 import { expect, test } from "@playwright/test";
 
 const out = "docs/screenshots";
@@ -10,7 +11,7 @@ test("capture the connect screen and the counter", async ({ page }) => {
   await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");
   await page.screenshot({ path: `${out}/connect.png` });
 
-  await page.getByLabel("Server URL").fill("http://127.0.0.1:9");
+  await page.getByLabel("Shop server").fill("http://127.0.0.1:9");
   await page.getByRole("button", { name: "Connect", exact: true }).click();
   await expect(page.getByText(/No Dan server answered/i)).toBeVisible();
   await page.screenshot({ path: `${out}/connect-error.png` });
@@ -39,11 +40,13 @@ test("capture the connect screen and the counter", async ({ page }) => {
   await expect(page.getByText("Kung po chicken")).toBeVisible();
   await page.screenshot({ path: `${out}/menu.png` });
 
-  await page.getByRole("link", { name: /^Stamps/ }).click();
-  await expect(page.getByRole("heading", { name: "Stamp cards" })).toBeVisible();
-  await page.getByRole("button", { name: /Mrs Wong/ }).click();
-  await expect(page.getByRole("button", { name: "Add a stamp" })).toBeVisible();
-  await page.screenshot({ path: `${out}/stamps.png` });
+  if (FEATURES.stamps) {
+    await page.getByRole("link", { name: /^Stamps/ }).click();
+    await expect(page.getByRole("heading", { name: "Stamp cards" })).toBeVisible();
+    await page.getByRole("button", { name: /Mrs Wong/ }).click();
+    await expect(page.getByRole("button", { name: "Add a stamp" })).toBeVisible();
+    await page.screenshot({ path: `${out}/stamps.png` });
+  }
 
   await page.getByRole("link", { name: /^Sales/ }).click();
   await expect(page.getByText("Takings")).toBeVisible();

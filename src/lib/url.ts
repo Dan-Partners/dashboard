@@ -5,6 +5,20 @@ import { DanError } from "./errors";
  * `192.168.1.20:2283` or `https://goldendragon.dan.partners/`.
  * Returns an origin plus optional base path, with no trailing slash.
  */
+/**
+ * The Dan cloud's address. Always https, except this machine for testing.
+ * Empty means no cloud.
+ */
+export function normalizeCloudUrl(input: string): string | null {
+  if (!input.trim()) return null;
+  const url = normalizeServerUrl(/^[a-z][a-z0-9+.-]*:\/\//i.test(input.trim()) ? input : `https://${input.trim()}`);
+  const local = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/.test(url);
+  if (!url.startsWith("https://") && !local) {
+    throw new DanError("invalid_url", "The Dan cloud's address starts with https://");
+  }
+  return url;
+}
+
 export function normalizeServerUrl(input: string): string {
   const trimmed = input.trim();
   if (!trimmed) {

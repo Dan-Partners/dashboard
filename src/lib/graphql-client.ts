@@ -14,6 +14,7 @@ import type {
   OrderStatus,
   SalesRange,
   SalesSummary,
+  SyncStatus,
   ServerPing,
 } from "./types";
 import { DAN_PRODUCT } from "./types";
@@ -112,6 +113,22 @@ export async function pingServer(input: string, fetchImpl: typeof fetch = fetch)
       throw new DanError("not_dan", "That address answered, but it is not a Dan server.");
     }
     throw asDanError(error);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Whether the Dan cloud answers. Its health check is the only thing it shares with any website. */
+export async function checkCloud(base: string, fetchImpl: typeof fetch = fetch): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
+  try {
+    const response = await fetchImpl(`${base}/healthz`, { signal: controller.signal, cache: "no-store", credentials: "omit" });
+    if (!response.ok) return false;
+    const body = (await response.json()) as { product?: unknown };
+    return body.product === "dan-cloud";
+  } catch {
+    return false;
   } finally {
     clearTimeout(timer);
   }
@@ -222,6 +239,12 @@ export class GraphQLDanClient implements DanClient {
       { theme: { preset: theme.preset, typeface: theme.typeface, custom: theme.custom } },
     );
     return normalizeTheme(data.updateTheme);
+  }
+
+  /** Any signed-in staff. For the status corner; not part of DanClient. */
+  async getSyncStatus(): Promise<SyncStatus> {
+    const data = await this.run<{ syncStatus: SyncStatus }>("query SyncStatus { syncStatus { mode pending lastSyncedAt } }");
+    return data.syncStatus;
   }
 
   /** Owner only. Not part of DanClient: see BackupStatus. */

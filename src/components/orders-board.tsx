@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { isDanError } from "@/lib/errors";
+import { FEATURES } from "@/lib/features";
 import { formatPence, fulfilmentLabel, phoneDigits, primaryName, secondaryName } from "@/lib/format";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
@@ -167,7 +168,7 @@ function Docket({
           <Link href={`/shop/ticket?order=${order.id}`} className="inline-flex min-h-11 items-center px-2 font-display text-ink-soft">
             {t("viewTicket")}
           </Link>
-          {order.phone ? (
+          {FEATURES.stamps && order.phone ? (
             rewardReady ? (
               <Link href="/shop/loyalty" className="inline-flex min-h-11 items-center px-2 font-display text-accent-ink">
                 {t("rewardWaiting")}

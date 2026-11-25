@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
 test("an unreachable server gets a clear error, then the demo can take an order", async ({ page }) => {
   await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");
   await expect(page.getByRole("heading", { name: "Connect" })).toBeVisible();
-  await page.getByLabel("Server URL").fill("http://127.0.0.1:9");
+  await page.getByLabel("Shop server").fill("http://127.0.0.1:9");
   await page.getByRole("button", { name: "Connect", exact: true }).click();
   await expect(page.getByText(/No Dan server answered/i)).toBeVisible();
 

@@ -31,7 +31,7 @@ async function connect(page: Page) {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");
-  await page.getByLabel("Server URL").fill(server!);
+  await page.getByLabel("Shop server").fill(server!);
   await page.getByRole("button", { name: "Connect", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Golden Dragon" })).toBeVisible();
 }
@@ -115,7 +115,7 @@ test("the owner's theme is saved on the shop server for every tablet", async ({ 
   await tablet.evaluate(() => localStorage.clear());
   await tablet.reload();
   await tablet.waitForFunction(() => document.documentElement.dataset.dan === "ready");
-  await tablet.getByLabel("Server URL").fill(server!);
+  await tablet.getByLabel("Shop server").fill(server!);
   await tablet.getByRole("button", { name: "Connect", exact: true }).click();
   await tablet.getByRole("button", { name: "PIN", exact: true }).click();
   await tablet.getByLabel("PIN").fill(pin);
@@ -233,4 +233,22 @@ test("the owner is warned when backups are off, the counter is not", async ({ pa
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
   await page.waitForTimeout(1000);
   await expect(page.getByTestId("backup-notice")).toHaveCount(0);
+});
+
+test("the status corner shows the shop server connected, no cloud yet, and stamps are off", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await connect(page);
+  await page.getByRole("button", { name: "PIN", exact: true }).click();
+  await page.getByLabel("PIN").fill(pin);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
+  const status = page.getByTestId("connection-status");
+  await expect(status).toHaveAttribute("data-shop", "connected");
+  await expect(status).toHaveAttribute("data-cloud", "not_set");
+  await expect(page.getByTestId("sync-line")).toHaveText("Sync not running yet");
+  await status.click();
+  await expect(page.getByTestId("connection-details")).toContainText(server!);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("link", { name: /^Stamps/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Stamp", exact: true })).toHaveCount(0);
 });

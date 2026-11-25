@@ -1,5 +1,6 @@
 "use client";
 
+import { FEATURES } from "@/lib/features";
 import { useState } from "react";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import {
@@ -323,7 +324,7 @@ function Sample() {
         </p>
         <p className="mt-2 flex items-center gap-2">
           <span className="bg-accent px-3 py-1.5 font-display leading-none text-on-accent">{t("accept")}</span>
-          <span className="border border-rule px-3 py-1.5 font-display leading-none">{t("stampThis")}</span>
+          {FEATURES.stamps ? <span className="border border-rule px-3 py-1.5 font-display leading-none">{t("stampThis")}</span> : null}
           <span className="ml-auto font-display text-lg">£7.80</span>
         </p>
       </div>

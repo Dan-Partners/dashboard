@@ -238,6 +238,13 @@ export type BackupStatus = {
   lastResult: string | null;
 };
 
+/** Whether the shop's changes are in step with the Dan cloud. Any signed-in staff. */
+export type SyncStatus = {
+  mode: "not_running" | "synced" | "waiting";
+  pending: number;
+  lastSyncedAt: string | null;
+};
+
 export interface DanClient {
   ping(): Promise<ServerPing>;
   login(input: LoginInput): Promise<LoginResult>;
@@ -262,8 +269,11 @@ export type SessionMode = "demo" | "remote";
 
 export type Session = {
   mode: SessionMode;
+  /** The shop server: the counter's first choice, always. */
   serverUrl: string | null;
   token: string | null;
+  /** The Dan cloud, the counter's second server. Optional. */
+  cloudUrl?: string | null;
   shop: Shop;
   staff: Staff;
 };

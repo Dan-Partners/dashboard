@@ -50,7 +50,7 @@ type ShopContextValue = {
   dismissNotice: () => void;
   rememberServer: (url: string) => void;
   forgetServer: (url: string) => void;
-  loginRemote: (baseUrl: string, input: LoginInput, ping: ServerPing) => Promise<void>;
+  loginRemote: (baseUrl: string, input: LoginInput, ping: ServerPing, cloudUrl?: string | null) => Promise<void>;
   enterDemo: () => void;
   logout: () => void;
   resetDemo: () => void;
@@ -288,13 +288,15 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       dismissNotice: () => setNotice(null),
       rememberServer,
       forgetServer,
-      async loginRemote(baseUrl, input, ping) {
+      async loginRemote(baseUrl, input, ping, cloudUrl = null) {
         const client = new GraphQLDanClient(baseUrl);
         const result = await client.login(input);
         writePersisted({
+          lastCloudUrl: cloudUrl,
           session: {
             mode: "remote",
             serverUrl: baseUrl,
+            cloudUrl,
             token: result.token,
             shop: result.shop ?? ping.shop,
             staff: result.staff,
