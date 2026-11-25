@@ -52,6 +52,14 @@ export function FocusFrame({ session, position, children }: { session: Session; 
   const stations = shop.persisted.kitchenStations;
   const route = POSITION_ROUTE[position];
 
+  // Marks the page as locked, for the touch rules in globals.css.
+  useEffect(() => {
+    document.documentElement.dataset.focus = position;
+    return () => {
+      delete document.documentElement.dataset.focus;
+    };
+  }, [position]);
+
   // Locked means locked: any other screen goes back to this position's.
   useEffect(() => {
     if (pathname !== route) router.replace(route);
@@ -63,7 +71,7 @@ export function FocusFrame({ session, position, children }: { session: Session; 
       : "";
 
   return (
-    <div className="min-h-dvh" data-focus={position}>
+    <div className="focus-screen min-h-dvh" data-focus={position}>
       {/* On a phone the lock and lights take the top row (lock in the corner), the line goes under. */}
       <header className="chrome-sm no-print sticky top-0 z-20 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-rule bg-paper/95 py-2 pr-2 pl-4 text-ink backdrop-blur md:pl-6">
         <p className="order-2 min-w-0 basis-full pb-1 font-display text-base leading-tight sm:order-1 sm:flex-1 sm:basis-0 sm:pb-0 md:text-lg" data-testid="focus-status" role="status">

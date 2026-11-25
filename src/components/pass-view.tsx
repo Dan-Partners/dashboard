@@ -6,6 +6,7 @@ import { passOrders } from "@/lib/focus";
 import { ago, formatPence, orderLabel, primaryName } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
+import { useTapGuard, type TapGuard } from "@/lib/tap-guard";
 import type { Order } from "@/lib/types";
 import { WhereStrip } from "./where-strip";
 import { Button, PageTitle } from "./ui";
@@ -16,6 +17,7 @@ export function PassView() {
   const shop = useShop();
   const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
+  const guard = useTapGuard();
   const locked = shop.persisted.focus?.position === "pass";
   const orders = shop.snapshot?.orders ?? [];
   const ready = passOrders(orders);
@@ -40,14 +42,14 @@ export function PassView() {
       {ready.length === 0 ? <p className="mt-8 font-display text-2xl text-ink-soft">{t("passEmpty")}</p> : null}
       <div className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))] items-start gap-5">
         {ready.map((order) => (
-          <PassCard key={order.id} order={order} now={now} onError={setError} />
+          <PassCard key={order.id} order={order} now={now} guard={guard} onError={setError} />
         ))}
       </div>
     </div>
   );
 }
 
-function PassCard({ order, now, onError }: { order: Order; now: number; onError: (message: string | null) => void }) {
+function PassCard({ order, now, guard, onError }: { order: Order; now: number; guard: TapGuard; onError: (message: string | null) => void }) {
   const { t, locale } = useI18n();
   const shop = useShop();
   const [busy, setBusy] = useState(false);
@@ -78,10 +80,11 @@ function PassCard({ order, now, onError }: { order: Order; now: number; onError:
         className="mt-4 min-h-14 w-full text-2xl"
         disabled={busy}
         onClick={() => {
+          const done = guard.run(() => shop.setOrderStatus(order.id, "completed"));
+          if (!done) return;
           setBusy(true);
           onError(null);
-          void shop
-            .setOrderStatus(order.id, "completed")
+          void done
             .catch((error: unknown) => onError(isDanError(error) ? error.message : t("errGeneric")))
             .finally(() => setBusy(false));
         }}

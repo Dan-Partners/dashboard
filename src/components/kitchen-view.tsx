@@ -8,6 +8,7 @@ import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
 import { STATION_GLOSS, STATION_LABEL } from "@/lib/stations";
 import { writePersisted } from "@/lib/storage";
+import { useTapGuard, type TapGuard } from "@/lib/tap-guard";
 import { STATIONS, type OrderStatus, type Station } from "@/lib/types";
 import { StationPicker } from "./station-picker";
 import { Button, PageTitle } from "./ui";
@@ -36,6 +37,7 @@ export function KitchenView() {
   const shop = useShop();
   const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
+  const guard = useTapGuard();
   const locked = shop.persisted.focus?.position === "kitchen";
   const stations = shop.persisted.kitchenStations;
   const orders = shop.snapshot?.orders ?? [];
@@ -64,7 +66,7 @@ export function KitchenView() {
       {tickets.length === 0 ? <p className="mt-8 font-display text-2xl text-ink-soft">{t("kitchenEmpty")}</p> : null}
       <div className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(min(100%,19rem),1fr))] items-start gap-5">
         {tickets.map((ticket) => (
-          <KitchenCard key={ticket.order.id} ticket={ticket} stations={stations} now={now} onError={setError} />
+          <KitchenCard key={ticket.order.id} ticket={ticket} stations={stations} now={now} guard={guard} onError={setError} />
         ))}
       </div>
     </div>
@@ -75,11 +77,13 @@ function KitchenCard({
   ticket,
   stations,
   now,
+  guard,
   onError,
 }: {
   ticket: KitchenTicket;
   stations: Station[];
   now: number;
+  guard: TapGuard;
   onError: (message: string | null) => void;
 }) {
   const { t, locale } = useI18n();
@@ -155,10 +159,11 @@ function KitchenCard({
           className={`mt-4 w-full ${forPicked ? "min-h-14 text-2xl" : ""}`}
           disabled={busy}
           onClick={() => {
+            const done = guard.run(() => shop.setOrderStatus(order.id, next.status));
+            if (!done) return;
             setBusy(true);
             onError(null);
-            void shop
-              .setOrderStatus(order.id, next.status)
+            void done
               .catch((error: unknown) => onError(isDanError(error) ? error.message : t("errGeneric")))
               .finally(() => setBusy(false));
           }}

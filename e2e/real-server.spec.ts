@@ -172,13 +172,16 @@ test("an online order reaches an open tablet live, with no refresh", async ({ pa
       variables: { i: { customerName: customer, phone: "07700 900555", lines: [{ number: 81, qty: 1 }], payWith: "at_shop", allergensConfirmed: true } },
     },
   });
-  const number = ((await placed.json()) as { data: { placeOrder: { order: { number: number } } } }).data.placeOrder.order.number;
+  // The customer API limits orders from one address: a rerun too soon is refused here, plainly.
+  expect((await placed.json()) as { errors?: unknown }).not.toHaveProperty("errors");
 
   // No reload, no waiting for a timer: it is pushed.
   const docket = page.locator("article", { hasText: customer });
-  await expect(docket).toBeVisible({ timeout: 3000 });
+  // Through the cloud, then the shop server's sync: a few seconds.
+  await expect(docket).toBeVisible({ timeout: 10_000 });
   await expect(docket.getByTestId("docket-payment")).toContainText("To pay at the shop");
-  await expect(page.getByText(`#${number}`).first()).toBeVisible();
+  // The cloud leaves the number to the shop server, which gives it on arrival.
+  await expect(docket.getByTestId("docket-number")).toHaveText(/^#\d+$/);
 });
 
 test("an order from a table's link shows its table and is marked served", async ({ page }) => {
@@ -201,9 +204,12 @@ test("an order from a table's link shows its table and is marked served", async 
   });
 
   const docket = page.locator("article", { hasText: customer });
-  await expect(docket).toBeVisible({ timeout: 3000 });
+  // Through the cloud, then the shop server's sync: a few seconds.
+  await expect(docket).toBeVisible({ timeout: 10_000 });
   await expect(docket.getByTestId("docket-table")).toHaveText("Eat in · Table 7");
   await docket.getByRole("button", { name: "Accept", exact: true }).click();
+  // A person's pause: taps in the moment after a change count as a double tap.
+  await page.waitForTimeout(800);
   await docket.getByRole("button", { name: "Ready", exact: true }).click();
   await expect(docket.getByRole("button", { name: "Served", exact: true })).toBeVisible();
 });

@@ -7,6 +7,7 @@ import { FEATURES } from "@/lib/features";
 import { ago, formatPence, fulfilmentLabel, orderLabel, phoneDigits, primaryName, secondaryName } from "@/lib/format";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
+import { useTapGuard, type TapGuard } from "@/lib/tap-guard";
 import type { Order, OrderStatus } from "@/lib/types";
 import { Button, PageTitle } from "./ui";
 import { WhereStrip } from "./where-strip";
@@ -24,6 +25,7 @@ export function OrdersBoard() {
   const [focus, setFocus] = useState<OrderStatus>("new");
   const [now, setNow] = useState(() => Date.now());
   const [cardError, setCardError] = useState<string | null>(null);
+  const guard = useTapGuard();
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
@@ -79,6 +81,7 @@ export function OrdersBoard() {
                     now={now}
                     rewardReady={customers.some((customer) => customer.id === phoneDigits(order.phone) && customer.stamps >= 10)}
                     locked={locked}
+                    guard={guard}
                     onError={setCardError}
                   />
                 ))}
@@ -96,6 +99,7 @@ function Docket({
   now,
   rewardReady,
   locked,
+  guard,
   onError,
 }: {
   order: Order;
@@ -103,6 +107,7 @@ function Docket({
   rewardReady: boolean;
   /** In focus mode: where the food goes, big, at the top; no links away. */
   locked: boolean;
+  guard: TapGuard;
   onError: (message: string | null) => void;
 }) {
   const { t, locale } = useI18n();
@@ -168,9 +173,11 @@ function Docket({
               variant="accent"
               disabled={busy}
               onClick={() => {
+                const done = guard.run(() => shop.setOrderStatus(order.id, next.status));
+                if (!done) return;
                 setBusy(true);
                 onError(null);
-                void shop.setOrderStatus(order.id, next.status).catch((error: unknown) => {
+                void done.catch((error: unknown) => {
                   onError(isDanError(error) ? error.message : t("errGeneric"));
                 }).finally(() => setBusy(false));
               }}

@@ -40,7 +40,7 @@ export function FocusDialog({ open, onClose }: { open: boolean; onClose: () => v
           <div key={position} className="border border-rule bg-paper-raised p-3">
             <button
               type="button"
-              className="flex w-full cursor-pointer flex-col items-start text-left"
+              className="flex min-h-11 w-full cursor-pointer flex-col items-start text-left transition-transform duration-75 active:scale-[0.99]"
               onClick={() => lock(position)}
               data-testid={`focus-${position}`}
             >

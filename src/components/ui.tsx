@@ -46,15 +46,15 @@ export function Button({
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "ink" | "accent" | "ghost" | "line" }) {
   const styles = {
-    ink: "bg-ink text-paper hover:bg-ink/90",
-    accent: "bg-accent text-on-accent hover:bg-accent-deep",
-    ghost: "bg-transparent text-ink hover:bg-paper-deep",
-    line: "border border-rule bg-paper-raised text-ink hover:bg-paper-deep",
+    ink: "bg-ink text-paper hover:bg-ink/90 active:bg-ink/80",
+    accent: "bg-accent text-on-accent hover:bg-accent-deep active:bg-accent-deep",
+    ghost: "bg-transparent text-ink hover:bg-paper-deep active:bg-paper-deep",
+    line: "border border-rule bg-paper-raised text-ink hover:bg-paper-deep active:bg-paper-deep",
   }[variant];
   return (
     <button
       {...props}
-      className={`inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 px-4 text-center font-display text-lg leading-none disabled:cursor-not-allowed disabled:opacity-40 ${styles} ${className}`}
+      className={`inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 px-4 text-center font-display text-lg leading-none transition-transform duration-75 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100 ${styles} ${className}`}
     />
   );
 }

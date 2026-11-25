@@ -116,6 +116,8 @@ test("kitchen and pass tablets follow a table's order from new to served", async
   await ticket.getByRole("button", { name: "Start" }).click();
   await expect(ticket).toHaveAttribute("data-status", "preparing");
   await expect(ticket).toHaveClass(/glow-preparing/);
+  // A person's pause: taps in the moment after a change count as a double tap.
+  await kitchen.waitForTimeout(800);
   await ticket.getByRole("button", { name: "Ready" }).click();
   await expect(ticket).toHaveClass(/glow-ready/);
 

@@ -173,7 +173,7 @@ export function Till() {
                     <IconButton label="+" onClick={() => changeQty(line.number, 1)} />
                   </span>
                   <span className="w-16 text-right font-display">{formatPence(line.qty * line.unitPricePence)}</span>
-                  <button type="button" className="min-h-11 cursor-pointer px-1 text-sm text-ink-soft" onClick={() => setLines((current) => current.filter((entryLine) => entryLine.number !== line.number))}>
+                  <button type="button" className="min-h-11 min-w-11 cursor-pointer px-1 text-sm text-ink-soft active:text-ink" onClick={() => setLines((current) => current.filter((entryLine) => entryLine.number !== line.number))}>
                     {t("tillRemove")}
                   </button>
                 </li>
@@ -261,7 +261,7 @@ function Toggle({ pressed, onClick, label }: { pressed: boolean; onClick: () => 
       type="button"
       aria-pressed={pressed}
       onClick={onClick}
-      className={`min-h-11 cursor-pointer border px-3 font-display ${pressed ? "border-ink bg-ink text-paper" : "border-rule text-ink-soft"}`}
+      className={`min-h-11 cursor-pointer border px-3 font-display active:scale-[0.97] ${pressed ? "border-ink bg-ink text-paper" : "border-rule text-ink-soft active:bg-paper-deep"}`}
     >
       {label}
     </button>
@@ -294,7 +294,7 @@ function Field({
 
 function IconButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button type="button" aria-label={label} onClick={onClick} className="min-h-11 min-w-11 cursor-pointer border border-rule font-display text-lg">
+    <button type="button" aria-label={label} onClick={onClick} className="min-h-11 min-w-11 cursor-pointer border border-rule font-display text-lg active:bg-paper-deep">
       {label}
     </button>
   );

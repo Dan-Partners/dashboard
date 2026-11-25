@@ -75,6 +75,8 @@ DAN_E2E_SERVER_URL=http://127.0.0.1:2283 DAN_E2E_CLOUD_URL=http://goldendragon.l
 
 With the stop and start commands set, the tests run one at a time, so nothing else uses the shop server while it is stopped.
 
+`e2e/touch.spec.ts` runs the demo on an iPad-sized touch screen: a double tap moves an order one step, the lock is held with a finger, nothing is selected by a long press, and controls are big enough.
+
 `e2e/focus.spec.ts` locks the demo to the kitchen. With `DAN_E2E_PUBLIC_URL` (the shop's customer API on the cloud) it also places a table's order and follows it on a kitchen tablet and a pass tablet. The customer API limits orders from one address, so a rerun a minute later may be refused; the test says so.
 
 ## In the browser
@@ -100,6 +102,7 @@ With the stop and start commands set, the tests run one at a time, so nothing el
 - The lock and the kitchen's station filter are saved on the tablet, so a reload stays locked. Browsers need a tap to go full screen again: a Full screen button shows until then. iPhones have no full screen for web pages; the simplified screen still applies.
 - Signing out unlocks the tablet.
 - Done tickets stay 15 minutes from when the tablet saw them finish (after a reload, from when they were placed): orders do not record when they were finished yet (Linear DAN-17).
+- **Made for touch.** After a status button is tapped, the kitchen, pass and board ignore action taps for 0.7 seconds ([`src/lib/tap-guard.ts`](src/lib/tap-guard.ts)): Start puts Ready in the same spot, and Served slides the next ticket under the finger, so a double tap must count once. Locked screens have no pull-to-refresh or bounce (a reload leaves full screen) and no text selection or copy menu on a long press; the till's fields still type. Buttons visibly press. Every control on the kitchen and till is at least 44 by 44 pixels. Pinch zoom stays on, for anyone who needs it larger.
 - Logic in [`src/lib/focus.ts`](src/lib/focus.ts).
 
 ![The pass, with the table number large](docs/screenshots/focus-pass.png)

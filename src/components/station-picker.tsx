@@ -10,7 +10,7 @@ export function StationPicker({ value, onToggle, onAll }: { value: Station[]; on
   const { t } = useI18n();
   const all = allStations(value);
   const chip = (on: boolean) =>
-    `min-h-11 cursor-pointer border px-3 font-display text-lg leading-none ${on ? "border-ink bg-ink text-paper" : "border-rule bg-paper text-ink-soft"}`;
+    `min-h-11 cursor-pointer border px-3 font-display text-lg leading-none transition-transform duration-75 active:scale-[0.97] ${on ? "border-ink bg-ink text-paper" : "border-rule bg-paper text-ink-soft active:bg-paper-deep"}`;
   return (
     <fieldset className="flex flex-wrap items-center gap-2" data-testid="station-picker">
       <legend className="mb-1 font-display text-[0.72rem] tracking-[0.18em] text-ink-soft uppercase">{t("kitchenStations")}</legend>

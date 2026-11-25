@@ -200,6 +200,28 @@ input,
 select,
 textarea {
   touch-action: manipulation;
+  /* Buttons show their own press (active:), not the browser's grey flash. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * A locked tablet (focus mode): no pull-to-refresh or bounce, which would
+ * reload it out of full screen, and no text selection or copy menu when a
+ * ticket is pressed. The till's fields still take typing.
+ */
+html[data-focus] {
+  overscroll-behavior: none;
+}
+
+.focus-screen {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.focus-screen :is(input, textarea, select) {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 dialog.sheet {
