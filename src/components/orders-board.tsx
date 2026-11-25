@@ -112,8 +112,7 @@ function Docket({
         </div>
         <p className="mt-2 font-display text-[0.72rem] tracking-[0.16em] text-ink-soft uppercase">
           {t(order.source === "online" ? "sourceOnline" : order.source === "phone" ? "sourcePhone" : "sourceCounter")}
-          {" · "}
-          {order.fulfilment === "eat_in" ? null : fulfilmentLabel(order, t)}
+          {order.fulfilment === "eat_in" ? null : ` · ${fulfilmentLabel(order, t)}`}
         </p>
         {order.fulfilment === "eat_in" ? (
           <p data-testid="docket-table" className="mt-1 font-display text-lg leading-tight">

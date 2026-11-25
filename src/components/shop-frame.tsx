@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { formatStamp } from "@/lib/format";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useIsOwner, useSessionRedirect, useShop } from "@/lib/shop-context";
+import { BackupNotice } from "./backup-notice";
 import { DanGlyph, DanMark } from "./mark";
 import { ThemeButton, ThemeDialog } from "./theme-dialog";
 import { Button, Dialog, Splash } from "./ui";
@@ -136,6 +137,8 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
             </Button>
           </div>
         ) : null}
+
+        <BackupNotice session={session} />
 
         <main id="main" className="px-4 py-6 pb-28 md:px-8 md:py-8 md:pb-10">
           {children}

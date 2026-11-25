@@ -1,6 +1,7 @@
 import { asDanError, DanError } from "./errors";
 import { normalizeServerUrl } from "./url";
 import type {
+  BackupStatus,
   CreateOrderInput,
   Customer,
   DanClient,
@@ -221,6 +222,14 @@ export class GraphQLDanClient implements DanClient {
       { theme: { preset: theme.preset, typeface: theme.typeface, custom: theme.custom } },
     );
     return normalizeTheme(data.updateTheme);
+  }
+
+  /** Owner only. Not part of DanClient: see BackupStatus. */
+  async getBackupStatus(): Promise<BackupStatus> {
+    const data = await this.run<{ backupStatus: BackupStatus }>(
+      "query BackupStatus { backupStatus { health lastRunAt lastSuccessAt lastResult } }",
+    );
+    return data.backupStatus;
   }
 
   async getSales(range: SalesRange): Promise<SalesSummary> {

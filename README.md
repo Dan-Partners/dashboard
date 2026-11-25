@@ -74,6 +74,8 @@ DAN_E2E_SERVER_URL=http://127.0.0.1:2283 DAN_E2E_OWNER_EMAIL=you@example.com DAN
 
 The demo also drops in an online order every so often while the tab is visible. Reset demo puts Golden Dragon back to the seeded service.
 
+On a real shop server, the owner sees a warning across the top when the nightly backup to the Dan cloud is off, failed last night, or is more than two days old. It can be hidden for the rest of the day. The counter PIN never sees it.
+
 UI copy is English, with Chinese beside the labels that staff already say. The language control switches the chrome to Traditional Chinese (`zh-Hant`). Strings live in [`src/lib/i18n.ts`](src/lib/i18n.ts); dish names are data, not chrome, and both languages are always stored on the menu.
 
 ## Themes
