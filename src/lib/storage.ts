@@ -1,6 +1,7 @@
 import type { DemoState } from "./seed";
 import { DEFAULT_THEME, normalizeTheme, type ThemeChoice } from "./theme";
-import type { Session } from "./types";
+import { normalizeFocus, normalizeStations, type Focus } from "./focus";
+import { STATIONS, type Session, type Station } from "./types";
 
 export type Locale = "en" | "zh-Hant";
 
@@ -15,6 +16,10 @@ export type Persisted = {
   activeOrderId: string | null;
   /** Saved on this device only. A shop-wide theme would need the shop server. */
   theme: ThemeChoice;
+  /** Focus mode: this tablet locked to one position. */
+  focus: Focus | null;
+  /** The kitchen screen's station filter on this tablet. */
+  kitchenStations: Station[];
 };
 
 export const STORAGE_KEY = "dan.v1";
@@ -28,6 +33,8 @@ export const EMPTY_PERSISTED: Persisted = {
   demoState: null,
   activeOrderId: null,
   theme: DEFAULT_THEME,
+  focus: null,
+  kitchenStations: [...STATIONS],
 };
 
 const listeners = new Set<() => void>();
@@ -55,6 +62,8 @@ export function normalizePersisted(value: unknown): Persisted {
     demoState: demo,
     activeOrderId: typeof record.activeOrderId === "string" ? record.activeOrderId : null,
     theme: normalizeTheme(record.theme),
+    focus: normalizeFocus(record.focus),
+    kitchenStations: normalizeStations(record.kitchenStations),
   };
 }
 

@@ -73,16 +73,36 @@ DAN_E2E_SERVER_URL=http://127.0.0.1:2283 DAN_E2E_OWNER_EMAIL=you@example.com DAN
 DAN_E2E_SERVER_URL=http://127.0.0.1:2283 DAN_E2E_CLOUD_URL=http://goldendragon.localhost:2290/staff DAN_E2E_PIN='…' DAN_E2E_SHOP_STOP='…' DAN_E2E_SHOP_START='…' npx playwright test switch-over
 ```
 
+With the stop and start commands set, the tests run one at a time, so nothing else uses the shop server while it is stopped.
+
+`e2e/focus.spec.ts` locks the demo to the kitchen. With `DAN_E2E_PUBLIC_URL` (the shop's customer API on the cloud) it also places a table's order and follows it on a kitchen tablet and a pass tablet. The customer API limits orders from one address, so a rerun a minute later may be refused; the test says so.
+
 ## In the browser
 
 | Screen | What it does |
 | --- | --- |
 | Orders | New, preparing, ready, completed. Collection, delivery, and eat in (from a table's link on the customer site: the docket and ticket show "Eat in · Table 3"). Accept, mark ready, then collected, delivered or served. Stamp a phone number from the docket. |
 | Till | Key a dish number. `2`, `×`, `81`, Add is two egg fried rice. Send the slip to the kitchen. |
+| Kitchen | Live tickets, oldest first, for the cooks. Borders glow by status: green new, blue preparing, red ready, grey once done (kept 15 minutes). A station filter (wok, fryer, rice, counter) greys and shrinks the rest; nothing is hidden. Start and Ready move the whole order. |
+| Pass | Orders ready to hand over. The table number, very large, at the top; collection or delivery with the name otherwise. Served, collected or delivered in one tap. |
 | Menu | English and Traditional Chinese, dish numbers, allergens, prices in pounds. Edit a dish. Toggle sold out. |
 | Ticket | An 80mm bill, wok / fryer / rice / counter, in Chinese and English. One slip, or torn by station. Print uses the browser. |
 | Stamps | Customers by phone. Ten stamps, then a reward. **Switched off for now** (`FEATURES.stamps` in [`src/lib/features.ts`](src/lib/features.ts)): hidden everywhere, data kept. |
 | Sales | Today and this week. |
+
+### Focus mode
+
+![Kitchen locked to the wok station](docs/screenshots/focus-kitchen.png)
+
+**Focus mode** locks a tablet to one job: Kitchen, Till, Pass or Orders board. Anyone signed in can turn it on (the Focus mode button). The tablet goes full screen with no menu, a line at the top says what it is locked to ("Focus mode on: Kitchen · Wok only · Hold the lock 3 seconds to exit"), and any other address sends it back. Each ticket starts with what that job needs most: the stations in the kitchen, the table at the pass and on the board.
+
+- **To leave:** hold the lock in the top right corner for 3 seconds. A tap only says to hold it. It stops accidents; it is not a security lock.
+- The lock and the kitchen's station filter are saved on the tablet, so a reload stays locked. Browsers need a tap to go full screen again: a Full screen button shows until then. iPhones have no full screen for web pages; the simplified screen still applies.
+- Signing out unlocks the tablet.
+- Done tickets stay 15 minutes from when the tablet saw them finish (after a reload, from when they were placed): orders do not record when they were finished yet (Linear DAN-17).
+- Logic in [`src/lib/focus.ts`](src/lib/focus.ts).
+
+![The pass, with the table number large](docs/screenshots/focus-pass.png)
 
 The demo also drops in an online order every so often while the tab is visible. Reset demo puts Golden Dragon back to the seeded service.
 

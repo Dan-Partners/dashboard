@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useReducer, useState } from "react";
 import { isDanError } from "@/lib/errors";
-import { formatPence, primaryName, secondaryName } from "@/lib/format";
+import { formatPence, orderLabel, primaryName, secondaryName } from "@/lib/format";
 import { messageForError, useI18n } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
 import type { MenuItem } from "@/lib/types";
@@ -43,6 +43,7 @@ export function Till() {
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<{ id: string; number: number } | null>(null);
   const [busy, setBusy] = useState(false);
+  const locked = shop.persisted.focus?.position === "till";
 
   const exact = items.find((item) => String(item.number) === entry.digits);
 
@@ -135,7 +136,7 @@ export function Till() {
 
   return (
     <div>
-      <PageTitle title={t("tillTitle")} gloss={locale === "zh-Hant" ? "Till" : "收銀"} />
+      {locked ? null : <PageTitle title={t("tillTitle")} gloss={locale === "zh-Hant" ? "Till" : "收銀"} />}
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="torn-wrap">
           <section className="torn border border-b-0 border-rule bg-paper-raised p-4">
@@ -198,10 +199,12 @@ export function Till() {
           ) : null}
           {sent ? (
             <p className="mt-3 text-sm">
-              {t("tillSent")} #{sent.number}.{" "}
-              <Link href={`/shop/ticket?order=${sent.id}`} className="text-accent-ink underline">
-                {t("viewTicket")}
-              </Link>
+              {t("tillSent")} {orderLabel(sent.number, t("numberWaiting"))}.{" "}
+              {locked ? null : (
+                <Link href={`/shop/ticket?order=${sent.id}`} className="text-accent-ink underline">
+                  {t("viewTicket")}
+                </Link>
+              )}
             </p>
           ) : null}
           <div className="mt-3 grid grid-cols-3 gap-2">

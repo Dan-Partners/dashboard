@@ -9,6 +9,8 @@ import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useIsOwner, useSessionRedirect, useShop } from "@/lib/shop-context";
 import { BackupNotice } from "./backup-notice";
 import { ConnectionStatus } from "./connection-status";
+import { FocusDialog } from "./focus-dialog";
+import { FocusFrame } from "./focus-frame";
 import { DanGlyph, DanMark } from "./mark";
 import { ServerSwitchNotice } from "./server-switch-notice";
 import { ThemeButton, ThemeDialog } from "./theme-dialog";
@@ -17,6 +19,8 @@ import { Button, Dialog, Splash } from "./ui";
 const LINKS: { href: string; label: CopyKey; gloss: CopyKey; ownerOnly?: boolean; cloudOnly?: boolean }[] = [
   { href: "/shop/orders", label: "navOrders", gloss: "navOrdersZh" },
   { href: "/shop/till", label: "navTill", gloss: "navTillZh" },
+  { href: "/shop/kitchen", label: "navKitchen", gloss: "navKitchenZh" },
+  { href: "/shop/pass", label: "navPass", gloss: "navPassZh" },
   { href: "/shop/menu", label: "navMenu", gloss: "navMenuZh" },
   { href: "/shop/ticket", label: "navTicket", gloss: "navTicketZh" },
   ...(FEATURES.stamps ? [{ href: "/shop/loyalty", label: "navStamps" as CopyKey, gloss: "navStampsZh" as CopyKey }] : []),
@@ -33,6 +37,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
   const [more, setMore] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
+  const [focusOpen, setFocusOpen] = useState(false);
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -46,6 +51,15 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
         <Splash />
         <div hidden>{children}</div>
       </>
+    );
+  }
+
+  const focus = shop.persisted.focus;
+  if (focus) {
+    return (
+      <FocusFrame session={session} position={focus.position}>
+        {children}
+      </FocusFrame>
     );
   }
 
@@ -88,6 +102,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="mt-auto space-y-2 px-4 pt-8 pb-5">
+          <FocusButton label={t("focusButton")} gloss={t("focusButtonZh")} onClick={() => setFocusOpen(true)} />
           <ThemeButton label={t("theme")} gloss={t("themeZh")} onClick={() => setThemeOpen(true)} />
           <LanguageToggle locale={locale} setLocale={setLocale} labelEn={t("langEn")} labelZh={t("langZh")} />
           {session.mode === "demo" ? (
@@ -186,7 +201,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
 
       <Dialog open={more} title={t("moreTitle")} onClose={() => setMore(false)}>
         <div className="flex flex-col">
-          {links.filter((link) => ["/shop/ticket", "/shop/sales", "/shop/payments"].includes(link.href)).map((link) => (
+          {links.filter((link) => ["/shop/kitchen", "/shop/pass", "/shop/ticket", "/shop/sales", "/shop/payments"].includes(link.href)).map((link) => (
             <Link
               key={link.href}
               href={link.href}
@@ -198,6 +213,14 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
           <div className="mt-4 space-y-2">
+            <FocusButton
+              label={t("focusButton")}
+              gloss={t("focusButtonZh")}
+              onClick={() => {
+                setMore(false);
+                setFocusOpen(true);
+              }}
+            />
             <ThemeButton
               label={t("theme")}
               gloss={t("themeZh")}
@@ -253,6 +276,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
       </Dialog>
 
       <ThemeDialog open={themeOpen} onClose={() => setThemeOpen(false)} />
+      <FocusDialog open={focusOpen} onClose={() => setFocusOpen(false)} />
     </div>
   );
 }
@@ -287,5 +311,19 @@ function LanguageToggle({
         {labelZh}
       </button>
     </div>
+  );
+}
+
+function FocusButton({ label, gloss, onClick }: { label: string; gloss: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      data-testid="focus-button"
+      className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-3 border border-ink bg-ink px-3 text-paper hover:bg-ink/90"
+      onClick={onClick}
+    >
+      <span className="font-display text-lg leading-none">{label}</span>
+      <span className="font-zh text-xs">{gloss}</span>
+    </button>
   );
 }

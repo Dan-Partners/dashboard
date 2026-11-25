@@ -239,6 +239,58 @@ dialog.sheet::backdrop {
   filter: drop-shadow(0 1px 0 var(--dan-rule));
 }
 
+/*
+ * Focus mode tickets: the border glows in the order's status colour, always.
+ * Green new, blue preparing, red ready, grey once done. With reduced motion
+ * the glow holds still (the rule below stops the pulse).
+ */
+.glow {
+  --glow: #1f9d55;
+  border: 3px solid var(--glow);
+  box-shadow:
+    0 0 0 1px var(--glow),
+    0 0 12px 2px color-mix(in srgb, var(--glow) 40%, transparent);
+  animation: dan-glow 1.8s ease-in-out infinite;
+}
+
+.glow-new {
+  --glow: #1f9d55;
+}
+
+.glow-preparing {
+  --glow: #2f6fdb;
+}
+
+.glow-ready {
+  --glow: #d7372a;
+}
+
+.glow-done {
+  border-color: var(--dan-rule);
+  box-shadow: none;
+  animation: none;
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
+@keyframes dan-glow {
+  50% {
+    box-shadow:
+      0 0 0 1px var(--glow),
+      0 0 26px 8px color-mix(in srgb, var(--glow) 60%, transparent);
+  }
+}
+
+/* The hold-to-unlock ring fills over 3 seconds. */
+@keyframes dan-hold {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -33,7 +33,7 @@ function Light({ link }: { link: Link }) {
  * which one the counter is using, and whether changes have reached the cloud.
  * Tap for the addresses and the last sync.
  */
-export function ConnectionStatus({ session }: { session: Session }) {
+export function ConnectionStatus({ session, compact = false }: { session: Session; compact?: boolean }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const { servers } = useShop();
@@ -42,7 +42,14 @@ export function ConnectionStatus({ session }: { session: Session }) {
   if (session.mode === "demo") {
     return (
       <p className="font-display text-sm tracking-[0.14em] text-ink-soft uppercase" data-testid="connection-status">
-        {t("statusDemo")}
+        {compact ? (
+          <>
+            <span className="sm:hidden">{t("statusDemoShort")}</span>
+            <span className="hidden sm:inline">{t("statusDemo")}</span>
+          </>
+        ) : (
+          t("statusDemo")
+        )}
       </p>
     );
   }
@@ -79,7 +86,7 @@ export function ConnectionStatus({ session }: { session: Session }) {
             {t("statusCloud")}
           </span>
         </span>
-        <span className="text-xs text-ink-soft" data-testid="sync-line">
+        <span className={`text-xs text-ink-soft ${compact ? "hidden sm:block" : ""}`} data-testid="sync-line">
           {syncLine}
         </span>
       </button>

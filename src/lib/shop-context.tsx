@@ -360,7 +360,8 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         if (current?.cloudUrl && current.cloudToken) {
           void new GraphQLDanClient(current.cloudUrl, current.cloudToken).logout().catch(() => undefined);
         }
-        writePersisted({ session: null });
+        // Signing out also unlocks the tablet.
+        writePersisted({ session: null, focus: null });
         setRemote(null);
       },
       resetDemo() {

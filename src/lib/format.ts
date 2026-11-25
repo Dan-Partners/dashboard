@@ -117,3 +117,14 @@ export function inLondonRange(iso: string, range: "today" | "week", now: Date): 
   if (range === "today") return key === dayKey(now);
   return key >= weekStartKey(now) && key <= dayKey(now);
 }
+
+/** How long ago, short: "just now", "4m", "2h", "1d" (or 分 / 小時 / 日). */
+export function ago(iso: string, now: number, locale: string, justNow: string) {
+  const mins = Math.max(0, Math.round((now - new Date(iso).getTime()) / 60_000));
+  if (mins < 1) return justNow;
+  if (mins < 60) return locale === "zh-Hant" ? `${mins} 分` : `${mins}m`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return locale === "zh-Hant" ? `${hours} 小時` : `${hours}h`;
+  const days = Math.round(hours / 24);
+  return locale === "zh-Hant" ? `${days} 日` : `${days}d`;
+}

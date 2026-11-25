@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { isDanError } from "@/lib/errors";
 import { FEATURES } from "@/lib/features";
-import { formatPence, fulfilmentLabel, orderLabel, phoneDigits, primaryName, secondaryName } from "@/lib/format";
+import { ago, formatPence, fulfilmentLabel, orderLabel, phoneDigits, primaryName, secondaryName } from "@/lib/format";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
 import type { Order, OrderStatus } from "@/lib/types";
 import { Button, PageTitle } from "./ui";
+import { WhereStrip } from "./where-strip";
 
 const COLUMNS: { status: OrderStatus; label: CopyKey }[] = [
   { status: "new", label: "statusNew" },
@@ -31,10 +32,11 @@ export function OrdersBoard() {
 
   const orders = shop.snapshot?.orders ?? [];
   const customers = shop.snapshot?.customers ?? [];
+  const locked = shop.persisted.focus?.position === "board";
 
   return (
     <div>
-      <PageTitle title={t("ordersTitle")} gloss={locale === "zh-Hant" ? "Orders" : "訂單"} />
+      {locked ? null : <PageTitle title={t("ordersTitle")} gloss={locale === "zh-Hant" ? "Orders" : "訂單"} />}
       {shop.persisted.session?.mode === "demo" ? <p className="mb-5 text-sm text-ink-soft">{t("ordersDemoNote")}</p> : null}
       {cardError ? (
         <p className="mb-4 border-l-2 border-accent pl-3 text-sm" role="alert">
@@ -76,6 +78,7 @@ export function OrdersBoard() {
                     order={order}
                     now={now}
                     rewardReady={customers.some((customer) => customer.id === phoneDigits(order.phone) && customer.stamps >= 10)}
+                    locked={locked}
                     onError={setCardError}
                   />
                 ))}
@@ -92,11 +95,14 @@ function Docket({
   order,
   now,
   rewardReady,
+  locked,
   onError,
 }: {
   order: Order;
   now: number;
   rewardReady: boolean;
+  /** In focus mode: where the food goes, big, at the top; no links away. */
+  locked: boolean;
   onError: (message: string | null) => void;
 }) {
   const { t, locale } = useI18n();
@@ -107,6 +113,11 @@ function Docket({
   return (
     <div className="torn-wrap">
       <article className={`torn border border-b-0 border-rule bg-paper-raised px-3 py-3 ${order.status === "new" ? "border-t-[3px] border-t-accent" : "border-t-[3px] border-t-ink/15"}`}>
+        {locked ? (
+          <div className="mb-2">
+            <WhereStrip order={order} size="board" />
+          </div>
+        ) : null}
         <div className="flex items-baseline justify-between gap-3">
           <h3 className="font-display text-2xl leading-none" data-testid="docket-number">
             {orderLabel(order.number, t("numberWaiting"))}
@@ -167,9 +178,11 @@ function Docket({
               {next.label}
             </Button>
           ) : null}
-          <Link href={`/shop/ticket?order=${order.id}`} className="inline-flex min-h-11 items-center px-2 font-display text-ink-soft">
-            {t("viewTicket")}
-          </Link>
+          {locked ? null : (
+            <Link href={`/shop/ticket?order=${order.id}`} className="inline-flex min-h-11 items-center px-2 font-display text-ink-soft">
+              {t("viewTicket")}
+            </Link>
+          )}
           {FEATURES.stamps && order.phone ? (
             rewardReady ? (
               <Link href="/shop/loyalty" className="inline-flex min-h-11 items-center px-2 font-display text-accent-ink">
@@ -205,14 +218,4 @@ function nextStep(order: Order, t: (key: CopyKey) => string): { status: OrderSta
     return { status: "completed", label };
   }
   return null;
-}
-
-function ago(iso: string, now: number, locale: string, justNow: string) {
-  const mins = Math.max(0, Math.round((now - new Date(iso).getTime()) / 60_000));
-  if (mins < 1) return justNow;
-  if (mins < 60) return locale === "zh-Hant" ? `${mins} 分` : `${mins}m`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return locale === "zh-Hant" ? `${hours} 小時` : `${hours}h`;
-  const days = Math.round(hours / 24);
-  return locale === "zh-Hant" ? `${days} 日` : `${days}d`;
 }
