@@ -9,6 +9,8 @@ import { english } from "./i18n";
 import { summarizeSales } from "./sales";
 import { GraphQLDanClient, ORDER_FIELDS } from "./graphql-client";
 import { live } from "./live";
+import { endpointFor, useServerHealth, type Servers } from "./server-health";
+import type { ServerName } from "./server-links";
 import type { ThemeChoice } from "./theme";
 import { editingThemeNow } from "./use-theme";
 import { nextOnlineDraft } from "./online-drafts";
@@ -46,6 +48,8 @@ type ShopContextValue = {
   persisted: Persisted;
   snapshot: ShopSnapshot | null;
   remoteError: string | null;
+  /** Both servers' state, and which one the counter is using. */
+  servers: Servers;
   notice: Notice | null;
   dismissNotice: () => void;
   rememberServer: (url: string) => void;
@@ -129,36 +133,54 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const session = ready ? persisted.session : null;
+  const servers = useServerHealth(session);
+
+  /*
+   * A server refused this tablet's sign-in. The shop server's refusal signs
+   * the tablet out. The cloud's only drops the cloud sign-in, which sends the
+   * counter back to the shop server and stops it switching until the next login.
+   */
+  const signInRefused = useCallback((server: ServerName) => {
+    const current = getSnapshot().session;
+    if (server === "cloud" && current) {
+      writePersisted({ session: { ...current, cloudToken: null } });
+      return;
+    }
+    writePersisted({ session: null });
+    setRemote(null);
+  }, []);
 
   const refreshRemote = useCallback(async () => {
     const current = getSnapshot().session;
-    if (current?.mode !== "remote" || !current.serverUrl || !current.token) return;
+    const end = endpointFor(current);
+    if (!current || !end) return;
     try {
-      const { theme, ...next } = await pullRemote(current.serverUrl, current.token);
+      const { theme, ...next } = await pullRemote(end.url, end.token);
       adoptShopTheme(theme);
       remoteOrders = next.orders;
       setRemote({ ...next, shop: current.shop });
       setRemoteError(null);
     } catch (error) {
       if (isDanError(error) && error.code === "unauthorized") {
-        writePersisted({ session: null });
-        setRemote(null);
+        signInRefused(end.server);
         return;
       }
       setRemoteError(error instanceof Error ? error.message : "The shop server stopped answering.");
       throw error;
     }
-  }, []);
+  }, [signInRefused]);
 
   /*
-   * The shop server's live channel. Each (re)connection fetches everything
+   * The live channel of the server in use (the shop server, or the cloud while
+   * it stands in; switching reconnects). Each (re)connection fetches everything
    * once, so nothing is missed while it was down. After that, an order change
    * arrives in full and is put on the board; a menu, stamp card or theme
    * notice fetches just that part. Nothing polls.
    */
   const liveMode = session?.mode;
-  const liveServer = session?.serverUrl;
-  const liveToken = session?.token;
+  const liveOn = servers.inUse;
+  const liveServer = liveOn === "cloud" ? session?.cloudUrl : session?.serverUrl;
+  const liveToken = liveOn === "cloud" ? session?.cloudToken : session?.token;
   useEffect(() => {
     if (!ready || liveMode !== "remote" || !liveServer || !liveToken) return;
     const serverUrl = liveServer;
@@ -184,10 +206,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         if (status === "live") setRemoteError(null);
       },
       onRefused: (code) => {
-        if (code === "unauthorized") {
-          writePersisted({ session: null });
-          setRemote(null);
-        }
+        if (code === "unauthorized") signInRefused(liveOn);
       },
       onData: ({ shopEvents: event }) => {
         if (event.kind === "order" && event.order) {
@@ -221,7 +240,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       },
     });
     return stop;
-  }, [ready, liveMode, liveServer, liveToken, refreshRemote]);
+  }, [ready, liveMode, liveOn, liveServer, liveToken, refreshRemote, signInRefused]);
 
   useEffect(() => {
     if (!ready || session?.mode !== "demo") return;
@@ -284,6 +303,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       persisted,
       snapshot,
       remoteError,
+      servers,
       notice,
       dismissNotice: () => setNotice(null),
       rememberServer,
@@ -352,9 +372,9 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
           await demoMutate((server) => server.updateMenuItem(id, patch));
           return;
         }
-        const current = getSnapshot().session;
-        if (!current?.serverUrl || !current.token) return;
-        await new GraphQLDanClient(current.serverUrl, current.token).updateMenuItem(id, patch);
+        const end = endpointFor(getSnapshot().session);
+        if (!end) return;
+        await new GraphQLDanClient(end.url, end.token).updateMenuItem(id, patch);
         await refreshRemote();
       },
       async placeOrder(input) {
@@ -363,11 +383,9 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
           writePersisted({ activeOrderId: order.id });
           return order;
         }
-        const current = getSnapshot().session;
-        if (!current?.serverUrl || !current.token) {
-          throw new Error("Sign in first.");
-        }
-        const order = await new GraphQLDanClient(current.serverUrl, current.token).createOrder(input);
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        const order = await new GraphQLDanClient(end.url, end.token).createOrder(input);
         writePersisted({ activeOrderId: order.id });
         await refreshRemote();
         return order;
@@ -377,18 +395,18 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
           await demoMutate((server) => server.updateOrder(id, { status }));
           return;
         }
-        const current = getSnapshot().session;
-        if (!current?.serverUrl || !current.token) return;
-        await new GraphQLDanClient(current.serverUrl, current.token).updateOrder(id, { status });
+        const end = endpointFor(getSnapshot().session);
+        if (!end) return;
+        await new GraphQLDanClient(end.url, end.token).updateOrder(id, { status });
         await refreshRemote();
       },
       async createCustomer(input) {
         if (getSnapshot().session?.mode === "demo") {
           return demoMutate((server) => server.createCustomer(input));
         }
-        const current = getSnapshot().session;
-        if (!current?.serverUrl || !current.token) throw new Error("Sign in first.");
-        const customer = await new GraphQLDanClient(current.serverUrl, current.token).createCustomer(input);
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        const customer = await new GraphQLDanClient(end.url, end.token).createCustomer(input);
         await refreshRemote();
         return customer;
       },
@@ -396,9 +414,9 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         if (getSnapshot().session?.mode === "demo") {
           return demoMutate((server) => server.addStamp(phone));
         }
-        const current = getSnapshot().session;
-        if (!current?.serverUrl || !current.token) throw new Error("Sign in first.");
-        const customer = await new GraphQLDanClient(current.serverUrl, current.token).addStamp(phone);
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        const customer = await new GraphQLDanClient(end.url, end.token).addStamp(phone);
         await refreshRemote();
         return customer;
       },
@@ -406,9 +424,9 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         if (getSnapshot().session?.mode === "demo") {
           return demoMutate((server) => server.redeemReward(phone));
         }
-        const current = getSnapshot().session;
-        if (!current?.serverUrl || !current.token) throw new Error("Sign in first.");
-        const customer = await new GraphQLDanClient(current.serverUrl, current.token).redeemReward(phone);
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        const customer = await new GraphQLDanClient(end.url, end.token).redeemReward(phone);
         await refreshRemote();
         return customer;
       },
@@ -418,9 +436,9 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
           if (!state) throw new DanError("no_demo", "Demo is not running.");
           return summarizeSales(state.orders, range, new Date());
         }
-        const current = getSnapshot().session;
-        if (!current?.serverUrl || !current.token) throw new Error("Sign in first.");
-        return new GraphQLDanClient(current.serverUrl, current.token).getSales(range);
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        return new GraphQLDanClient(end.url, end.token).getSales(range);
       },
       setActiveOrderId(id) {
         writePersisted({ activeOrderId: id });
@@ -429,7 +447,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         return refreshRemote();
       },
     };
-  }, [notice, persisted, ready, refreshRemote, remoteError, snapshot]);
+  }, [notice, persisted, ready, refreshRemote, remoteError, servers, snapshot]);
 
   return <ShopContext.Provider value={value}>{children}</ShopContext.Provider>;
 }

@@ -10,6 +10,7 @@ import { useIsOwner, useSessionRedirect, useShop } from "@/lib/shop-context";
 import { BackupNotice } from "./backup-notice";
 import { ConnectionStatus } from "./connection-status";
 import { DanGlyph, DanMark } from "./mark";
+import { ServerSwitchNotice } from "./server-switch-notice";
 import { ThemeButton, ThemeDialog } from "./theme-dialog";
 import { Button, Dialog, Splash } from "./ui";
 
@@ -135,7 +136,10 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
           </Link>
         ) : null}
 
-        {shop.remoteError ? (
+        <ServerSwitchNotice />
+
+        {/* While the cloud stands in, the strip above says so; no alarm as well. */}
+        {shop.remoteError && shop.servers.inUse === "shop" ? (
           <div className="no-print flex items-center justify-between gap-4 border-b border-rule px-4 py-3 md:px-8" role="alert">
             <p>{t("serverDown")}</p>
             <Button variant="line" onClick={() => void shop.retryRemote()}>

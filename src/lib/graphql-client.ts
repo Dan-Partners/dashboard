@@ -118,20 +118,16 @@ export async function pingServer(input: string, fetchImpl: typeof fetch = fetch)
   }
 }
 
-/** Whether the Dan cloud answers. Its health check is the only thing it shares with any website. */
+/**
+ * Is the shop there on the Dan cloud? A shop's cloud address is its staff API
+ * there (`https://<shop>.dan.partners/staff`), so this pings it like a shop
+ * server: it answers only if the cloud is up and runs that shop.
+ */
 export async function checkCloud(base: string, fetchImpl: typeof fetch = fetch): Promise<boolean> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
-  try {
-    const response = await fetchImpl(`${base}/healthz`, { signal: controller.signal, cache: "no-store", credentials: "omit" });
-    if (!response.ok) return false;
-    const body = (await response.json()) as { product?: unknown };
-    return body.product === "dan-cloud";
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
+  return pingServer(base, fetchImpl).then(
+    () => true,
+    () => false,
+  );
 }
 
 export class GraphQLDanClient implements DanClient {

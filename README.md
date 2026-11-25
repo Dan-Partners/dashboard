@@ -43,7 +43,9 @@ npm run build
 
 A real shop runs [DanPartners/server](https://github.com/DanPartners/server): a Rust server with a local MongoDB, set up with `dan-server init` and run with Docker Compose. The dashboard talks to it over **GraphQL** at `<server>/graphql`. The wire contract is the server's [`schema.graphql`](https://github.com/DanPartners/server/blob/main/schema.graphql); this repo's side is [`src/lib/graphql-client.ts`](src/lib/graphql-client.ts), which implements `DanClient` from [`src/lib/types.ts`](src/lib/types.ts). Screens only see `DanClient`, so the browser demo and a real server look the same to them.
 
-- **Two servers.** The sign-in page asks for the **shop server** (required) and the **Dan cloud** (optional). The counter always uses the shop server first. Switching to the cloud when the shop server is down comes once the cloud can run shops; until then the cloud address is checked and shown, nothing more.
+- **Two servers.** The sign-in page asks for the **shop server** (required) and the **Dan cloud** (optional: the shop's address on the cloud, `https://<shop>.dan.partners/staff`). Signing in signs in to both. The counter uses the shop server first.
+- **Switch-over.** Both servers are checked every 10 seconds (every 3 while something is wrong). If the shop server misses 3 checks in a row while the cloud answers, every request and the live channel move to the cloud, and a strip says so. When the shop server answers 2 checks in a row and reports it has caught up with the cloud, the counter goes back. The rule is `serverInUse` in [`src/lib/server-links.ts`](src/lib/server-links.ts). Orders taken on the cloud are numbered from 9001 if the shop server cannot number them, and sync to it when it returns.
+  - **Limit:** the counter page is served by the shop machine. A tablet that already has it open carries on; one that reloads while the machine is down has nothing to reload. Until the counter is cached in the browser, open `my.dan.partners` on any device and enter the shop's cloud address as the shop server.
 - **Status, top right.** A light for each server (green connected, amber reconnecting, red offline), the one in use underlined, and the sync line ("Synced", "Waiting to sync: 12 changes", or "Sync not running yet"). Tap for the addresses and the last sync. Both servers are checked every 10 seconds; a server is offline after three missed checks. Any staff member sees it.
 - **Connect** sends `ping`. The answer must say `product: "dan"`. A server that has not run `init` answers `not_set_up`, and the connect screen says so.
 - **Sign in** with the owner's email and password, or the counter PIN. The token goes in `Authorization: Bearer <token>`.
@@ -63,6 +65,12 @@ Prices are integer pence. Times are ISO-8601. The sales day and week are calenda
 
 ```bash
 DAN_E2E_SERVER_URL=http://127.0.0.1:2283 DAN_E2E_OWNER_EMAIL=you@example.com DAN_E2E_OWNER_PASSWORD='…' DAN_E2E_PIN='…' npx playwright test real-server
+```
+
+`e2e/switch-over.spec.ts` stops a shop server that syncs to a cloud, takes an order through the cloud, starts it again and checks the counter goes back with the order. Give it the cloud address and commands that stop and start that shop server:
+
+```bash
+DAN_E2E_SERVER_URL=http://127.0.0.1:2283 DAN_E2E_CLOUD_URL=http://goldendragon.localhost:2290/staff DAN_E2E_PIN='…' DAN_E2E_SHOP_STOP='…' DAN_E2E_SHOP_START='…' npx playwright test switch-over
 ```
 
 ## In the browser
