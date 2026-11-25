@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, u
 import { useRouter } from "next/navigation";
 import { demoMutate, enterDemo, resetDemo } from "./demo-runtime";
 import { DanError, isDanError } from "./errors";
-import { formatPence, fulfilmentLabel } from "./format";
+import { formatPence, fulfilmentLabel, orderLabel } from "./format";
 import { english } from "./i18n";
 import { summarizeSales } from "./sales";
 import { GraphQLDanClient, ORDER_FIELDS } from "./graphql-client";
@@ -200,7 +200,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
           if (order.source === "online" && order.status === "new" && !seen.has(order.id)) {
             setNotice({
               id: order.id,
-              title: `#${order.number}`,
+              title: orderLabel(order.number, english("numberWaiting")),
               detail: `${fulfilmentLabel(order, english)} · ${formatPence(order.totalPence)}`,
               href: `/shop/ticket?order=${order.id}`,
             });

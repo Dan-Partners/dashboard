@@ -5,6 +5,14 @@ const gbp = new Intl.NumberFormat("en-GB", {
   currency: "GBP",
 });
 
+/**
+ * An order's number as staff see it. 0 means placed through the Dan cloud and
+ * not numbered yet: the shop server gives it one within seconds.
+ */
+export function orderLabel(number: number, waiting = "…"): string {
+  return number > 0 ? `#${number}` : waiting;
+}
+
 type FulfilmentKey = "fulfilCollection" | "fulfilDelivery" | "fulfilEatIn" | "table";
 
 /** "Collection", "Delivery", or "Eat in · Table 3" for an order brought to a table. */

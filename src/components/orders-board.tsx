@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { isDanError } from "@/lib/errors";
 import { FEATURES } from "@/lib/features";
-import { formatPence, fulfilmentLabel, phoneDigits, primaryName, secondaryName } from "@/lib/format";
+import { formatPence, fulfilmentLabel, orderLabel, phoneDigits, primaryName, secondaryName } from "@/lib/format";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
 import type { Order, OrderStatus } from "@/lib/types";
@@ -108,7 +108,9 @@ function Docket({
     <div className="torn-wrap">
       <article className={`torn border border-b-0 border-rule bg-paper-raised px-3 py-3 ${order.status === "new" ? "border-t-[3px] border-t-accent" : "border-t-[3px] border-t-ink/15"}`}>
         <div className="flex items-baseline justify-between gap-3">
-          <h3 className="font-display text-2xl leading-none">#{order.number}</h3>
+          <h3 className="font-display text-2xl leading-none" data-testid="docket-number">
+            {orderLabel(order.number, t("numberWaiting"))}
+          </h3>
           <p className="text-sm text-ink-soft">{ago(order.createdAt, now, locale, t("justNow"))}</p>
         </div>
         <p className="mt-2 font-display text-[0.72rem] tracking-[0.16em] text-ink-soft uppercase">

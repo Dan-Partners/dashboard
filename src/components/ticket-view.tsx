@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { formatClock, formatPence, fulfilmentLabel, primaryName } from "@/lib/format";
+import { formatClock, formatPence, fulfilmentLabel, orderLabel, primaryName } from "@/lib/format";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
 import { ticketSections, type TicketSection } from "@/lib/ticket";
@@ -82,7 +82,7 @@ function Slip({ order, shopInfo, sections }: { order: Order; shopInfo: Shop; sec
         </header>
         <Rule />
         <p className="flex justify-between font-display text-base">
-          <span>#{order.number}</span>
+          <span>{orderLabel(order.number, t("numberWaiting"))}</span>
           <span data-testid="ticket-fulfilment">{fulfilmentLabel(order, t).toUpperCase()}</span>
         </p>
         <p className="flex justify-between">
