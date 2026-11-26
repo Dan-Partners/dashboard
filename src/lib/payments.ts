@@ -9,9 +9,36 @@ export type PaymentsStatus = {
   available: boolean;
   /** The shop has started connecting a Stripe account. */
   connected: boolean;
-  /** Customers can pay by card. */
+  /** Customers can pay by card: the account is ready and the owner accepted Dan's terms. */
   cardPayments: boolean;
+  /** The Stripe account can take charges. Missing from an older cloud. */
+  accountReady?: boolean;
+  /** Dan's deal with the shop now. */
+  deal?: Deal;
+  /** Paid card orders so far. */
+  cardOrdersPaid?: number;
+  terms?: { version: string; text: string } | null;
+  agreement?: Agreement | null;
+  /** The terms or the deal changed since the owner last accepted (or never did). */
+  needsAcceptance?: boolean;
 };
+
+export type Deal = { freeCardOrders: number; percentBp: number; capPence: number };
+export type Agreement = { termsVersion: string; deal: Deal; ownerName: string; ownerEmail: string; acceptedAt: string };
+
+/** "3" or "2.5", from basis points. */
+export function percentText(bp: number): string {
+  return (bp / 100).toFixed(2).replace(/\.?0+$/, "");
+}
+
+export function sameDeal(a: Deal | undefined | null, b: Deal | undefined | null): boolean {
+  return Boolean(a && b && a.freeCardOrders === b.freeCardOrders && a.percentBp === b.percentBp && a.capPence === b.capPence);
+}
+
+/** The owner accepts the terms and deal they were shown. */
+export function acceptTerms(cloudUrl: string, token: string, termsVersion: string, deal: Deal, name: string): Promise<PaymentsStatus> {
+  return call<PaymentsStatus>(cloudUrl, token, "/payments/accept", { method: "POST", body: JSON.stringify({ termsVersion, deal, name }) });
+}
 
 async function call<T>(cloudUrl: string, token: string, path: string, init: RequestInit = {}): Promise<T> {
   let response: Response;
