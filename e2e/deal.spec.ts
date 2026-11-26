@@ -17,7 +17,7 @@ const customerSite = process.env.DAN_E2E_CUSTOMER_ORIGIN;
 const fakeStripe = process.env.DAN_E2E_FAKE_STRIPE;
 
 async function signIn(page: Page) {
-  await page.goto("/");
+  await page.goto("/connect");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");

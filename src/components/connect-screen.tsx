@@ -6,6 +6,7 @@ import { isDanError } from "@/lib/errors";
 import { messageForError, useI18n } from "@/lib/i18n";
 import { checkCloud, pingServer } from "@/lib/graphql-client";
 import { useSessionRedirect, useShop } from "@/lib/shop-context";
+import { writePersisted } from "@/lib/storage";
 import { normalizeCloudUrl, normalizeServerUrl } from "@/lib/url";
 import type { ServerPing } from "@/lib/types";
 import { DanMark } from "./mark";
@@ -104,6 +105,9 @@ export function ConnectScreen() {
         phase.ping,
         phase.cloudUrl,
       );
+      // The page can stay in memory after it is left: the password does not stay with it.
+      setPassword("");
+      setPin("");
       router.push("/shop/orders");
     } catch (caught) {
       const code = isDanError(caught) ? caught.code : undefined;
@@ -316,6 +320,20 @@ export function ConnectScreen() {
           <span className="mt-1 font-zh text-sm tracking-[0.2em]">{t("connectDemoZh")}</span>
         </button>
         <p className="mt-3 text-center text-sm text-ink-soft">{t("connectDemoHint")}</p>
+        <p className="mt-6 text-center">
+          <button
+            type="button"
+            className="inline-flex min-h-11 cursor-pointer items-center font-display text-sm tracking-[0.14em] text-accent-ink uppercase"
+            data-testid="use-cloud"
+            onClick={() => {
+              // Remembered, so the sign-in page does not send this device straight back here.
+              writePersisted({ lastWay: "cloud" });
+              router.push("/");
+            }}
+          >
+            {t("connectUseCloud")}
+          </button>
+        </p>
       </div>
 
     </div>

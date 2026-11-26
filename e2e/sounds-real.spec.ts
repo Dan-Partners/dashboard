@@ -24,7 +24,7 @@ async function turn(page: Page, key: string, on: boolean) {
 }
 
 async function signIn(page: Page, who: "owner" | "pin") {
-  await page.goto("/");
+  await page.goto("/connect");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");

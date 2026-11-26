@@ -45,7 +45,7 @@ async function aPhoto(page: Page): Promise<Buffer> {
 test("the owner adds a dish photo through the cloud; the menu, till and customer site show it", async ({ page, browser }) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/");
+  await page.goto("/connect");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");
@@ -105,7 +105,7 @@ test("the owner adds a dish photo through the cloud; the menu, till and customer
 });
 
 test("without the cloud, a photo cannot be added and the owner is told why", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/connect");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");

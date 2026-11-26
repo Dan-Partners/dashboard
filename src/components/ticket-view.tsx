@@ -107,7 +107,7 @@ function Slip({ order, shopInfo, sections }: { order: Order; shopInfo: Shop; sec
                   <p>
                     {line.qty} × {line.number} {line.nameEn}
                   </p>
-                  <p className="pl-8 font-zh">{line.nameZh}</p>
+                  {line.nameZh && line.nameZh !== line.nameEn ? <p className="pl-8 font-zh">{line.nameZh}</p> : null}
                 </li>
               ))}
             </ul>

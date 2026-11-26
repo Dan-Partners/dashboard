@@ -31,7 +31,7 @@ test.afterAll(() => {
 test("the counter carries on through the cloud while the shop server is down, then goes back", async ({ page }) => {
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/");
+  await page.goto("/connect");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");

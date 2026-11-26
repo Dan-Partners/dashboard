@@ -33,8 +33,8 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");
 });
 
-test("the connect screen has no theme button, because the theme belongs to the shop", async ({ page }) => {
-  await expect(page.getByRole("heading", { name: "Connect" })).toBeVisible();
+test("the sign-in screen has no theme button, because the theme belongs to the shop", async ({ page }) => {
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await expect(page.getByTestId("theme-button")).toHaveCount(0);
 });
 
@@ -119,7 +119,7 @@ test("a custom theme keeps text readable, rejects half a colour, and can be rese
 });
 
 test("the typeface can be changed and is saved, and the wordmark keeps the brand serif", async ({ page }) => {
-  const connect = page.getByRole("heading", { name: "Connect" });
+  const connect = page.getByRole("heading", { name: "Sign in" });
   // Plex is the default.
   expect(await fontOf(connect)).toMatch(/IBM.Plex.Sans/i);
   expect(await fontOf(page.locator("body"))).toMatch(/IBM.Plex.Sans/i);
@@ -191,5 +191,5 @@ test("tampered storage cannot inject styles", async ({ page }) => {
   expect(await token(page, "--dan-paper")).toBe("#f5eedc");
   expect(await token(page, "--dan-ink")).toBe("#1b1916");
   expect(await page.evaluate(() => document.documentElement.style.backgroundImage)).toBe("");
-  await expect(page.getByRole("heading", { name: "Connect" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
 });

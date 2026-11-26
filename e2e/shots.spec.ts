@@ -9,14 +9,17 @@ test("capture the connect screen and the counter", async ({ page }) => {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");
-  await page.screenshot({ path: `${out}/connect.png` });
+  await page.screenshot({ path: `${out}/sign-in.png` });
 
+  await page.getByTestId("use-shop-server").click();
+  await expect(page.getByRole("heading", { name: "Connect" })).toBeVisible();
+  await page.screenshot({ path: `${out}/connect.png` });
   await page.getByLabel("Shop server").fill("http://127.0.0.1:9");
   await page.getByRole("button", { name: "Connect", exact: true }).click();
   await expect(page.getByText(/No Dan server answered/i)).toBeVisible();
   await page.screenshot({ path: `${out}/connect-error.png` });
 
-  await page.getByTestId("demo-button").click();
+  await page.getByTestId("demo-button").filter({ visible: true }).click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
   await page.screenshot({ path: `${out}/orders.png` });
 

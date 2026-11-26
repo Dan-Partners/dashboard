@@ -54,6 +54,25 @@ export function ConnectionStatus({ session, compact = false }: { session: Sessio
     );
   }
 
+  // A shop that lives in the cloud has one server and nothing to sync with.
+  if (session.home === "cloud") {
+    return (
+      <p
+        className="flex items-center gap-1.5 font-display text-sm tracking-[0.12em] text-ink uppercase"
+        data-testid="connection-status"
+        data-shop={shop}
+        data-cloud={shop}
+        data-in-use="cloud"
+        data-home="cloud"
+        aria-label={`${t("statusCloudHome")}: ${t(LINK_WORDS[shop])}`}
+        title={session.serverUrl ?? undefined}
+      >
+        <Light link={shop} />
+        {compact ? t("statusCloud") : t("statusCloudHome")}
+      </p>
+    );
+  }
+
   // On the cloud, the shop server cannot report its sync: say what happens next.
   const syncLine =
     inUse === "cloud"

@@ -80,7 +80,7 @@ test("in the demo, the owner switches methods on and off, with the server's rule
 });
 
 async function signIn(page: Page, who: "owner" | "pin") {
-  await page.goto("/");
+  await page.goto("/connect");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");

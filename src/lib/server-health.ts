@@ -53,6 +53,8 @@ export function useServerHealth(session: Session | null): Servers {
   const token = session?.token ?? null;
   const cloudUrl = session?.cloudUrl ?? null;
   const cloudToken = session?.cloudToken ?? null;
+  /** The shop lives in the cloud: one server, checked once, and nothing to sync with. */
+  const cloudHome = session?.home === "cloud";
 
   useEffect(() => {
     if (!remote || !serverUrl) return;
@@ -65,15 +67,16 @@ export function useServerHealth(session: Session | null): Servers {
     let lastSyncedAt: string | null = null;
 
     const check = async () => {
-      const [shopUp, cloudUp] = await Promise.all([
+      const [shopUp, cloudChecked] = await Promise.all([
         pingServer(serverUrl).then(
           () => true,
           () => false,
         ),
-        cloudUrl ? checkCloud(cloudUrl) : Promise.resolve(false),
+        cloudUrl && !cloudHome ? checkCloud(cloudUrl) : Promise.resolve(false),
       ]);
+      const cloudUp = cloudHome ? shopUp : cloudChecked;
       // An older shop server has no sync report: treated as nothing to wait for.
-      const shopClient = shopUp && token ? new GraphQLDanClient(serverUrl, token) : null;
+      const shopClient = shopUp && token && !cloudHome ? new GraphQLDanClient(serverUrl, token) : null;
       const [sync, printers] = shopClient
         ? await Promise.all([
             shopClient.getSyncStatus().catch(() => null),
@@ -86,13 +89,16 @@ export function useServerHealth(session: Session | null): Servers {
       shopGood = shopUp ? shopGood + 1 : 0;
       cloudMisses = cloudUp ? 0 : cloudMisses + 1;
       if (sync?.lastSyncedAt) lastSyncedAt = sync.lastSyncedAt;
-      inUse = serverInUse(inUse, {
-        shopMisses,
-        shopGood,
-        cloudUp,
-        cloudSignedIn: Boolean(cloudUrl && cloudToken),
-        sync,
-      });
+      // With one server there is nothing to switch to.
+      inUse = cloudHome
+        ? "shop"
+        : serverInUse(inUse, {
+            shopMisses,
+            shopGood,
+            cloudUp,
+            cloudSignedIn: Boolean(cloudUrl && cloudToken),
+            sync,
+          });
       // Set before React hears of it, so the reconnection it triggers already
       // sends its requests to the new server.
       inUseNow = inUse;
@@ -115,7 +121,7 @@ export function useServerHealth(session: Session | null): Servers {
       inUseNow = "shop";
       setServers(STARTING);
     };
-  }, [remote, serverUrl, token, cloudUrl, cloudToken]);
+  }, [remote, serverUrl, token, cloudUrl, cloudToken, cloudHome]);
 
   return servers;
 }

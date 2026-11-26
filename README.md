@@ -2,9 +2,11 @@
 
 Dan (單, Cantonese *daan1*, an order slip) is the counter for a Chinese takeaway. Each shop runs its own Dan server on the premises. This repository is the web client — the glass on the counter — served at [my.dan.partners](https://my.dan.partners). The name is a pun on 埋單夥記.
 
-The client can point at a real shop server, or open a full mock of **Golden Dragon, Watford** that lives entirely in the browser.
+The client signs in to a shop in the **Dan cloud**, connects to a shop's own server, or opens a full mock of **Golden Dragon, Watford** that lives entirely in the browser.
 
-![Connect to a shop server, or try the Golden Dragon demo](docs/screenshots/connect.png)
+![Sign in, join the waiting list, or try the Golden Dragon demo](docs/screenshots/sign-in.png)
+
+![Connect to a shop server](docs/screenshots/connect.png)
 
 ![Orders on the counter](docs/screenshots/orders.png)
 
@@ -23,7 +25,8 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-- **Connect** asks for the shop server URL (`http://192.168.1.20:2283`, `https://goldendragon.dan.partners`, …), sends a GraphQL `ping` to `<server>/graphql`, remembers recent servers, then asks for email and password or a counter PIN.
+- **Sign in** (the first page) is for a shop in the Dan cloud: the owner's email and password, or the shop's address name and the counter PIN. Below it, anyone can **join the waiting list** with an email. See [Accounts in the Dan cloud](#accounts-in-the-dan-cloud).
+- **Connect** (`/connect`, linked from the first page) asks for the shop server URL (`http://192.168.1.20:2283`, `https://goldendragon.dan.partners`, …), sends a GraphQL `ping` to `<server>/graphql`, remembers recent servers, then asks for email and password or a counter PIN.
 - **Try the demo / 試用示範** signs into Golden Dragon with no backend. Orders, the menu, stamp cards and today’s takings persist in `localStorage`. **Reset demo** in the side menu loads the shop again.
 
 ```bash
@@ -37,13 +40,38 @@ npm run build
 
 **On the shop's machine (how a shop's counter runs it).** The [shop server](https://github.com/DanPartners/server)'s `compose.yaml` builds this repo, pinned to a tested commit, from the `Dockerfile` here (a standalone Next.js build on Node 22, non-root). Its front serves the dashboard and the staff API together at `http://<shop machine>:3000` on the shop's network. The tablets open that address, so the counter works with no internet: every page, font and request stays on the shop's network. The sign-in page fills in the shop server by itself there.
 
-**Hosted (for the owner away from the shop, and the demo).** The app is a Next.js project with no required environment variables. On Vercel, import this repository (framework preset Next.js) and attach the domain `my.dan.partners`. The demo works as soon as the deployment is live. `https://my.dan.partners/shop/orders?demo=1` opens the demo straight on the orders board (the website links there); someone already signed in to a shop stays signed in.
+**Hosted (for the owner away from the shop, and the demo).** The app is a Next.js project with no required environment variables (`NEXT_PUBLIC_DAN_CLOUD_URL` is only for a cloud other than `https://cloud.dan.partners`). On Vercel, import this repository (framework preset Next.js) and attach the domain `my.dan.partners`. The demo works as soon as the deployment is live. `https://my.dan.partners/shop/orders?demo=1` opens the demo straight on the orders board (the website links there); someone already signed in to a shop stays signed in.
+
+## Accounts in the Dan cloud
+
+A business joins in the [Dan cloud](https://github.com/DanPartners/cloud), with no machine to set up. The dashboard talks to the cloud's own address for this (`NEXT_PUBLIC_DAN_CLOUD_URL` at build time; `https://cloud.dan.partners` when unset), then to the shop's own staff API, which the cloud hands back.
+
+- **Waiting list.** The first page takes an email (`POST /v1/waitlist`). The answer is the same whoever asks.
+- **Invite.** Dan picks people from the list and sends each a one-time link by hand (`dan-cloud waitlist invite <email>`): `/join#<token>`. The page takes the token out of the address bar, then asks for a name, a password (at least 10 characters), the shop's name, its address name (checked as it is typed) and a template: **online shop** or **restaurant**. The shop is made and the owner is signed in, on an empty menu.
+- **Sign in.** Email and password find the owner's shop (`POST /v1/login`). A counter tablet signs in with the shop's address name and PIN; the device remembers the address name.
+- **Forgotten password.** Dan sends a one-time link (`dan-cloud shop reset-link <email>`): `/reset#<token>`. Choosing a new password ends the old sign-ins.
+- **A shop that lives in the cloud** has one server. The status corner shows one light, "Dan cloud", and there is nothing to sync or switch to.
+- **Building the menu** (owner): on Menu, **Add dish**, **Edit categories** (add, rename, put in order, remove an empty one), and **Remove dish** inside a dish. One name is enough for a dish or a category; it is used for both languages. The demo does the same in the browser.
+- **Tools** (owner): **Shop details** (name, Chinese name, address, town, phone) and **Counter PIN** (set or change it; tablets on the old PIN are signed out).
+- Passwords are cleared from a form once it has signed in, because a page already visited can stay in memory.
+
+`e2e/accounts.spec.ts` runs the whole of it against a real cloud: waiting list, an invite made with the cloud's command, joining, building a menu, an order numbered 1, signing in again by email and by PIN, and a reset link. It is skipped unless you point it at a cloud that allows this dashboard's address, with the dashboard built for that cloud:
+
+```bash
+NEXT_PUBLIC_DAN_CLOUD_URL=http://localhost:2290 npm run dev
+```
+
+```bash
+DAN_E2E_ACCOUNTS=1 DAN_E2E_CLOUD=http://localhost:2290 DAN_E2E_CLOUD_BIN=../cloud/target/debug/dan-cloud DAN_E2E_CLOUD_MONGODB_URI=mongodb://127.0.0.1:27017 DAN_E2E_CLOUD_DATABASE=dan_cloud npx playwright test accounts
+```
+
+The cloud limits how often one caller may use these pages (5 waiting-list entries an hour), so many reruns in a row are refused, plainly.
 
 ## The shop server
 
 A real shop runs [DanPartners/server](https://github.com/DanPartners/server): a Rust server with a local MongoDB, set up with `dan-server init` and run with Docker Compose. The dashboard talks to it over **GraphQL** at `<server>/graphql`. The wire contract is the server's [`schema.graphql`](https://github.com/DanPartners/server/blob/main/schema.graphql); this repo's side is [`src/lib/graphql-client.ts`](src/lib/graphql-client.ts), which implements `DanClient` from [`src/lib/types.ts`](src/lib/types.ts). Screens only see `DanClient`, so the browser demo and a real server look the same to them.
 
-- **Two servers.** The sign-in page asks for the **shop server** (required) and the **Dan cloud** (optional: the shop's address on the cloud, `https://<shop>.dan.partners/staff`). Signing in signs in to both. The counter uses the shop server first.
+- **Two servers.** The connect page (`/connect`) asks for the **shop server** (required) and the **Dan cloud** (optional: the shop's address on the cloud, `https://<shop>.dan.partners/staff`). Signing in signs in to both. The counter uses the shop server first.
 - **Switch-over.** Both servers are checked every 10 seconds (every 3 while something is wrong). If the shop server misses 3 checks in a row while the cloud answers, every request and the live channel move to the cloud, and a strip says so. When the shop server answers 2 checks in a row and reports it has caught up with the cloud, the counter goes back. The rule is `serverInUse` in [`src/lib/server-links.ts`](src/lib/server-links.ts). Orders taken on the cloud are numbered from 9001 if the shop server cannot number them, and sync to it when it returns.
   - **Limit:** the counter page is served by the shop machine. A tablet that already has it open carries on; one that reloads while the machine is down has nothing to reload. Until the counter is cached in the browser, open `my.dan.partners` on any device and enter the shop's cloud address as the shop server.
 - **Status, top right.** A light for each server (green connected, amber reconnecting, red offline), the one in use underlined, and the sync line ("Synced", "Waiting to sync: 12 changes", or "Sync not running yet"). Tap for the addresses and the last sync. Both servers are checked every 10 seconds; a server is offline after three missed checks. Any staff member sees it.

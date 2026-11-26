@@ -2,6 +2,8 @@ import { asDanError, DanError } from "./errors";
 import { normalizeServerUrl } from "./url";
 import type {
   AwaitingPayment,
+  Category,
+  CategoryNames,
   CreateOrderInput,
   Customer,
   DanClient,
@@ -10,6 +12,7 @@ import type {
   MenuItem,
   MenuItemPatch,
   MenuPayload,
+  NewMenuItem,
   Order,
   OrderStatus,
   Printer,
@@ -19,6 +22,8 @@ import type {
   SalesSummary,
   SyncStatus,
   ServerPing,
+  Shop,
+  ShopPatch,
 } from "./types";
 import { DAN_PRODUCT } from "./types";
 import { normalizeTheme, type ThemeChoice } from "./theme";
@@ -38,6 +43,7 @@ const PING_TIMEOUT_MS = 6000;
 const SHOP = "id name nameZh address city phone";
 const THEME = "preset typeface custom { paper ink accent chrome }";
 const STAFF = "id name role";
+const CATEGORY = "id nameEn nameZh sort";
 const MENU_ITEM_BASE =
   "id number categoryId nameEn nameZh descriptionEn pricePence station allergens soldOut kind includes { number qty }";
 const MENU_ITEM = `${MENU_ITEM_BASE} photo`;
@@ -254,6 +260,60 @@ export class GraphQLDanClient implements DanClient {
       { id },
     );
     return data.removeMenuItemPhoto;
+  }
+
+  // ------------------------------------------------------------ building the menu (owner only)
+
+  async createMenuItem(input: NewMenuItem): Promise<MenuItem> {
+    const data = await this.run<{ createMenuItem: MenuItem }>(
+      `mutation CreateMenuItem($input: NewMenuItem!) { createMenuItem(input: $input) { ${MENU_ITEM} } }`,
+      { input },
+    );
+    return data.createMenuItem;
+  }
+
+  async deleteMenuItem(id: string): Promise<void> {
+    await this.run<{ deleteMenuItem: boolean }>(`mutation DeleteMenuItem($id: ID!) { deleteMenuItem(id: $id) }`, { id });
+  }
+
+  async createCategory(names: CategoryNames): Promise<Category> {
+    const data = await this.run<{ createCategory: Category }>(
+      `mutation CreateCategory($input: CategoryInput!) { createCategory(input: $input) { ${CATEGORY} } }`,
+      { input: names },
+    );
+    return data.createCategory;
+  }
+
+  async updateCategory(id: string, names: CategoryNames): Promise<Category> {
+    const data = await this.run<{ updateCategory: Category }>(
+      `mutation UpdateCategory($id: ID!, $input: CategoryInput!) { updateCategory(id: $id, input: $input) { ${CATEGORY} } }`,
+      { id, input: names },
+    );
+    return data.updateCategory;
+  }
+
+  async deleteCategory(id: string): Promise<void> {
+    await this.run<{ deleteCategory: boolean }>(`mutation DeleteCategory($id: ID!) { deleteCategory(id: $id) }`, { id });
+  }
+
+  async reorderCategories(ids: string[]): Promise<Category[]> {
+    const data = await this.run<{ reorderCategories: Category[] }>(
+      `mutation ReorderCategories($ids: [ID!]!) { reorderCategories(ids: $ids) { ${CATEGORY} } }`,
+      { ids },
+    );
+    return data.reorderCategories;
+  }
+
+  async updateShop(patch: ShopPatch): Promise<Shop> {
+    const data = await this.run<{ updateShop: Shop }>(
+      `mutation UpdateShop($patch: ShopPatch!) { updateShop(patch: $patch) { ${SHOP} } }`,
+      { patch },
+    );
+    return data.updateShop;
+  }
+
+  async setCounterPin(pin: string): Promise<void> {
+    await this.run<{ setCounterPin: boolean }>(`mutation SetCounterPin($pin: String!) { setCounterPin(pin: $pin) }`, { pin });
   }
 
   async updateMenuItem(id: string, patch: MenuItemPatch): Promise<MenuItem> {

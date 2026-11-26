@@ -115,6 +115,24 @@ export type MenuItem = {
   photo?: string | null;
 };
 
+/** A new dish. A name given in one language only is used for both. */
+export type NewMenuItem = {
+  number: number;
+  categoryId: string;
+  nameEn: string;
+  nameZh: string;
+  descriptionEn?: string;
+  pricePence: number;
+  station?: Station;
+  allergens?: Allergen[];
+};
+
+/** A category's names. A name given in one language only is used for both. */
+export type CategoryNames = { nameEn: string; nameZh: string };
+
+/** The shop's details, as tickets and the customer site show them. */
+export type ShopPatch = Partial<Pick<Shop, "name" | "nameZh" | "address" | "city" | "phone">>;
+
 export type MenuItemPatch = Partial<
   Pick<
     MenuItem,
@@ -271,6 +289,20 @@ export interface DanClient {
   logout(): Promise<void>;
   getMenu(): Promise<MenuPayload>;
   updateMenuItem(id: string, patch: MenuItemPatch): Promise<MenuItem>;
+  /** Owner only: building the menu. */
+  createMenuItem(input: NewMenuItem): Promise<MenuItem>;
+  /** Refused (`in_a_set`) while a set meal includes the dish. */
+  deleteMenuItem(id: string): Promise<void>;
+  createCategory(names: CategoryNames): Promise<Category>;
+  updateCategory(id: string, names: CategoryNames): Promise<Category>;
+  /** Refused (`category_not_empty`) while it holds dishes. */
+  deleteCategory(id: string): Promise<void>;
+  /** Every category id, in the new order. */
+  reorderCategories(ids: string[]): Promise<Category[]>;
+  /** Owner only: the shop's name, address and phone. */
+  updateShop(patch: ShopPatch): Promise<Shop>;
+  /** Owner only: sets or changes the counter PIN (4 to 6 digits). */
+  setCounterPin(pin: string): Promise<void>;
   getOrders(): Promise<{ orders: Order[] }>;
   createOrder(input: CreateOrderInput): Promise<Order>;
   updateOrder(id: string, patch: { status: OrderStatus }): Promise<Order>;
@@ -296,6 +328,13 @@ export type Session = {
   cloudUrl?: string | null;
   /** Signed in to the cloud too, with the same details. Missing when it could not be reached. */
   cloudToken?: string | null;
+  /**
+   * "cloud": the shop lives in the Dan cloud and has no shop server. Then
+   * `serverUrl` and `cloudUrl` are both the shop's cloud address.
+   */
+  home?: "cloud";
+  /** The shop's address name in the cloud (goldendragon), when known. */
+  addressName?: string | null;
   shop: Shop;
   staff: Staff;
 };

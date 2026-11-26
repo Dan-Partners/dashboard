@@ -132,10 +132,12 @@ export function formatStamp(date: Date): string {
 }
 
 export function primaryName(nameEn: string, nameZh: string, locale: string) {
-  return locale === "zh-Hant" ? nameZh : nameEn;
+  return (locale === "zh-Hant" ? nameZh : nameEn) || nameEn || nameZh;
 }
 
+/** The name in the other language. Empty when there is only one name. */
 export function secondaryName(nameEn: string, nameZh: string, locale: string) {
+  if (nameEn === nameZh) return "";
   return locale === "zh-Hant" ? nameEn : nameZh;
 }
 

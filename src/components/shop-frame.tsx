@@ -118,8 +118,8 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
               {t("resetDemo")}
             </Button>
           ) : null}
-          <Button variant="line" className="w-full" onClick={() => shop.logout()}>
-            {t("disconnect")}
+          <Button variant="line" className="w-full" onClick={() => shop.logout()} data-testid="sign-out">
+            {t(session.home === "cloud" ? "signOut" : "disconnect")}
           </Button>
         </div>
       </aside>
@@ -131,7 +131,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
             <div className="min-w-0">
               <p className="font-wordmark text-2xl leading-none">Dan</p>
               <p className="truncate text-sm text-ink-soft">
-                {session.shop.name} · {session.shop.nameZh}
+                {session.shop.nameZh ? `${session.shop.name} · ${session.shop.nameZh}` : session.shop.name}
               </p>
             </div>
           </div>
@@ -260,7 +260,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
               shop.logout();
             }}
           >
-            {t("disconnect")}
+            {t(session.home === "cloud" ? "signOut" : "disconnect")}
           </Button>
         </div>
       </Dialog>

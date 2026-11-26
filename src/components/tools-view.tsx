@@ -8,6 +8,7 @@ import { writePersisted } from "@/lib/storage";
 import { normalizeOrderingAddress, orderingAddressFromCloud, parseTables, tableLink } from "@/lib/tables";
 import type { Shop } from "@/lib/types";
 import { PrintersSection } from "./printers-section";
+import { CounterPinSection, ShopDetailsSection } from "./shop-settings-section";
 import { QrCode, qrModules } from "./qr-code";
 import { Button, PageTitle, TextField } from "./ui";
 
@@ -27,6 +28,8 @@ export function ToolsView() {
       </div>
       <TableQrCodes />
       <PrintersSection />
+      <ShopDetailsSection />
+      <CounterPinSection />
     </div>
   );
 }
@@ -169,7 +172,7 @@ function downloadCard(element: HTMLElement | null, shopInfo: Shop, table: string
   context.textAlign = "center";
   context.textBaseline = "alphabetic";
   context.font = `56px ${family}, ${zh}`;
-  context.fillText(`${shopInfo.name} ${shopInfo.nameZh}`, width / 2, 130, width - 120);
+  context.fillText(`${shopInfo.name} ${shopInfo.nameZh}`.trim(), width / 2, 130, width - 120);
   context.font = `40px ${family}, ${zh}`;
   context.fillText("TABLE · 枱號", width / 2, 220);
   context.font = `240px ${family}`;

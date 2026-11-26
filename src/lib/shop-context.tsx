@@ -7,7 +7,7 @@ import { DanError, isDanError } from "./errors";
 import { formatPence, fulfilmentLabel, orderLabel } from "./format";
 import { english } from "./i18n";
 import { summarizeSales } from "./sales";
-import { GraphQLDanClient, orderFields, uploadMenuPhoto, type CourierAction } from "./graphql-client";
+import { GraphQLDanClient, orderFields, pingServer, uploadMenuPhoto, type CourierAction } from "./graphql-client";
 import { shrinkPhoto } from "./photos";
 import { expectMine, noteBoard, seeOrder } from "./arrivals";
 import { normalizeTriggers, type Triggers } from "./triggers";
@@ -31,15 +31,20 @@ import {
 import type {
   CreateOrderInput,
   Customer,
+  DanClient,
   LoginInput,
+  LoginResult,
   MenuItemPatch,
   Order,
   OrderStatus,
   SalesRange,
   SalesSummary,
   ServerPing,
+  Session,
+  ShopPatch,
   ShopSnapshot,
 } from "./types";
+import type { CloudSession } from "./cloud";
 
 export type Notice = {
   id: string;
@@ -60,6 +65,14 @@ type ShopContextValue = {
   rememberServer: (url: string) => void;
   forgetServer: (url: string) => void;
   loginRemote: (baseUrl: string, input: LoginInput, ping: ServerPing, cloudUrl?: string | null) => Promise<void>;
+  /** Opens a sign-in the Dan cloud gave (email and password, an invite, a reset link). */
+  adoptCloudSession: (cloud: CloudSession) => Promise<void>;
+  /** The counter PIN at a shop that lives in the cloud, found by its address name. */
+  loginCloudPin: (found: { staffUrl: string; addressName: string }, pin: string, ping: ServerPing) => Promise<void>;
+  /** Owner only: adds, removes and arranges dishes and categories. */
+  editMenu: <T>(work: (client: DanClient) => Promise<T>) => Promise<T>;
+  /** Owner only: the shop's name, address and phone. */
+  saveShop: (patch: ShopPatch) => Promise<void>;
   enterDemo: () => void;
   logout: () => void;
   resetDemo: () => void;
@@ -165,6 +178,24 @@ function adoptShopTheme(theme: ThemeChoice | undefined) {
   if (JSON.stringify(theme) !== JSON.stringify(getSnapshot().theme)) writePersisted({ theme });
 }
 
+/**
+ * The session for a shop that lives in the Dan cloud: its cloud address is
+ * both the server and the cloud, with one sign-in.
+ */
+function cloudHome(staffUrl: string, addressName: string, signedIn: Pick<LoginResult, "token" | "staff" | "shop">): Session {
+  return {
+    mode: "remote",
+    home: "cloud",
+    addressName,
+    serverUrl: staffUrl,
+    token: signedIn.token,
+    cloudUrl: staffUrl,
+    cloudToken: signedIn.token,
+    shop: signedIn.shop,
+    staff: signedIn.staff,
+  };
+}
+
 export function ShopProvider({ children }: { children: React.ReactNode }) {
   const persisted = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const ready = useReady();
@@ -188,6 +219,35 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     }
     writePersisted({ session: null });
     setRemote(null);
+  }, []);
+
+  /** Saves a sign-in and loads the shop it is for. */
+  const openSession = useCallback(async (next: Session, theme: ThemeChoice | undefined) => {
+    if (!next.serverUrl || !next.token) throw new Error("Sign in first.");
+    writePersisted({ session: next });
+    adoptShopTheme(theme);
+    const authed = new GraphQLDanClient(next.serverUrl, next.token);
+    const [menu, orders, customers, ordering, board, triggers] = await Promise.all([
+      authed.getMenu(),
+      authed.getOrders(),
+      authed.getCustomers(),
+      authed.getOrderingSettings(),
+      authed.getBoard(),
+      authed.getTriggers(),
+    ]);
+    boardNow = board;
+    noteBoard(orders.orders, board);
+    setRemote({
+      shop: next.shop,
+      categories: menu.categories,
+      items: menu.items,
+      orders: orders.orders,
+      customers: customers.customers,
+      ordering,
+      board,
+      triggers,
+    });
+    setRemoteError(null);
   }, []);
 
   const refreshRemote = useCallback(async () => {
@@ -400,41 +460,42 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
               .then((signedIn) => signedIn.token)
               .catch(() => null)
           : null;
-        writePersisted({
-          lastCloudUrl: cloudUrl,
-          session: {
-            mode: "remote",
-            serverUrl: baseUrl,
-            cloudUrl,
-            cloudToken,
-            token: result.token,
-            shop: result.shop ?? ping.shop,
-            staff: result.staff,
-          },
-        });
-        adoptShopTheme(ping.theme);
-        const authed = new GraphQLDanClient(baseUrl, result.token);
-        const [menu, orders, customers, ordering, board, triggers] = await Promise.all([
-          authed.getMenu(),
-          authed.getOrders(),
-          authed.getCustomers(),
-          authed.getOrderingSettings(),
-          authed.getBoard(),
-          authed.getTriggers(),
-        ]);
-        boardNow = board;
-        noteBoard(orders.orders, board);
-        setRemote({
-          shop: result.shop ?? ping.shop,
-          categories: menu.categories,
-          items: menu.items,
-          orders: orders.orders,
-          customers: customers.customers,
-          ordering,
-          board,
-          triggers,
-        });
-        setRemoteError(null);
+        writePersisted({ lastCloudUrl: cloudUrl, lastWay: "server" });
+        await openSession({ mode: "remote", serverUrl: baseUrl, cloudUrl, cloudToken, token: result.token, shop: result.shop ?? ping.shop, staff: result.staff }, ping.theme);
+      },
+      async adoptCloudSession(cloud) {
+        // The shop's theme comes with its ping; without it the page keeps its colours.
+        const ping = await pingServer(cloud.staffUrl).catch(() => null);
+        writePersisted({ lastShopName: cloud.addressName, lastWay: "cloud" });
+        await openSession(cloudHome(cloud.staffUrl, cloud.addressName, cloud), ping?.theme);
+      },
+      async loginCloudPin(found, pin, ping) {
+        const result = await new GraphQLDanClient(found.staffUrl).login({ pin });
+        writePersisted({ lastShopName: found.addressName, lastWay: "cloud" });
+        await openSession(cloudHome(found.staffUrl, found.addressName, { ...result, shop: result.shop ?? ping.shop }), ping.theme);
+      },
+      async editMenu(work) {
+        if (getSnapshot().session?.mode === "demo") {
+          return demoMutate((server) => work(server));
+        }
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        const result = await work(new GraphQLDanClient(end.url, end.token));
+        await refreshRemote();
+        return result;
+      },
+      async saveShop(patch) {
+        const current = getSnapshot().session;
+        if (current?.mode === "demo") {
+          const saved = await demoMutate((server) => server.updateShop(patch));
+          writePersisted({ session: { ...current, shop: saved } });
+          return;
+        }
+        const end = endpointFor(current);
+        if (!current || !end) throw new Error("Sign in first.");
+        const saved = await new GraphQLDanClient(end.url, end.token).updateShop(patch);
+        writePersisted({ session: { ...current, shop: saved } });
+        setRemote((snapshot) => (snapshot ? { ...snapshot, shop: saved } : snapshot));
       },
       enterDemo() {
         enterDemo();
@@ -655,7 +716,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         return refreshRemote();
       },
     };
-  }, [notice, persisted, ready, refreshRemote, remoteError, servers, snapshot]);
+  }, [notice, openSession, persisted, ready, refreshRemote, remoteError, servers, snapshot]);
 
   return <ShopContext.Provider value={value}>{children}</ShopContext.Provider>;
 }

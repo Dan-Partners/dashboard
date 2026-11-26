@@ -82,7 +82,7 @@ test("kitchen and pass tablets follow a table's order from new to served", async
   test.setTimeout(90_000);
   const sign = async (position: "kitchen" | "pass") => {
     const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
-    await page.goto("/");
+    await page.goto("/connect");
     await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");
     await page.getByLabel("Shop server").fill(server!);
     await page.getByRole("button", { name: "Connect", exact: true }).click();
@@ -112,16 +112,19 @@ test("kitchen and pass tablets follow a table's order from new to served", async
   // (The kitchen shows the note, not the name, so the note finds the ticket.)
   const ticket = kitchen.getByTestId("kitchen-ticket").filter({ hasText: customer });
   await expect(ticket).toHaveAttribute("data-status", "new", { timeout: 15_000 });
-  await expect(ticket).toHaveClass(/glow-new/);
+  // The glow is the column's own colour (the owner's board).
+  await expect(ticket).toHaveAttribute("style", /--glow: #1f9d55/);
   await expect(ticket.getByTestId("station-strip")).toContainText("Wok");
 
   await ticket.getByRole("button", { name: "Start" }).click();
   await expect(ticket).toHaveAttribute("data-status", "preparing");
-  await expect(ticket).toHaveClass(/glow-preparing/);
+  // The glow is the column's own colour (the owner's board).
+  await expect(ticket).toHaveAttribute("style", /--glow: #2f6fdb/);
   // A person's pause: taps in the moment after a change count as a double tap.
   await kitchen.waitForTimeout(800);
   await ticket.getByRole("button", { name: "Ready" }).click();
-  await expect(ticket).toHaveClass(/glow-ready/);
+  // The glow is the column's own colour (the owner's board).
+  await expect(ticket).toHaveAttribute("style", /--glow: #d7372a/);
 
   // The pass sees it, the table number repeated large.
   const handOver = pass.getByTestId("pass-ticket").filter({ hasText: customer });

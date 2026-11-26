@@ -252,4 +252,57 @@ describe("graphql client", () => {
     expect(seen[2].variables).toEqual({ phone: null });
     expect(seen[3].variables).toEqual({ input: { source: "counter", fulfilment: "collection", lines: [{ number: 81, qty: 2 }] } });
   });
+  it("lets the owner build the menu: dishes and categories", async () => {
+    const server = new MockDanServer();
+    const drinks = await server.createCategory({ nameEn: " Drinks ", nameZh: "" });
+    // One name given: used for both languages.
+    expect(drinks).toMatchObject({ nameEn: "Drinks", nameZh: "Drinks" });
+    await expect(server.createCategory({ nameEn: " ", nameZh: "" })).rejects.toMatchObject({ code: "invalid" });
+
+    const cola = await server.createMenuItem({ number: 900, categoryId: drinks.id, nameEn: "Cola", nameZh: "", pricePence: 150 });
+    expect(cola).toMatchObject({ nameEn: "Cola", nameZh: "Cola", station: "counter", kind: "item", soldOut: false });
+    await expect(server.createMenuItem({ number: 900, categoryId: drinks.id, nameEn: "Lemonade", nameZh: "", pricePence: 150 })).rejects.toMatchObject({
+      code: "duplicate_number",
+    });
+    await expect(server.createMenuItem({ number: 901, categoryId: "nowhere", nameEn: "Lemonade", nameZh: "", pricePence: 150 })).rejects.toMatchObject({
+      code: "invalid",
+    });
+
+    // Renaming a dish with one name keeps one name; a second name is kept.
+    const renamed = await server.updateMenuItem(cola.id, { nameEn: "Cola (can)", nameZh: "Cola" });
+    expect(renamed.nameZh).toBe("Cola (can)");
+    const bilingual = await server.updateMenuItem(cola.id, { nameZh: "可樂" });
+    expect(bilingual).toMatchObject({ nameEn: "Cola (can)", nameZh: "可樂" });
+
+    await expect(server.deleteCategory(drinks.id)).rejects.toMatchObject({ code: "category_not_empty" });
+    await server.deleteMenuItem(cola.id);
+    await expect(server.deleteMenuItem(cola.id)).rejects.toMatchObject({ code: "not_found" });
+    await server.deleteCategory(drinks.id);
+    expect((await server.getMenu()).categories.some((category) => category.id === drinks.id)).toBe(false);
+  });
+
+  it("keeps a dish that a set meal includes, and puts categories in a new order", async () => {
+    const server = new MockDanServer();
+    const menu = await server.getMenu();
+    const set = menu.items.find((item) => item.kind === "set");
+    expect(set).toBeDefined();
+    const part = menu.items.find((item) => item.number === set!.includes[0].number)!;
+    await expect(server.deleteMenuItem(part.id)).rejects.toMatchObject({ code: "in_a_set" });
+
+    const ids = menu.categories.map((category) => category.id).reverse();
+    const reordered = await server.reorderCategories(ids);
+    expect(reordered.map((category) => category.id)).toEqual(ids);
+    expect(reordered[0].sort).toBe(1);
+    await expect(server.reorderCategories(ids.slice(1))).rejects.toMatchObject({ code: "invalid" });
+  });
+
+  it("changes the shop's details and checks a PIN's shape", async () => {
+    const server = new MockDanServer();
+    const saved = await server.updateShop({ name: " Golden  Dragon Two ", phone: "01923 000000" });
+    expect(saved).toMatchObject({ name: "Golden Dragon Two", phone: "01923 000000" });
+    expect((await server.ping()).shop.name).toBe("Golden Dragon Two");
+    await expect(server.updateShop({ name: "  " })).rejects.toMatchObject({ code: "invalid" });
+    await expect(server.setCounterPin("12")).rejects.toMatchObject({ code: "invalid" });
+    await expect(server.setCounterPin("2468")).resolves.toBeUndefined();
+  });
 });

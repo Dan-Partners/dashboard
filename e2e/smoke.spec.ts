@@ -8,12 +8,16 @@ test.beforeEach(async ({ page }) => {
 
 test("an unreachable server gets a clear error, then the demo can take an order", async ({ page }) => {
   await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");
+  // The first page signs in through the Dan cloud; a shop's own server is one link away.
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await page.getByTestId("use-shop-server").click();
   await expect(page.getByRole("heading", { name: "Connect" })).toBeVisible();
   await page.getByLabel("Shop server").fill("http://127.0.0.1:9");
   await page.getByRole("button", { name: "Connect", exact: true }).click();
   await expect(page.getByText(/No Dan server answered/i)).toBeVisible();
 
-  await page.getByTestId("demo-button").click();
+  // (The page a link left behind can stay in the document, hidden: take the button on show.)
+  await page.getByTestId("demo-button").filter({ visible: true }).click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
   await expect(page.getByText("Golden Dragon").first()).toBeVisible();
   await expect(page.getByText("金龍").first()).toBeVisible();
@@ -44,5 +48,5 @@ test("a link with ?demo=1 opens the demo straight on the orders board", async ({
   // Without it, nobody signed in is sent to the sign-in page.
   await page.evaluate(() => localStorage.clear());
   await page.goto("/shop/orders");
-  await expect(page.getByLabel("Shop server")).toBeVisible();
+  await expect(page.getByTestId("sign-in")).toBeVisible();
 });

@@ -12,6 +12,10 @@ export type Persisted = {
   recentServers: string[];
   /** The Dan cloud address last used on this device, to fill the sign-in page. */
   lastCloudUrl: string | null;
+  /** The shop's address name last signed in to through the cloud, to fill the counter PIN form. */
+  lastShopName: string | null;
+  /** How this device last signed in: through the Dan cloud, or to a shop server by its address. */
+  lastWay: "cloud" | "server" | null;
   locale: Locale;
   demoState: DemoState | null;
   activeOrderId: string | null;
@@ -34,6 +38,8 @@ export const EMPTY_PERSISTED: Persisted = {
   session: null,
   recentServers: [],
   lastCloudUrl: null,
+  lastShopName: null,
+  lastWay: null,
   locale: "en",
   demoState: null,
   activeOrderId: null,
@@ -65,6 +71,8 @@ export function normalizePersisted(value: unknown): Persisted {
       ? record.recentServers.filter((entry): entry is string => typeof entry === "string").slice(0, 5)
       : [],
     lastCloudUrl: typeof record.lastCloudUrl === "string" ? record.lastCloudUrl : null,
+    lastShopName: typeof record.lastShopName === "string" && record.lastShopName.length <= 40 ? record.lastShopName : null,
+    lastWay: record.lastWay === "cloud" || record.lastWay === "server" ? record.lastWay : null,
     locale: isLocale(record.locale) ? record.locale : "en",
     demoState: demo,
     activeOrderId: typeof record.activeOrderId === "string" ? record.activeOrderId : null,

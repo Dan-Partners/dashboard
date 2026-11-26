@@ -27,7 +27,7 @@ const customerSite = process.env.DAN_E2E_CUSTOMER_ORIGIN ?? "http://localhost:30
 test.skip(!server, "Set DAN_E2E_SERVER_URL to run against a real shop server.");
 
 async function connect(page: Page) {
-  await page.goto("/");
+  await page.goto("/connect");
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");
@@ -111,7 +111,7 @@ test("the owner's theme is saved on the shop server for every tablet", async ({ 
 
   // Another tablet, signing in fresh, paints in the shop's theme.
   const tablet = await page.context().browser()!.newPage();
-  await tablet.goto("/");
+  await tablet.goto("/connect");
   await tablet.evaluate(() => localStorage.clear());
   await tablet.reload();
   await tablet.waitForFunction(() => document.documentElement.dataset.dan === "ready");

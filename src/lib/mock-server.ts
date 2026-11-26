@@ -14,6 +14,8 @@ import {
   STAMP_GOAL,
 } from "./seed";
 import type {
+  Category,
+  CategoryNames,
   CreateOrderInput,
   Customer,
   DanClient,
@@ -21,11 +23,14 @@ import type {
   LoginResult,
   MenuItem,
   MenuItemPatch,
+  NewMenuItem,
   Order,
   OrderLine,
   OrderStatus,
   SalesRange,
   ServerPing,
+  Shop,
+  ShopPatch,
   TicketComponent,
 } from "./types";
 import { ALLERGENS, FULFILMENTS, ORDER_SOURCES, ORDER_STATUSES, STATIONS } from "./types";
@@ -74,6 +79,15 @@ function toLine(item: MenuItem, menu: MenuItem[], qty: number): OrderLine {
     kind: item.kind,
     components: item.kind === "set" ? componentsFor(item, menu, qty) : [],
   };
+}
+
+/** One name for both languages when only one was given. */
+function bothNames(nameEn: string, nameZh: string): [string, string] {
+  const en = nameEn.trim();
+  const zh = nameZh.trim();
+  if (en && !zh) return [en, en];
+  if (zh && !en) return [zh, zh];
+  return [en, zh];
 }
 
 export class MockDanServer implements DanClient {
@@ -135,6 +149,12 @@ export class MockDanServer implements DanClient {
     if (index < 0) return Promise.reject(new DanError("not_found", "That dish is not on the menu."));
     const current = this.state.items[index];
     const next: MenuItem = { ...current, ...patch, id: current.id, includes: current.includes, kind: current.kind };
+    // A dish with one name for both languages keeps one name when it is renamed.
+    next.nameEn = next.nameEn.trim();
+    next.nameZh = next.nameZh.trim();
+    const mirrored = current.nameEn === current.nameZh;
+    if (!next.nameZh || (mirrored && next.nameEn !== current.nameEn && next.nameZh === current.nameZh)) next.nameZh = next.nameEn;
+    if (!next.nameEn) next.nameEn = next.nameZh;
 
     if (!Number.isInteger(next.number) || next.number < 1 || next.number > 999) {
       return Promise.reject(new DanError("invalid", "Dish numbers run from 1 to 999."));
@@ -142,8 +162,8 @@ export class MockDanServer implements DanClient {
     if (this.state.items.some((item) => item.id !== id && item.number === next.number)) {
       return Promise.reject(new DanError("duplicate_number", "That number is already on the menu."));
     }
-    if (!next.nameEn.trim() || !next.nameZh.trim()) {
-      return Promise.reject(new DanError("invalid", "A dish needs an English name and a Chinese name."));
+    if (!next.nameEn) {
+      return Promise.reject(new DanError("invalid", "A dish needs a name."));
     }
     if (!Number.isInteger(next.pricePence) || next.pricePence < 0 || next.pricePence > 100_000) {
       return Promise.reject(new DanError("invalid", "Check the price."));
@@ -158,11 +178,120 @@ export class MockDanServer implements DanClient {
       return Promise.reject(new DanError("invalid", "Unknown allergen."));
     }
 
-    next.nameEn = next.nameEn.trim();
-    next.nameZh = next.nameZh.trim();
     next.descriptionEn = next.descriptionEn.trim();
     this.state.items[index] = next;
     return Promise.resolve(clone(next));
+  }
+
+  createMenuItem(input: NewMenuItem): Promise<MenuItem> {
+    const [nameEn, nameZh] = bothNames(input.nameEn, input.nameZh);
+    const item: MenuItem = {
+      id: `item-${crypto.randomUUID().replaceAll("-", "")}`,
+      number: input.number,
+      categoryId: input.categoryId,
+      nameEn,
+      nameZh,
+      descriptionEn: (input.descriptionEn ?? "").trim(),
+      pricePence: input.pricePence,
+      station: input.station ?? "counter",
+      allergens: [...new Set(input.allergens ?? [])],
+      soldOut: false,
+      kind: "item",
+      includes: [],
+    };
+    if (!Number.isInteger(item.number) || item.number < 1 || item.number > 999) {
+      return Promise.reject(new DanError("invalid", "Dish numbers run from 1 to 999."));
+    }
+    if (this.state.items.some((other) => other.number === item.number)) {
+      return Promise.reject(new DanError("duplicate_number", "That number is already on the menu."));
+    }
+    if (!item.nameEn) return Promise.reject(new DanError("invalid", "A dish needs a name."));
+    if (!Number.isInteger(item.pricePence) || item.pricePence < 0 || item.pricePence > 100_000) {
+      return Promise.reject(new DanError("invalid", "Check the price."));
+    }
+    if (!STATIONS.includes(item.station) || item.allergens.some((allergen) => !ALLERGENS.includes(allergen))) {
+      return Promise.reject(new DanError("invalid", "Check the station and allergens."));
+    }
+    if (!this.state.categories.some((category) => category.id === item.categoryId)) {
+      return Promise.reject(new DanError("invalid", "Choose a category."));
+    }
+    this.state.items.push(item);
+    return Promise.resolve(clone(item));
+  }
+
+  deleteMenuItem(id: string): Promise<void> {
+    const item = this.state.items.find((entry) => entry.id === id);
+    if (!item) return Promise.reject(new DanError("not_found", "That dish is not on the menu."));
+    const set = this.state.items.find((other) => other.id !== id && other.includes.some((part) => part.number === item.number));
+    if (set) {
+      return Promise.reject(
+        new DanError("in_a_set", `Dish ${item.number} is part of set meal ${set.number} (${set.nameEn}). Change the set meal first.`),
+      );
+    }
+    this.state.items = this.state.items.filter((entry) => entry.id !== id);
+    return Promise.resolve();
+  }
+
+  createCategory(names: CategoryNames): Promise<Category> {
+    const [nameEn, nameZh] = bothNames(names.nameEn, names.nameZh);
+    if (!nameEn) return Promise.reject(new DanError("invalid", "A category needs a name."));
+    if (this.state.categories.length >= 40) return Promise.reject(new DanError("invalid", "A menu holds up to 40 categories."));
+    const category: Category = {
+      id: `cat-${crypto.randomUUID().replaceAll("-", "")}`,
+      nameEn,
+      nameZh,
+      sort: Math.max(0, ...this.state.categories.map((entry) => entry.sort)) + 1,
+    };
+    this.state.categories.push(category);
+    return Promise.resolve(clone(category));
+  }
+
+  updateCategory(id: string, names: CategoryNames): Promise<Category> {
+    const category = this.state.categories.find((entry) => entry.id === id);
+    if (!category) return Promise.reject(new DanError("not_found", "That category is not on the menu."));
+    const [nameEn, nameZh] = bothNames(names.nameEn, names.nameZh);
+    if (!nameEn) return Promise.reject(new DanError("invalid", "A category needs a name."));
+    category.nameEn = nameEn;
+    category.nameZh = nameZh;
+    return Promise.resolve(clone(category));
+  }
+
+  deleteCategory(id: string): Promise<void> {
+    if (!this.state.categories.some((entry) => entry.id === id)) {
+      return Promise.reject(new DanError("not_found", "That category is not on the menu."));
+    }
+    const holds = this.state.items.filter((item) => item.categoryId === id).length;
+    if (holds > 0) return Promise.reject(new DanError("category_not_empty", `Move or remove its ${holds} dishes first.`));
+    this.state.categories = this.state.categories.filter((entry) => entry.id !== id);
+    return Promise.resolve();
+  }
+
+  reorderCategories(ids: string[]): Promise<Category[]> {
+    const known = new Set(this.state.categories.map((entry) => entry.id));
+    if (new Set(ids).size !== ids.length || ids.length !== known.size || !ids.every((id) => known.has(id))) {
+      return Promise.reject(new DanError("invalid", "List every category once."));
+    }
+    for (const category of this.state.categories) category.sort = ids.indexOf(category.id) + 1;
+    this.state.categories.sort((a, b) => a.sort - b.sort);
+    return Promise.resolve(clone(this.state.categories));
+  }
+
+  updateShop(patch: ShopPatch): Promise<Shop> {
+    const tidy = (value: string) => value.trim().replace(/\s+/g, " ");
+    const next: Shop = { ...this.state.shop };
+    for (const key of ["name", "nameZh", "address", "city", "phone"] as const) {
+      const value = patch[key];
+      if (typeof value === "string") next[key] = tidy(value);
+    }
+    if (!next.name) return Promise.reject(new DanError("invalid", "A shop needs a name."));
+    this.state.shop = next;
+    return Promise.resolve(clone(next));
+  }
+
+  /** The demo's PIN is fixed: there is nothing to sign in to. */
+  setCounterPin(pin: string): Promise<void> {
+    if (!/^\d{4,6}$/.test(pin)) return Promise.reject(new DanError("invalid", "A PIN is 4 to 6 digits."));
+    return Promise.resolve();
   }
 
   getOrders() {
