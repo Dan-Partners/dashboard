@@ -7,13 +7,14 @@ import { useShop } from "@/lib/shop-context";
 import { writePersisted } from "@/lib/storage";
 import { normalizeOrderingAddress, orderingAddressFromCloud, parseTables, tableLink } from "@/lib/tables";
 import type { Shop } from "@/lib/types";
+import { PrintersSection } from "./printers-section";
 import { QrCode, qrModules } from "./qr-code";
 import { Button, PageTitle, TextField } from "./ui";
 
 /** The demo's own ordering site: the website's "Try the demo" QR code opens it too. */
 const DEMO_ORDERING = "https://order.dan.partners";
 
-/** Setting-up tools. Table QR codes now; printers come next (DAN-21). */
+/** Setting-up tools: table QR codes and the shop's printers. */
 export function ToolsView() {
   const { t, locale } = useI18n();
   return (
@@ -25,6 +26,7 @@ export function ToolsView() {
         <p className="-mt-2 mb-6 text-ink-soft">{t("toolsLede")}</p>
       </div>
       <TableQrCodes />
+      <PrintersSection />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
 import { ticketSections, type TicketSection } from "@/lib/ticket";
 import type { Order, Shop, Station } from "@/lib/types";
+import { ReprintButton } from "./print-strip";
 import { Button, PageTitle } from "./ui";
 
 const STATION_KEY: Record<Station, CopyKey> = {
@@ -49,6 +50,7 @@ export function TicketView() {
           <Button variant="line" onClick={() => window.print()}>
             {t("ticketPrint")}
           </Button>
+          {order ? <ReprintButton orderId={order.id} /> : null}
         </div>
       </div>
       {!order || !shop.snapshot ? (

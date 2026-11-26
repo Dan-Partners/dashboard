@@ -10,6 +10,7 @@ import { useShop } from "@/lib/shop-context";
 import { useTapGuard, type TapGuard } from "@/lib/tap-guard";
 import type { Order, OrderStatus } from "@/lib/types";
 import { Button, PageTitle } from "./ui";
+import { ReprintButton } from "./print-strip";
 import { WhereStrip } from "./where-strip";
 
 const COLUMNS: { status: OrderStatus; label: CopyKey }[] = [
@@ -185,6 +186,7 @@ function Docket({
               {next.label}
             </Button>
           ) : null}
+          <ReprintButton orderId={order.id} />
           {locked ? null : (
             <Link href={`/shop/ticket?order=${order.id}`} className="inline-flex min-h-11 items-center px-2 font-display text-ink-soft">
               {t("viewTicket")}

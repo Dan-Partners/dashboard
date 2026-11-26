@@ -289,3 +289,30 @@ export type ShopSnapshot = {
   orders: Order[];
   customers: Customer[];
 };
+
+export type Paper = "MM58" | "MM80";
+
+/** A receipt printer on the shop's network; the shop server prints to it. */
+export type Printer = {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  paper: Paper;
+  /** Empty: the whole order, with its total. */
+  stations: Station[];
+  copies: number;
+  enabled: boolean;
+};
+
+export type PrinterInput = Omit<Printer, "id" | "port"> & { id?: string; port?: number };
+
+/** How a printer is doing, for the strip on every tablet. */
+export type PrinterStatus = {
+  printerId: string;
+  name: string;
+  waiting: number;
+  failed: number;
+  failing: boolean;
+  lastError: string | null;
+};

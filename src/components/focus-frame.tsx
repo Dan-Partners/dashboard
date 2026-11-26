@@ -9,6 +9,7 @@ import { STATION_LABEL } from "@/lib/stations";
 import { writePersisted } from "@/lib/storage";
 import type { Session } from "@/lib/types";
 import { ConnectionStatus } from "./connection-status";
+import { PrintStrip } from "./print-strip";
 import { ServerSwitchNotice } from "./server-switch-notice";
 import { Button } from "./ui";
 
@@ -93,6 +94,7 @@ export function FocusFrame({ session, position, children }: { session: Session; 
         </div>
       </header>
       <ServerSwitchNotice />
+      <PrintStrip />
       {shop.remoteError && shop.servers.inUse === "shop" ? (
         <p className="no-print border-b border-rule px-4 py-2 md:px-6" role="alert">
           {t("serverDown")}

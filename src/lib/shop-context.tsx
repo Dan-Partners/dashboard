@@ -62,6 +62,8 @@ type ShopContextValue = {
   updateItem: (id: string, patch: MenuItemPatch) => Promise<void>;
   /** Owner only, through the Dan cloud. */
   addItemPhoto: (id: string, file: Blob) => Promise<void>;
+  /** Runs something on the server in use (printers, reprints). Not in the demo. */
+  onServer: <T>(work: (client: GraphQLDanClient) => Promise<T>) => Promise<T>;
   removeItemPhoto: (id: string) => Promise<void>;
   placeOrder: (input: CreateOrderInput) => Promise<Order>;
   setOrderStatus: (id: string, status: OrderStatus) => Promise<void>;
@@ -381,6 +383,15 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         if (!end) return;
         await new GraphQLDanClient(end.url, end.token).updateMenuItem(id, patch);
         await refreshRemote();
+      },
+      onServer(work) {
+        const current = getSnapshot().session;
+        if (current?.mode === "demo") {
+          return Promise.reject(new DanError("printers_demo", english("printersDemo")));
+        }
+        const end = endpointFor(current);
+        if (!end) return Promise.reject(new Error("Sign in first."));
+        return work(new GraphQLDanClient(end.url, end.token));
       },
       async addItemPhoto(id, file) {
         const current = getSnapshot().session;

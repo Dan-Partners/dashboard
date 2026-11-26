@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { checkCloud, GraphQLDanClient, pingServer } from "./graphql-client";
 import { linkFrom, serverInUse, type Link, type ServerName } from "./server-links";
-import type { Session, SyncStatus } from "./types";
+import type { PrinterStatus, Session, SyncStatus } from "./types";
 
 /** How often both servers are checked while all is well. */
 export const CHECK_EVERY_MS = 10_000;
@@ -20,10 +20,12 @@ export type Servers = {
   sync: SyncStatus | null;
   /** When the shop server last reported a sync, kept while it is not answering. */
   lastSyncedAt: string | null;
+  /** The shop's printers, from the shop server (which prints). Empty when it is not answering. */
+  printers: PrinterStatus[];
   inUse: ServerName;
 };
 
-const STARTING: Servers = { shop: "checking", cloud: "checking", sync: null, lastSyncedAt: null, inUse: "shop" };
+const STARTING: Servers = { shop: "checking", cloud: "checking", sync: null, lastSyncedAt: null, printers: [], inUse: "shop" };
 
 /** The server in use, readable outside React (requests read it when sent). */
 let inUseNow: ServerName = "shop";
@@ -71,10 +73,14 @@ export function useServerHealth(session: Session | null): Servers {
         cloudUrl ? checkCloud(cloudUrl) : Promise.resolve(false),
       ]);
       // An older shop server has no sync report: treated as nothing to wait for.
-      const sync =
-        shopUp && token
-          ? await new GraphQLDanClient(serverUrl, token).getSyncStatus().catch(() => null)
-          : null;
+      const shopClient = shopUp && token ? new GraphQLDanClient(serverUrl, token) : null;
+      const [sync, printers] = shopClient
+        ? await Promise.all([
+            shopClient.getSyncStatus().catch(() => null),
+            // A shop server from before printing has no print status: none to show.
+            shopClient.getPrintStatus().catch(() => []),
+          ])
+        : [null, []];
       if (cancelled) return;
       shopMisses = shopUp ? 0 : shopMisses + 1;
       shopGood = shopUp ? shopGood + 1 : 0;
@@ -95,9 +101,12 @@ export function useServerHealth(session: Session | null): Servers {
         cloud: cloudUrl ? linkFrom(cloudMisses, true) : "not_set",
         sync,
         lastSyncedAt,
+        printers,
         inUse,
       });
-      timer = window.setTimeout(() => void check(), shopMisses > 0 || inUse === "cloud" ? CHECK_SOON_MS : CHECK_EVERY_MS);
+      // Sooner while something is wrong, a printer included, so a fix shows quickly.
+      const soon = shopMisses > 0 || inUse === "cloud" || printers.some((printer) => printer.failing);
+      timer = window.setTimeout(() => void check(), soon ? CHECK_SOON_MS : CHECK_EVERY_MS);
     };
     void check();
     return () => {

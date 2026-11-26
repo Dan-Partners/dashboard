@@ -12,6 +12,7 @@ import { ConnectionStatus } from "./connection-status";
 import { FocusDialog } from "./focus-dialog";
 import { FocusFrame } from "./focus-frame";
 import { DanGlyph, DanMark } from "./mark";
+import { PrintStrip } from "./print-strip";
 import { ServerSwitchNotice } from "./server-switch-notice";
 import { ThemeButton, ThemeDialog } from "./theme-dialog";
 import { Button, Dialog, Splash } from "./ui";
@@ -154,6 +155,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
         ) : null}
 
         <ServerSwitchNotice />
+        <PrintStrip />
 
         {/* While the cloud stands in, the strip above says so; no alarm as well. */}
         {shop.remoteError && shop.servers.inUse === "shop" ? (

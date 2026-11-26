@@ -10,6 +10,7 @@ import { STATION_GLOSS, STATION_LABEL } from "@/lib/stations";
 import { writePersisted } from "@/lib/storage";
 import { useTapGuard, type TapGuard } from "@/lib/tap-guard";
 import { STATIONS, type OrderStatus, type Station } from "@/lib/types";
+import { ReprintButton } from "./print-strip";
 import { StationPicker } from "./station-picker";
 import { Button, PageTitle } from "./ui";
 
@@ -171,6 +172,7 @@ function KitchenCard({
           {t(next.label)}
         </Button>
       ) : null}
+      <ReprintButton orderId={order.id} className="mt-2 w-full" />
     </article>
   );
 }

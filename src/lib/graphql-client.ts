@@ -12,6 +12,9 @@ import type {
   MenuPayload,
   Order,
   OrderStatus,
+  Printer,
+  PrinterInput,
+  PrinterStatus,
   SalesRange,
   SalesSummary,
   SyncStatus,
@@ -34,6 +37,7 @@ const STAFF = "id name role";
 const MENU_ITEM_BASE =
   "id number categoryId nameEn nameZh descriptionEn pricePence station allergens soldOut kind includes { number qty }";
 const MENU_ITEM = `${MENU_ITEM_BASE} photo`;
+const PRINTER = "id name host port paper stations copies enabled";
 /** The order fields the dashboard uses, for queries and the live channel alike. */
 export const ORDER_FIELDS = `id number createdAt source fulfilment status customerName phone address notes table totalPence payment { method status }
   lines { itemId number nameEn nameZh qty unitPricePence station kind components { number nameEn nameZh qty station } }`;
@@ -159,17 +163,72 @@ export class GraphQLDanClient implements DanClient {
     await this.run<{ logout: boolean }>("mutation Logout { logout }");
   }
 
-  async getMenu(): Promise<MenuPayload> {
-    const query = (fields: string) => `query Menu { menu { categories { id nameEn nameZh sort } items { ${fields} } } }`;
+  /**
+   * Runs a query that asks for dish photos. A shop server from before them
+   * does not know the field and says so without a code (a query it cannot
+   * read), so the query is asked once more without it.
+   */
+  private async withPhotos<T>(query: (fields: string) => string, variables: Record<string, unknown> = {}): Promise<T> {
     try {
-      return (await this.run<{ menu: MenuPayload }>(query(MENU_ITEM))).menu;
+      return await this.run<T>(query(MENU_ITEM), variables);
     } catch (error) {
-      // A shop server from before dish photos does not know the field: ask again without it.
-      if (error instanceof Error && /photo/.test(error.message)) {
-        return (await this.run<{ menu: MenuPayload }>(query(MENU_ITEM_BASE))).menu;
-      }
+      if (error instanceof DanError && error.code === "bad_response") return this.run<T>(query(MENU_ITEM_BASE), variables);
       throw error;
     }
+  }
+
+  async getMenu(): Promise<MenuPayload> {
+    const data = await this.withPhotos<{ menu: MenuPayload }>(
+      (fields) => `query Menu { menu { categories { id nameEn nameZh sort } items { ${fields} } } }`,
+    );
+    return data.menu;
+  }
+
+  // ------------------------------------------------------------ printers (the shop server's)
+
+  async getPrinters(): Promise<Printer[]> {
+    const data = await this.run<{ printers: Printer[] }>(`query Printers { printers { ${PRINTER} } }`);
+    return data.printers;
+  }
+
+  /** How each printer is doing. A shop server from before printing has none. */
+  async getPrintStatus(): Promise<PrinterStatus[]> {
+    const data = await this.run<{ printStatus: PrinterStatus[] }>(
+      "query PrintStatus { printStatus { printerId name waiting failed failing lastError } }",
+    );
+    return data.printStatus;
+  }
+
+  /** Owner only. */
+  async savePrinter(input: PrinterInput): Promise<Printer> {
+    const data = await this.run<{ savePrinter: Printer }>(
+      `mutation SavePrinter($input: PrinterInput!) { savePrinter(input: $input) { ${PRINTER} } }`,
+      { input },
+    );
+    return data.savePrinter;
+  }
+
+  /** Owner only. */
+  async removePrinter(id: string): Promise<void> {
+    await this.run("mutation RemovePrinter($id: ID!) { removePrinter(id: $id) }", { id });
+  }
+
+  async testPrint(printerId: string): Promise<void> {
+    await this.run("mutation TestPrint($id: ID!) { testPrint(printerId: $id) }", { id: printerId });
+  }
+
+  /** Prints an order again on every printer that takes it. Says how many. */
+  async reprintOrder(orderId: string): Promise<number> {
+    const data = await this.run<{ reprintOrder: number }>("mutation Reprint($id: ID!) { reprintOrder(orderId: $id) }", { id: orderId });
+    return data.reprintOrder;
+  }
+
+  async retryPrinting(): Promise<void> {
+    await this.run("mutation { retryPrinting }");
+  }
+
+  async dismissPrintFailures(): Promise<void> {
+    await this.run("mutation { dismissPrintFailures }");
   }
 
   /** Owner only. Takes a dish's photo off (any server). */
@@ -182,8 +241,9 @@ export class GraphQLDanClient implements DanClient {
   }
 
   async updateMenuItem(id: string, patch: MenuItemPatch): Promise<MenuItem> {
-    const data = await this.run<{ updateMenuItem: MenuItem }>(
-      `mutation UpdateMenuItem($id: ID!, $patch: MenuItemPatch!) { updateMenuItem(id: $id, patch: $patch) { ${MENU_ITEM} } }`,
+    // A query the server cannot read is refused before it runs: asking again saves once.
+    const data = await this.withPhotos<{ updateMenuItem: MenuItem }>(
+      (fields) => `mutation UpdateMenuItem($id: ID!, $patch: MenuItemPatch!) { updateMenuItem(id: $id, patch: $patch) { ${fields} } }`,
       { id, patch },
     );
     return data.updateMenuItem;
