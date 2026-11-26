@@ -1,3 +1,4 @@
+import type { Board } from "./board";
 import type { OrderingSetup } from "./ordering";
 import type { ThemeChoice } from "./theme";
 import type {
@@ -686,6 +687,8 @@ export type DemoState = {
   theme?: ThemeChoice;
   /** How the demo shop takes orders and payment. Kept in this browser; v0.1's defaults when missing. */
   ordering?: OrderingSetup;
+  /** The demo shop's board columns. Kept in this browser; the four defaults when missing. */
+  board?: Board;
 };
 
 function buildItems(): MenuItem[] {

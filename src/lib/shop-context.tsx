@@ -9,6 +9,7 @@ import { english } from "./i18n";
 import { summarizeSales } from "./sales";
 import { GraphQLDanClient, orderFields, uploadMenuPhoto, type CourierAction } from "./graphql-client";
 import { shrinkPhoto } from "./photos";
+import { columnOf, DEFAULT_BOARD, nextAfter, normalizeBoard, statusAfter, type Board, type BoardPreview } from "./board";
 import { normalizeSetup, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
 import { live } from "./live";
 import { endpointFor, useServerHealth, type Servers } from "./server-health";
@@ -70,6 +71,12 @@ type ShopContextValue = {
   removeItemPhoto: (id: string) => Promise<void>;
   placeOrder: (input: CreateOrderInput) => Promise<Order>;
   setOrderStatus: (id: string, status: OrderStatus) => Promise<void>;
+  /** Moves a ticket to the next column on the owner's board. */
+  advanceOrder: (order: Order) => Promise<void>;
+  /** Owner only: the board's columns. `moveTickets`: the owner agreed to move tickets out of removed columns. */
+  previewBoard: (board: Board) => Promise<BoardPreview>;
+  saveBoard: (board: Board, moveTickets: boolean) => Promise<Board>;
+  resetBoard: () => Promise<Board>;
   /** Courier requests and changes to a delivery; cancelling an order. */
   courierAction: (action: CourierAction, id: string) => Promise<void>;
   createCustomer: (input: { phone: string; name: string }) => Promise<Customer>;
@@ -100,17 +107,19 @@ function snapshotFromPersisted(persisted: Persisted): ShopSnapshot | null {
     orders: state.orders,
     customers: state.customers,
     ordering: normalizeSetup(state.ordering),
+    board: normalizeBoard(state.board),
   };
 }
 
 async function pullRemote(baseUrl: string, token: string): Promise<Omit<ShopSnapshot, "shop"> & { theme: ThemeChoice }> {
   const client = new GraphQLDanClient(baseUrl, token);
-  const [menu, orders, customers, theme, ordering] = await Promise.all([
+  const [menu, orders, customers, theme, ordering, board] = await Promise.all([
     client.getMenu(),
     client.getOrders(),
     client.getCustomers(),
     client.getTheme(),
     client.getOrderingSettings(),
+    client.getBoard(),
   ]);
   return {
     categories: menu.categories,
@@ -118,6 +127,7 @@ async function pullRemote(baseUrl: string, token: string): Promise<Omit<ShopSnap
     orders: orders.orders,
     customers: customers.customers,
     ordering,
+    board,
     theme,
   };
 }
@@ -254,6 +264,10 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
             .getOrderingSettings()
             .then((ordering) => setRemote((current) => (current ? { ...current, ordering } : current)))
             .catch(() => undefined);
+          void client
+            .getBoard()
+            .then((board) => setRemote((current) => (current ? { ...current, board } : current)))
+            .catch(() => undefined);
         } else {
           void refreshRemote().catch(() => undefined);
         }
@@ -353,11 +367,12 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         });
         adoptShopTheme(ping.theme);
         const authed = new GraphQLDanClient(baseUrl, result.token);
-        const [menu, orders, customers, ordering] = await Promise.all([
+        const [menu, orders, customers, ordering, board] = await Promise.all([
           authed.getMenu(),
           authed.getOrders(),
           authed.getCustomers(),
           authed.getOrderingSettings(),
+          authed.getBoard(),
         ]);
         setRemote({
           shop: result.shop ?? ping.shop,
@@ -366,6 +381,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
           orders: orders.orders,
           customers: customers.customers,
           ordering,
+          board,
         });
         setRemoteError(null);
       },
@@ -461,6 +477,43 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         if (!end) return;
         await new GraphQLDanClient(end.url, end.token).updateOrder(id, { status });
         await refreshRemote();
+      },
+      async advanceOrder(order) {
+        const board = snapshot?.board ?? DEFAULT_BOARD;
+        const here = columnOf(board, order);
+        const next = here ? nextAfter(board, here.id) : null;
+        if (!next) return;
+        const status = statusAfter(order, next);
+        if (getSnapshot().session?.mode === "demo") {
+          await demoMutate((server) => server.moveOrder(order.id, next.id));
+          return;
+        }
+        const end = endpointFor(getSnapshot().session);
+        if (!end) return;
+        await new GraphQLDanClient(end.url, end.token).moveOrder(order.id, next.id, status);
+        await refreshRemote();
+      },
+      async previewBoard(board) {
+        if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.previewBoard(board));
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        return new GraphQLDanClient(end.url, end.token).previewBoard(board);
+      },
+      async saveBoard(board, moveTickets) {
+        if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.updateBoard(board, moveTickets));
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        const saved = await new GraphQLDanClient(end.url, end.token).updateBoard(board, moveTickets);
+        await refreshRemote();
+        return saved;
+      },
+      async resetBoard() {
+        if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.resetBoard());
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        const saved = await new GraphQLDanClient(end.url, end.token).resetBoard();
+        await refreshRemote();
+        return saved;
       },
       async courierAction(action, id) {
         if (getSnapshot().session?.mode === "demo") {

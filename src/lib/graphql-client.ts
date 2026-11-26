@@ -24,6 +24,7 @@ import type {
 import { DAN_PRODUCT } from "./types";
 import { normalizeTheme, type ThemeChoice } from "./theme";
 import { DEFAULT_SETUP, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
+import { DEFAULT_BOARD, type Board, type BoardPreview } from "./board";
 import { DEFAULT_UBER, UBER_FIELDS, type UberKeys, type UberOptions, type UberOptionsInput } from "./uber";
 
 /**
@@ -46,12 +47,14 @@ const ORDERING =
 /** The order fields a shop server from before delivery and bank transfer knows. */
 const ORDER_FIELDS_BASE = `id number createdAt source fulfilment status customerName phone address notes table totalPence payment { method status }
   lines { itemId number nameEn nameZh qty unitPricePence station kind components { number nameEn nameZh qty station } }`;
+const BOARD_COLUMN = "id nameEn nameZh role colour";
 const COURIER = "courier { deliveryId status trackingUrl feePence pickupEta dropoffEta courierName problem } refund";
-/** What the shop server knows: 2 with couriers (DAN-23), 1 with delivery fees, 0 before them. */
-let orderLevel = 2;
+/** What the shop server knows: 3 with board columns (DAN-25), 2 with couriers (DAN-23), 1 with delivery fees, 0 before them. */
+let orderLevel = 3;
 /** The order fields the dashboard uses, for queries and the live channel alike. */
 export function orderFields(): string {
-  if (orderLevel >= 2) return `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy ${COURIER}`;
+  if (orderLevel >= 3) return `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy ${COURIER} column columnAt columnRemap`;
+  if (orderLevel === 2) return `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy ${COURIER}`;
   return orderLevel === 1 ? `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy` : ORDER_FIELDS_BASE;
 }
 const CUSTOMER = "id phone name stamps rewardsRedeemed createdAt";
@@ -293,6 +296,54 @@ export class GraphQLDanClient implements DanClient {
       { settings, bank: bank ?? null },
     );
     return data.updateOrderingSettings;
+  }
+
+  /** The owner's board columns. A shop server from before them: the four defaults. */
+  async getBoard(): Promise<Board> {
+    try {
+      const data = await this.run<{ board: Board }>(`query Board { board { columns { ${BOARD_COLUMN} } } }`);
+      return data.board;
+    } catch (error) {
+      if (error instanceof DanError && error.code === "bad_response") return DEFAULT_BOARD;
+      throw error;
+    }
+  }
+
+  /** Owner only. What saving these columns would do to the tickets on the board now. */
+  async previewBoard(board: Board): Promise<BoardPreview> {
+    const data = await this.run<{ previewBoard: BoardPreview }>(
+      "query PreviewBoard($columns: [BoardColumnInput!]!) { previewBoard(columns: $columns) { moves { fromColumn toColumn tickets } stuckTickets } }",
+      { columns: board.columns },
+    );
+    return data.previewBoard;
+  }
+
+  /** Owner only. `moveTickets`: the owner agreed to move tickets out of removed columns. */
+  async updateBoard(board: Board, moveTickets: boolean): Promise<Board> {
+    const data = await this.run<{ updateBoard: Board }>(
+      `mutation SaveBoard($columns: [BoardColumnInput!]!, $moveTickets: Boolean) { updateBoard(columns: $columns, moveTickets: $moveTickets) { columns { ${BOARD_COLUMN} } } }`,
+      { columns: board.columns, moveTickets },
+    );
+    return data.updateBoard;
+  }
+
+  async resetBoard(): Promise<Board> {
+    const data = await this.run<{ resetBoard: Board }>(`mutation ResetBoard { resetBoard { columns { ${BOARD_COLUMN} } } }`);
+    return data.resetBoard;
+  }
+
+  /** Moves a ticket to the next column. A shop server from before columns: by status. */
+  async moveOrder(id: string, column: string, status: OrderStatus): Promise<Order> {
+    try {
+      const data = await this.run<{ moveOrder: Order }>(
+        `mutation MoveOrder($id: ID!, $column: ID!) { moveOrder(id: $id, column: $column) { ${orderFields()} } }`,
+        { id, column },
+      );
+      return data.moveOrder;
+    } catch (error) {
+      if (error instanceof DanError && error.code === "bad_response") return this.updateOrder(id, { status });
+      throw error;
+    }
   }
 
   /** The shop's Uber Direct options. A shop server from before them: not connected. */

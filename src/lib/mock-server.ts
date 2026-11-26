@@ -1,3 +1,4 @@
+import { checkBoard, columnOf, DEFAULT_BOARD, nextAfter, normalizeBoard, planMoves, roleOf, startFor, statusAfter, summarise, type Board, type BoardPreview, type PlannedMove } from "./board";
 import { bankIsEmpty, checkedBank, checkOrdering, normalizeSetup, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
 import { DanError } from "./errors";
 import { phoneDigits } from "./format";
@@ -243,8 +244,74 @@ export class MockDanServer implements DanClient {
       totalPence: lines.reduce((sum, line) => sum + line.qty * line.unitPricePence, 0),
       // Online orders in the demo alternate between the ways the shop takes payment.
       payment: input.source === "online" ? demoPayment(rules, number) : null,
+      column: startFor(normalizeBoard(this.state.board), input.source).id,
+      columnAt: this.now().toISOString(),
     };
     this.state.orders.unshift(order);
+    return Promise.resolve(clone(order));
+  }
+
+  getBoard(): Promise<Board> {
+    return Promise.resolve(clone(normalizeBoard(this.state.board)));
+  }
+
+  /** The demo signs in as the owner; the same checks and ticket moves as the shop server. */
+  previewBoard(board: Board): Promise<BoardPreview> {
+    try {
+      const next = checkBoard(board);
+      const { moves, stuck } = planMoves(normalizeBoard(this.state.board), next, this.state.orders);
+      return Promise.resolve({ moves: summarise(moves), stuckTickets: stuck });
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
+  updateBoard(board: Board, moveTickets: boolean): Promise<Board> {
+    try {
+      const next = checkBoard(board);
+      const { moves, stuck } = planMoves(normalizeBoard(this.state.board), next, this.state.orders);
+      if (stuck > 0) throw new DanError("board_tickets_stuck", `${stuck} tickets are in a column being removed and cannot go back a step. Move them on first.`);
+      if (moves.length && !moveTickets) throw new DanError("board_has_tickets", `${moves.length} tickets are in columns being removed.`);
+      this.state.board = next;
+      this.remap(moves);
+      return Promise.resolve(clone(next));
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
+  resetBoard(): Promise<Board> {
+    const current = normalizeBoard(this.state.board);
+    const moves: PlannedMove[] = [];
+    for (const order of this.state.orders) {
+      if (!["new", "preparing", "ready"].includes(order.status)) continue;
+      const at = columnOf(current, order);
+      const target = at ? DEFAULT_BOARD.columns.find((column) => column.role === at.role) : undefined;
+      if (at && target && order.column !== target.id) moves.push({ orderId: order.id, from: at.id, to: target.id });
+    }
+    this.state.board = clone(DEFAULT_BOARD);
+    this.remap(moves);
+    return Promise.resolve(clone(DEFAULT_BOARD));
+  }
+
+  private remap(moves: PlannedMove[]) {
+    const at = this.now().toISOString();
+    for (const move of moves) {
+      const order = this.state.orders.find((entry) => entry.id === move.orderId);
+      if (order) Object.assign(order, { column: move.to, columnAt: at, columnRemap: true });
+    }
+  }
+
+  /** Moves a ticket to the next column, one step at a time. */
+  moveOrder(id: string, to: string): Promise<Order> {
+    const order = this.state.orders.find((entry) => entry.id === id);
+    if (!order) return Promise.reject(new DanError("not_found", "That order is not on the board."));
+    const board = normalizeBoard(this.state.board);
+    const here = columnOf(board, order);
+    if (!here || order.status === "completed") return Promise.reject(new DanError("order_finished", "That order is finished."));
+    const next = nextAfter(board, here.id);
+    if (!next || next.id !== to) return Promise.reject(new DanError("bad_status", "Move the order on one step at a time."));
+    Object.assign(order, { column: next.id, columnAt: this.now().toISOString(), columnRemap: false, status: statusAfter(order, next) });
     return Promise.resolve(clone(order));
   }
 
@@ -278,6 +345,8 @@ export class MockDanServer implements DanClient {
       return Promise.reject(new DanError("bad_status", "Move the order on one step at a time."));
     }
     order.status = patch.status;
+    const column = normalizeBoard(this.state.board).columns.find((entry) => entry.role === roleOf(patch.status));
+    if (column) Object.assign(order, { column: column.id, columnAt: this.now().toISOString(), columnRemap: false });
     return Promise.resolve(clone(order));
   }
 

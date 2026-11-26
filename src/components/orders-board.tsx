@@ -8,24 +8,21 @@ import { ago, formatPence, fulfilmentLabel, paymentLabel, orderLabel, phoneDigit
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
 import { useTapGuard, type TapGuard } from "@/lib/tap-guard";
-import type { Order, OrderStatus } from "@/lib/types";
+import { columnGloss, columnName, columnOf, DEFAULT_BOARD, nextStep, type Board, type NextStep } from "@/lib/board";
+import type { Order } from "@/lib/types";
 import { Button, PageTitle } from "./ui";
 import { AwaitingTransfers } from "./awaiting-transfers";
 import { CourierPanel, RefundFailures } from "./courier-panel";
 import { ReprintButton } from "./print-strip";
 import { WhereStrip } from "./where-strip";
 
-const COLUMNS: { status: OrderStatus; label: CopyKey }[] = [
-  { status: "new", label: "statusNew" },
-  { status: "preparing", label: "statusPreparing" },
-  { status: "ready", label: "statusReady" },
-  { status: "completed", label: "statusCompleted" },
-];
-
 export function OrdersBoard() {
   const { t, locale } = useI18n();
   const shop = useShop();
-  const [focus, setFocus] = useState<OrderStatus>("new");
+  const board = shop.snapshot?.board ?? DEFAULT_BOARD;
+  const [chosen, setFocus] = useState<string>(board.columns[0].id);
+  // A column removed meanwhile: back to the first.
+  const focus = board.columns.some((column) => column.id === chosen) ? chosen : board.columns[0].id;
   const [now, setNow] = useState(() => Date.now());
   const [cardError, setCardError] = useState<string | null>(null);
   const guard = useTapGuard();
@@ -35,7 +32,8 @@ export function OrdersBoard() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const orders = shop.snapshot?.orders ?? [];
+  const orders = (shop.snapshot?.orders ?? []).filter((order) => order.status !== "cancelled");
+  const inColumn = (id: string) => orders.filter((order) => columnOf(board, order)?.id === id);
   const customers = shop.snapshot?.customers ?? [];
   const locked = shop.persisted.focus?.position === "board";
 
@@ -51,30 +49,34 @@ export function OrdersBoard() {
         </p>
       ) : null}
 
-      <div className="mb-4 grid grid-cols-4 gap-2 md:hidden">
-        {COLUMNS.map((column) => (
+      <div className="-mx-1 mb-4 flex gap-2 overflow-x-auto px-1 md:hidden">
+        {board.columns.map((column) => (
           <button
-            key={column.status}
+            key={column.id}
             type="button"
-            aria-pressed={focus === column.status}
-            className={`min-h-11 cursor-pointer border px-1 py-1 text-center font-display text-sm leading-tight ${focus === column.status ? "border-ink bg-ink text-paper" : "border-rule text-ink-soft"}`}
-            onClick={() => setFocus(column.status)}
+            aria-pressed={focus === column.id}
+            className={`min-h-11 min-w-[4.75rem] flex-1 cursor-pointer border px-1 py-1 text-center font-display text-sm leading-tight ${focus === column.id ? "border-ink bg-ink text-paper" : "border-rule text-ink-soft"}`}
+            onClick={() => setFocus(column.id)}
           >
-            {t(column.label)}
-            <span className="mt-0.5 block">{orders.filter((order) => order.status === column.status).length}</span>
+            {columnName(column, locale)}
+            <span className="mt-0.5 block">{inColumn(column.id).length}</span>
           </button>
         ))}
       </div>
 
-      <div className="grid gap-6 md:grid-cols-4">
-        {COLUMNS.map((column) => {
-          const list = orders
-            .filter((order) => order.status === column.status)
-            .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+      <div
+        className="gap-6 md:grid md:overflow-x-auto"
+        style={{ gridTemplateColumns: `repeat(${board.columns.length}, minmax(${board.columns.length > 4 ? "12.5rem" : "0"}, 1fr))` }}
+      >
+        {board.columns.map((column) => {
+          const list = inColumn(column.id).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
           return (
-            <section key={column.status} className={focus === column.status ? "" : "hidden md:block"} aria-label={t(column.label)}>
-              <div className="mb-3 flex items-baseline justify-between border-b border-ink pb-2">
-                <h2 className="font-display text-2xl leading-none">{t(column.label)}</h2>
+            <section key={column.id} className={focus === column.id ? "" : "hidden md:block"} aria-label={columnName(column, locale)} data-column={column.id}>
+              <div className="mb-3 flex items-baseline justify-between border-b-[3px] pb-2" style={{ borderColor: column.colour }}>
+                <h2 className="font-display text-2xl leading-none">
+                  {columnName(column, locale)}
+                  {columnGloss(column, locale) ? <span className="ml-2 font-zh text-sm text-ink-soft">{columnGloss(column, locale)}</span> : null}
+                </h2>
                 <span className="font-display text-ink-soft">{list.length}</span>
               </div>
               <div className="space-y-3">
@@ -83,6 +85,8 @@ export function OrdersBoard() {
                   <Docket
                     key={order.id}
                     order={order}
+                    board={board}
+                    colour={column.colour}
                     now={now}
                     rewardReady={customers.some((customer) => customer.id === phoneDigits(order.phone) && customer.stamps >= 10)}
                     locked={locked}
@@ -101,6 +105,8 @@ export function OrdersBoard() {
 
 function Docket({
   order,
+  board,
+  colour,
   now,
   rewardReady,
   locked,
@@ -108,6 +114,9 @@ function Docket({
   onError,
 }: {
   order: Order;
+  board: Board;
+  /** The column's colour: the docket's top border. */
+  colour: string;
   now: number;
   rewardReady: boolean;
   /** In focus mode: where the food goes, big, at the top; no links away. */
@@ -118,13 +127,15 @@ function Docket({
   const { t, locale } = useI18n();
   const shop = useShop();
   const [busy, setBusy] = useState(false);
-  const next = nextStep(order, t);
+  const step = nextStep(board, order);
+  const next = step ? { label: stepLabel(step, order, t, locale) } : null;
   const problem = Boolean(order.courier?.problem);
 
   return (
     <div className="torn-wrap">
       <article
-        className={`torn border border-b-0 border-rule bg-paper-raised px-3 py-3 ${order.status === "new" || problem ? "border-t-[3px] border-t-accent" : "border-t-[3px] border-t-ink/15"}`}
+        className={`torn border border-b-0 border-t-[3px] border-rule bg-paper-raised px-3 py-3 ${problem ? "border-t-accent" : ""}`}
+        style={problem ? undefined : { borderTopColor: colour }}
       >
         {locked ? (
           <div className="mb-2">
@@ -189,7 +200,7 @@ function Docket({
               variant="accent"
               disabled={busy}
               onClick={() => {
-                const done = guard.run(() => shop.setOrderStatus(order.id, next.status));
+                const done = guard.run(() => shop.advanceOrder(order));
                 if (!done) return;
                 setBusy(true);
                 onError(null);
@@ -234,12 +245,10 @@ function Docket({
   );
 }
 
-function nextStep(order: Order, t: (key: CopyKey) => string): { status: OrderStatus; label: string } | null {
-  if (order.status === "new") return { status: "preparing", label: t("accept") };
-  if (order.status === "preparing") return { status: "ready", label: t("markReady") };
-  if (order.status === "ready") {
-    const label = order.fulfilment === "delivery" ? t("delivered") : order.fulfilment === "eat_in" ? t("served") : t("collected");
-    return { status: "completed", label };
-  }
-  return null;
+/** What a ticket's next-step button says, on the board, the kitchen and the pass. */
+export function stepLabel(step: NextStep, order: Order, t: (key: CopyKey) => string, locale: string): string {
+  if (step.kind === "accept") return t("accept");
+  if (step.kind === "ready") return t("markReady");
+  if (step.kind === "done") return order.fulfilment === "delivery" ? t("delivered") : order.fulfilment === "eat_in" ? t("served") : t("collected");
+  return `${t("moveTo")} ${columnName(step.column, locale)}`;
 }

@@ -28,6 +28,7 @@ const LINKS: { href: string; label: CopyKey; gloss: CopyKey; ownerOnly?: boolean
   { href: "/shop/sales", label: "navSales", gloss: "navSalesZh", ownerOnly: true },
   { href: "/shop/payments", label: "navPayments", gloss: "navPaymentsZh", ownerOnly: true, cloudOnly: true },
   { href: "/shop/ordering", label: "navOrdering", gloss: "navOrderingZh" },
+  { href: "/shop/board", label: "navBoard", gloss: "navBoardZh" },
   // Last, at the bottom of the menu: setting-up tools.
   { href: "/shop/tools", label: "navTools", gloss: "navToolsZh" },
 ];
@@ -209,7 +210,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
 
       <Dialog open={more} title={t("moreTitle")} onClose={() => setMore(false)}>
         <div className="flex flex-col">
-          {links.filter((link) => ["/shop/kitchen", "/shop/pass", "/shop/ticket", "/shop/sales", "/shop/payments", "/shop/ordering", "/shop/tools"].includes(link.href)).map((link) => (
+          {links.filter((link) => ["/shop/kitchen", "/shop/pass", "/shop/ticket", "/shop/sales", "/shop/payments", "/shop/ordering", "/shop/board", "/shop/tools"].includes(link.href)).map((link) => (
             <Link
               key={link.href}
               href={link.href}

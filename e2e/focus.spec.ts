@@ -50,7 +50,9 @@ test("a tablet locked to the kitchen stays locked, filters by station without hi
   await expect(page.locator('[data-testid="kitchen-ticket"][data-for-picked="false"]').first()).toBeVisible();
   for (const ticket of await tickets.all()) {
     const state = await ticket.getAttribute("data-status");
-    await expect(ticket).toHaveClass(new RegExp(`glow-${state === "completed" ? "done" : state}`));
+    // The glow is the column's colour: green new, blue preparing, red ready; grey once done.
+    if (state === "completed") await expect(ticket).toHaveClass(/glow-done/);
+    else await expect(ticket).toHaveAttribute("style", new RegExp(`--glow: ${{ new: "#1f9d55", preparing: "#2f6fdb", ready: "#d7372a" }[state!]}`));
   }
   // Adding the fryer brings more tickets into the filter, none leave the screen.
   await page.getByTestId("station-picker").getByRole("button", { name: /^Fryer/ }).click();

@@ -1,3 +1,4 @@
+import type { Board } from "./board";
 import type { OrderingSetup } from "./ordering";
 /**
  * Dan shop-server contract.
@@ -178,6 +179,12 @@ export type Order = {
   courier?: Courier | null;
   /** For a cancelled card order: "refunded", or "failed" (refund it in Stripe). */
   refund?: string | null;
+  /** The board column it sits in. Empty: the first column for its status. */
+  column?: string | null;
+  /** When it entered that column. */
+  columnAt?: string | null;
+  /** True when a change to the board moved it there, not staff (no sound). */
+  columnRemap?: boolean | null;
 };
 
 export type Courier = {
@@ -308,6 +315,8 @@ export type Session = {
 
 export type ShopSnapshot = {
   shop: Shop;
+  /** The owner's board columns. */
+  board: Board;
   /** How the shop takes orders and payment. */
   ordering: OrderingSetup;
   categories: Category[];
