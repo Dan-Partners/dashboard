@@ -3,26 +3,13 @@
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { formatClock, formatPence, fulfilmentLabel, orderLabel, primaryName } from "@/lib/format";
-import { useI18n, type CopyKey } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
 import { ticketSections, type TicketSection } from "@/lib/ticket";
+import { stationGloss, stationName } from "@/lib/stations";
 import type { Order, Shop, Station } from "@/lib/types";
 import { ReprintButton } from "./print-strip";
 import { Button, PageTitle } from "./ui";
-
-const STATION_KEY: Record<Station, CopyKey> = {
-  wok: "stationWok",
-  fryer: "stationFryer",
-  rice: "stationRice",
-  counter: "stationCounter",
-};
-
-const STATION_ZH: Record<Station, CopyKey> = {
-  wok: "stationWokZh",
-  fryer: "stationFryerZh",
-  rice: "stationRiceZh",
-  counter: "stationCounterZh",
-};
 
 export function TicketView() {
   const { t, locale } = useI18n();
@@ -56,11 +43,11 @@ export function TicketView() {
       {!order || !shop.snapshot ? (
         <p className="text-ink-soft">{t("ticketEmpty")}</p>
       ) : mode === "one" ? (
-        <Slip order={order} shopInfo={shop.snapshot.shop} sections={ticketSections(order)} />
+        <Slip order={order} shopInfo={shop.snapshot.shop} stations={shop.snapshot.stations} sections={ticketSections(order, shop.snapshot.stations)} />
       ) : (
         <div className="ticket-print flex flex-wrap items-start gap-6">
-          {ticketSections(order).map((section) => (
-            <Slip key={section.station} order={order} shopInfo={shop.snapshot!.shop} sections={[section]} />
+          {ticketSections(order, shop.snapshot.stations).map((section) => (
+            <Slip key={section.station} order={order} shopInfo={shop.snapshot!.shop} stations={shop.snapshot!.stations} sections={[section]} />
           ))}
         </div>
       )}
@@ -68,7 +55,7 @@ export function TicketView() {
   );
 }
 
-function Slip({ order, shopInfo, sections }: { order: Order; shopInfo: Shop; sections: TicketSection[] }) {
+function Slip({ order, shopInfo, stations, sections }: { order: Order; shopInfo: Shop; stations: Station[]; sections: TicketSection[] }) {
   const { t, locale } = useI18n();
   return (
     <div className="torn-wrap ticket-print max-w-full">
@@ -98,9 +85,13 @@ function Slip({ order, shopInfo, sections }: { order: Order; shopInfo: Shop; sec
         {sections.map((section) => (
           <section key={section.station}>
             <Rule />
-            <h2 className="font-display text-sm tracking-[0.16em]">
-              {t(STATION_KEY[section.station]).toUpperCase()} <span className="font-zh tracking-normal">{t(STATION_ZH[section.station])}</span>
-            </h2>
+            {/* Dishes with no station have no heading. The slip is always headed in English, then Chinese. */}
+            {section.station ? (
+              <h2 className="font-display text-sm tracking-[0.16em]">
+                {stationName(stations, section.station, "en").toUpperCase()}{" "}
+                <span className="font-zh tracking-normal">{stationGloss(stations, section.station, "en")}</span>
+              </h2>
+            ) : null}
             <ul className="mt-1">
               {section.lines.map((line) => (
                 <li key={`${section.station}-${line.number}`} className="mt-1">

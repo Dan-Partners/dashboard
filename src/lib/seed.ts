@@ -57,7 +57,7 @@ type SeedItem = {
   nameZh: string;
   descriptionEn?: string;
   pricePence: number;
-  station: Station;
+  station: string;
   allergens?: Allergen[];
   soldOut?: boolean;
   kind?: "item" | "set";
@@ -692,6 +692,8 @@ export type DemoState = {
   board?: Board;
   /** The demo shop's ticket sounds. Kept in this browser; the kitchen 叮 when missing. */
   triggers?: Triggers;
+  /** The demo shop's stations. Kept in this browser; wok, fryer, rice and counter when missing. */
+  stations?: Station[];
 };
 
 function buildItems(): MenuItem[] {

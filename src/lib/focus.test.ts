@@ -5,14 +5,22 @@ import {
   newDoneMemory,
   normalizeFocus,
   normalizeStations,
+  pickedStations,
   pickStation,
   noteOrders,
   passOrders,
   toggleStation,
 } from "./focus";
-import type { Order, OrderLine, OrderStatus, Station } from "./types";
+import { DEFAULT_STATIONS, type Order, type OrderLine, type OrderStatus, type Station } from "./types";
 
-const line = (number: number, station: Station): OrderLine => ({
+/** The four a shop starts with, and a shop that named its own. */
+const FOUR = DEFAULT_STATIONS;
+const OWN: Station[] = [
+  { id: "bar", nameEn: "Bar", nameZh: "Bar" },
+  { id: "grill", nameEn: "Grill", nameZh: "燒烤" },
+];
+
+const line = (number: number, station: string): OrderLine => ({
   itemId: `item-${number}`,
   number,
   nameEn: `Dish ${number}`,
@@ -49,21 +57,29 @@ describe("the saved lock", () => {
 });
 
 describe("the station filter", () => {
-  it("keeps known stations in kitchen order, and falls back to all", () => {
-    expect(normalizeStations(["rice", "wok", "oven"])).toEqual(["wok", "rice"]);
-    expect(normalizeStations([])).toEqual(["wok", "fryer", "rice", "counter"]);
-    expect(normalizeStations("wok")).toEqual(["wok", "fryer", "rice", "counter"]);
+  it("keeps a tablet's picked stations as ids, and nothing picked means all", () => {
+    expect(normalizeStations(["rice", "wok", 7, "rice"])).toEqual(["rice", "wok"]);
+    expect(normalizeStations("wok")).toEqual([]);
+    // Shown in the shop's order; ones the shop no longer has are left out.
+    expect(pickedStations(["rice", "wok", "oven"], FOUR)).toEqual(["wok", "rice"]);
+    expect(pickedStations([], FOUR)).toEqual(["wok", "fryer", "rice", "counter"]);
+    // A tablet that picked a station the owner has since removed shows all again.
+    expect(pickedStations(["oven"], OWN)).toEqual(["bar", "grill"]);
+    // What older tablets saved (all four) still means all.
+    expect(pickedStations(["wok", "fryer", "rice", "counter"], FOUR)).toHaveLength(4);
+    expect(pickedStations(["wok"], [])).toEqual([]);
   });
 
   it("never turns the last station off", () => {
-    expect(toggleStation(["wok", "fryer"], "wok")).toEqual(["fryer"]);
-    expect(toggleStation(["fryer"], "fryer")).toEqual(["fryer"]);
-    expect(toggleStation(["rice"], "wok")).toEqual(["wok", "rice"]);
+    expect(toggleStation(["wok", "fryer"], "wok", FOUR)).toEqual(["fryer"]);
+    expect(toggleStation(["fryer"], "fryer", FOUR)).toEqual(["fryer"]);
+    expect(toggleStation(["rice"], "wok", FOUR)).toEqual(["wok", "rice"]);
   });
 
-  it("from all stations, a tap picks just that one", () => {
-    expect(pickStation(["wok", "fryer", "rice", "counter"], "fryer")).toEqual(["fryer"]);
-    expect(pickStation(["fryer"], "wok")).toEqual(["wok", "fryer"]);
+  it("from all stations, a tap picks just that one, and picking them all is all again", () => {
+    expect(pickStation([], "fryer", FOUR)).toEqual(["fryer"]);
+    expect(pickStation(["fryer"], "wok", FOUR)).toEqual(["wok", "fryer"]);
+    expect(pickStation(["bar"], "grill", OWN)).toEqual([]);
   });
 });
 
@@ -78,7 +94,7 @@ describe("the kitchen screen", () => {
     ];
     const memory = newDoneMemory();
     noteOrders(memory, orders, now);
-    const tickets = kitchenTickets(orders, ["wok"], memory, now);
+    const tickets = kitchenTickets(orders, ["wok"], FOUR, memory, now);
     expect(tickets.map((ticket) => ticket.order.id)).toEqual(["a", "c", "b"]);
     expect(tickets.map((ticket) => ticket.forPicked)).toEqual([true, true, false]);
     expect(tickets[0].sections.map((section) => section.station)).toEqual(["wok", "rice"]);
@@ -90,8 +106,8 @@ describe("the kitchen screen", () => {
     noteOrders(memory, [placedLongAgo], now);
     const done = { ...placedLongAgo, status: "completed" as const };
     noteOrders(memory, [done], now);
-    expect(kitchenTickets([done], ["wok"], memory, now + DONE_SHOWN_MS - 1000)).toHaveLength(1);
-    expect(kitchenTickets([done], ["wok"], memory, now + DONE_SHOWN_MS)).toHaveLength(0);
+    expect(kitchenTickets([done], ["wok"], FOUR, memory, now + DONE_SHOWN_MS - 1000)).toHaveLength(1);
+    expect(kitchenTickets([done], ["wok"], FOUR, memory, now + DONE_SHOWN_MS)).toHaveLength(0);
   });
 
   it("after a reload, counts a done order from when it was placed", () => {
@@ -99,7 +115,7 @@ describe("the kitchen screen", () => {
     const recent = order("r", "completed", 5, [line(1, "wok")], now);
     const old = order("o", "completed", 40, [line(1, "wok")], now);
     noteOrders(memory, [recent, old], now);
-    expect(kitchenTickets([recent, old], ["wok"], memory, now).map((ticket) => ticket.order.id)).toEqual(["r"]);
+    expect(kitchenTickets([recent, old], ["wok"], FOUR, memory, now).map((ticket) => ticket.order.id)).toEqual(["r"]);
   });
 });
 

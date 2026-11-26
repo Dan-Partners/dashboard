@@ -2,10 +2,10 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { allStations, enterFullscreen, exitFullscreen, fullscreenAvailable, POSITION_ROUTE, type Position } from "@/lib/focus";
+import { allStations, enterFullscreen, exitFullscreen, fullscreenAvailable, pickedStations, POSITION_ROUTE, type Position } from "@/lib/focus";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
-import { STATION_LABEL } from "@/lib/stations";
+import { stationName } from "@/lib/stations";
 import { writePersisted } from "@/lib/storage";
 import type { Session } from "@/lib/types";
 import { ConnectionStatus } from "./connection-status";
@@ -45,12 +45,13 @@ function useIsFullscreen() {
  * the top saying so, and a lock in the corner held for 3 seconds to leave.
  */
 export function FocusFrame({ session, position, children }: { session: Session; position: Position; children: React.ReactNode }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const shop = useShop();
   const pathname = usePathname();
   const router = useRouter();
   const fullscreen = useIsFullscreen();
-  const stations = shop.persisted.kitchenStations;
+  const stations = shop.snapshot?.stations ?? [];
+  const picked = pickedStations(shop.persisted.kitchenStations, stations);
   const route = POSITION_ROUTE[position];
 
   // Marks the page as locked, for the touch rules in globals.css.
@@ -67,8 +68,8 @@ export function FocusFrame({ session, position, children }: { session: Session; 
   }, [pathname, route, router]);
 
   const filter =
-    position === "kitchen" && !allStations(stations)
-      ? ` · ${t("focusFilterBefore")}${stations.map((station) => t(STATION_LABEL[station])).join(", ")}${t("focusFilterAfter")}`
+    position === "kitchen" && !allStations(picked, stations)
+      ? ` · ${t("focusFilterBefore")}${picked.map((station) => stationName(stations, station, locale)).join(", ")}${t("focusFilterAfter")}`
       : "";
 
   return (

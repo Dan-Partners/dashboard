@@ -9,6 +9,7 @@ import { DEMO_EMAIL, DEMO_PASSWORD, DEMO_PIN, STAMP_GOAL } from "./seed";
 import { normalizePersisted } from "./storage";
 import { ticketSections } from "./ticket";
 import { normalizeServerUrl } from "./url";
+import { DEFAULT_STATIONS } from "./types";
 
 const now = new Date("2026-06-10T15:00:00.000Z");
 
@@ -72,7 +73,7 @@ describe("mock shop", () => {
       lines: [{ number: 201, qty: 1 }],
     });
     expect(order.totalPence).toBe(1240);
-    const sections = ticketSections(order);
+    const sections = ticketSections(order, DEFAULT_STATIONS);
     const names = sections.flatMap((section) => section.lines.map((line) => line.number));
     expect(names).toEqual(expect.arrayContaining([25, 81, 2, 90]));
     expect(sections.map((section) => section.station)).toEqual(expect.arrayContaining(["wok", "fryer"]));
@@ -304,5 +305,27 @@ describe("graphql client", () => {
     await expect(server.updateShop({ name: "  " })).rejects.toMatchObject({ code: "invalid" });
     await expect(server.setCounterPin("12")).rejects.toMatchObject({ code: "invalid" });
     await expect(server.setCounterPin("2468")).resolves.toBeUndefined();
+  });
+  it("lets the owner name the stations, and keeps one that dishes still use", async () => {
+    const server = new MockDanServer();
+    expect((await server.getStations()).map((station) => station.id)).toEqual(["wok", "fryer", "rice", "counter"]);
+
+    const withBar = [...DEFAULT_STATIONS, { id: "bar", nameEn: " Bar ", nameZh: "" }];
+    const saved = await server.updateStations(withBar);
+    expect(saved[4]).toEqual({ id: "bar", nameEn: "Bar", nameZh: "Bar" });
+
+    // A dish moves to the bar; then the bar cannot go until it moves off.
+    const menu = await server.getMenu();
+    const dish = menu.items.find((item) => item.number === 81)!;
+    expect((await server.updateMenuItem(dish.id, { station: "bar" })).station).toBe("bar");
+    await expect(server.updateMenuItem(dish.id, { station: "oven" })).rejects.toMatchObject({ code: "invalid" });
+    await expect(server.updateStations(DEFAULT_STATIONS)).rejects.toMatchObject({ code: "station_in_use" });
+    expect((await server.updateMenuItem(dish.id, { station: "" })).station).toBe("");
+    expect(await server.updateStations(DEFAULT_STATIONS)).toHaveLength(4);
+
+    await expect(server.updateStations([{ id: "Bad Id", nameEn: "X", nameZh: "" }])).rejects.toMatchObject({ code: "stations_ids" });
+    await expect(server.updateStations([{ id: "x", nameEn: " ", nameZh: "" }])).rejects.toMatchObject({ code: "stations_name" });
+    // Wok still has dishes, so the list cannot be emptied in the demo.
+    await expect(server.updateStations([])).rejects.toMatchObject({ code: "station_in_use" });
   });
 });

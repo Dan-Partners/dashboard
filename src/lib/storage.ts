@@ -2,7 +2,7 @@ import type { SoundPlace } from "./triggers";
 import type { DemoState } from "./seed";
 import { DEFAULT_THEME, normalizeTheme, type ThemeChoice } from "./theme";
 import { normalizeFocus, normalizeStations, type Focus } from "./focus";
-import { STATIONS, type Session, type Station } from "./types";
+import type { Session } from "./types";
 
 export type Locale = "en" | "zh-Hant";
 
@@ -23,8 +23,8 @@ export type Persisted = {
   theme: ThemeChoice;
   /** Focus mode: this tablet locked to one position. */
   focus: Focus | null;
-  /** The kitchen screen's station filter on this tablet. */
-  kitchenStations: Station[];
+  /** The kitchen screen's station filter on this tablet: station ids. Empty: all. */
+  kitchenStations: string[];
   /** The ordering site address the Tools page last used for table QR codes. */
   orderingAddress: string | null;
   /** Ticket sounds wanted on this device, per station (kitchen, pass, counter). */
@@ -45,7 +45,7 @@ export const EMPTY_PERSISTED: Persisted = {
   activeOrderId: null,
   theme: DEFAULT_THEME,
   focus: null,
-  kitchenStations: [...STATIONS],
+  kitchenStations: [],
   orderingAddress: null,
   sounds: {},
 };

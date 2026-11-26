@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { isDanError } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n";
 import { useIsOwner, useShop } from "@/lib/shop-context";
-import { STATION_GLOSS, STATION_LABEL } from "@/lib/stations";
-import { STATIONS, type Paper, type Printer, type PrinterInput, type Station } from "@/lib/types";
+import { stationGloss, stationName } from "@/lib/stations";
+import type { Paper, Printer, PrinterInput } from "@/lib/types";
 import { Button, Dialog, TextField } from "./ui";
 
 const BLANK: PrinterInput = { name: "", host: "", port: 9100, paper: "MM80", stations: [], copies: 1, enabled: true };
@@ -15,7 +15,7 @@ const BLANK: PrinterInput = { name: "", host: "", port: 9100, paper: "MM80", sta
  * send a test print. They live on the shop's machine, which does the printing.
  */
 export function PrintersSection() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const shop = useShop();
   const isOwner = useIsOwner();
   const [printers, setPrinters] = useState<Printer[] | null>(null);
@@ -23,6 +23,8 @@ export function PrintersSection() {
   const [editing, setEditing] = useState<PrinterInput | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const onServer = shop.onServer;
+
+  const stations = shop.snapshot?.stations ?? [];
 
   const load = useCallback(() => {
     void onServer((client) => client.getPrinters())
@@ -72,9 +74,15 @@ export function PrintersSection() {
                     </p>
                     <p className="text-sm text-ink-soft">
                       {printer.host}:{printer.port} · {printer.paper === "MM58" ? "58 mm" : "80 mm"} ·{" "}
-                      {printer.stations.length === 0 ? t("printersWhole") : printer.stations.map((station) => t(STATION_LABEL[station])).join(", ")}
+                      {printer.stations.length === 0 ? t("printersWhole") : printer.stations.map((station) => stationName(stations, station, locale)).join(", ")}
                       {printer.copies > 1 ? ` · ${printer.copies} ${t("printersCopies").toLowerCase()}` : ""}
                     </p>
+                    {/* Its stations have all gone: it prints nothing, and never falls back to whole orders. */}
+                    {printer.stations.length > 0 && !printer.stations.some((station) => stations.some((known) => known.id === station)) ? (
+                      <p className="text-sm text-[#d7372a]" role="alert" data-testid="printer-no-stations">
+                        {t("printersStationsGone")}
+                      </p>
+                    ) : null}
                     {failing && now?.lastError ? <p className="text-sm text-[#d7372a]">{now.lastError}</p> : null}
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -89,7 +97,7 @@ export function PrintersSection() {
                       {t("printersTest")}
                     </Button>
                     {isOwner ? (
-                      <Button variant="ghost" onClick={() => setEditing({ ...printer })}>
+                      <Button variant="ghost" onClick={() => setEditing({ ...printer })} data-testid="printer-edit">
                         {t("printersEditButton")}
                       </Button>
                     ) : null}
@@ -127,15 +135,23 @@ export function PrintersSection() {
 }
 
 function PrinterForm({ start, onClose, onDone }: { start: PrinterInput; onClose: () => void; onDone: () => void }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const shop = useShop();
-  const [form, setForm] = useState<PrinterInput>(start);
+  const known = shop.snapshot?.stations ?? [];
+  // Stations that have gone are dropped as the form opens (the server refuses them), and the owner is told.
+  const gone = start.stations.filter((station) => !known.some((entry) => entry.id === station));
+  const [form, setForm] = useState<PrinterInput>({ ...start, stations: start.stations.filter((station) => !gone.includes(station)) });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const set = (patch: Partial<PrinterInput>) => setForm((current) => ({ ...current, ...patch }));
+  const stations = shop.snapshot?.stations ?? [];
   const whole = form.stations.length === 0;
-  const toggle = (station: Station) =>
-    set({ stations: form.stations.includes(station) ? form.stations.filter((s) => s !== station) : STATIONS.filter((s) => s === station || form.stations.includes(s)) });
+  const toggle = (station: string) =>
+    set({
+      stations: form.stations.includes(station)
+        ? form.stations.filter((s) => s !== station)
+        : stations.map((known) => known.id).filter((id) => id === station || form.stations.includes(id)),
+    });
   const chip = (on: boolean) =>
     `min-h-11 cursor-pointer border px-3 font-display active:scale-[0.97] ${on ? "border-ink bg-ink text-paper" : "border-rule bg-paper text-ink-soft active:bg-paper-deep"}`;
 
@@ -181,13 +197,18 @@ function PrinterForm({ start, onClose, onDone }: { start: PrinterInput; onClose:
             <button type="button" aria-pressed={whole} className={chip(whole)} onClick={() => set({ stations: [] })}>
               {t("printersWhole")}
             </button>
-            {STATIONS.map((station) => (
-              <button key={station} type="button" aria-pressed={form.stations.includes(station)} className={chip(form.stations.includes(station))} onClick={() => toggle(station)}>
-                {t(STATION_LABEL[station])} <span className="font-zh text-sm opacity-80">{t(STATION_GLOSS[station])}</span>
+            {stations.map((station) => (
+              <button key={station.id} type="button" aria-pressed={form.stations.includes(station.id)} className={chip(form.stations.includes(station.id))} onClick={() => toggle(station.id)}>
+                {stationName(stations, station.id, locale)} <span className="font-zh text-sm opacity-80">{stationGloss(stations, station.id, locale)}</span>
               </button>
             ))}
           </div>
           <p className="mt-1 text-sm text-ink-soft">{t("printersWholeHint")}</p>
+          {gone.length > 0 ? (
+            <p className="mt-1 text-sm text-[#d7372a]" role="alert" data-testid="printer-stations-gone">
+              {t("printersStationsChoose")}
+            </p>
+          ) : null}
         </fieldset>
         <div className="flex flex-wrap items-center gap-6">
           <div className="flex items-center gap-2">

@@ -1,11 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { enterFullscreen, POSITION_ROUTE, pickStation, POSITIONS, type Position } from "@/lib/focus";
+import { enterFullscreen, pickedStations, POSITION_ROUTE, pickStation, POSITIONS, type Position } from "@/lib/focus";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
 import { writePersisted } from "@/lib/storage";
-import { STATIONS } from "@/lib/types";
 import { POSITION_LABEL } from "./focus-frame";
 import { StationPicker } from "./station-picker";
 import { Dialog } from "./ui";
@@ -22,7 +21,8 @@ export function FocusDialog({ open, onClose }: { open: boolean; onClose: () => v
   const { t } = useI18n();
   const shop = useShop();
   const router = useRouter();
-  const stations = shop.persisted.kitchenStations;
+  const stations = shop.snapshot?.stations ?? [];
+  const saved = shop.persisted.kitchenStations;
 
   const lock = (position: Position) => {
     // Full screen needs this tap; asked before anything else happens.
@@ -53,9 +53,10 @@ export function FocusDialog({ open, onClose }: { open: boolean; onClose: () => v
             {position === "kitchen" ? (
               <div className="mt-3">
                 <StationPicker
-                  value={stations}
-                  onToggle={(station) => writePersisted({ kitchenStations: pickStation(stations, station) })}
-                  onAll={() => writePersisted({ kitchenStations: [...STATIONS] })}
+                  stations={stations}
+                  picked={pickedStations(saved, stations)}
+                  onToggle={(station) => writePersisted({ kitchenStations: pickStation(saved, station, stations) })}
+                  onAll={() => writePersisted({ kitchenStations: [] })}
                 />
               </div>
             ) : null}

@@ -1,5 +1,5 @@
 import { ticketSections, type TicketSection } from "./ticket";
-import { STATIONS, type Order, type OrderStatus, type Station } from "./types";
+import type { Order, OrderStatus, Station } from "./types";
 
 /** The jobs a tablet can be locked to. */
 export const POSITIONS = ["kitchen", "till", "pass", "board"] as const;
@@ -22,24 +22,38 @@ export function normalizeFocus(value: unknown): Focus | null {
   return POSITIONS.includes(position as Position) ? { position: position as Position } : null;
 }
 
-/** The kitchen's station filter: known stations, no repeats, never empty (empty means all). */
-export function normalizeStations(value: unknown): Station[] {
-  if (!Array.isArray(value)) return [...STATIONS];
-  const picked = STATIONS.filter((station) => value.includes(station));
-  return picked.length > 0 ? picked : [...STATIONS];
+/** What a tablet keeps of its station filter: station ids. Empty means all. */
+export function normalizeStations(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((entry): entry is string => typeof entry === "string" && entry.length <= 32))].slice(0, 12);
 }
+
+/**
+ * The stations a tablet shows large: the ones it picked that the shop still
+ * has, in the shop's order, or all of them when it picked none.
+ */
+export function pickedStations(saved: string[], stations: Station[]): string[] {
+  const all = stations.map((station) => station.id);
+  const picked = all.filter((id) => saved.includes(id));
+  return picked.length > 0 ? picked : all;
+}
+
+export const allStations = (picked: string[], stations: Station[]) => picked.length >= stations.length;
 
 /** Turns one station on or off, keeping at least one on. */
-export function toggleStation(current: Station[], station: Station): Station[] {
-  const next = current.includes(station) ? current.filter((entry) => entry !== station) : [...current, station];
-  return next.length > 0 ? STATIONS.filter((entry) => next.includes(entry)) : current;
+export function toggleStation(picked: string[], station: string, stations: Station[]): string[] {
+  const next = picked.includes(station) ? picked.filter((entry) => entry !== station) : [...picked, station];
+  return next.length > 0 ? stations.map((entry) => entry.id).filter((id) => next.includes(id)) : picked;
 }
 
-export const allStations = (stations: Station[]) => stations.length === STATIONS.length;
-
-/** A tap on a station chip: from "all", picks just that one; after that, adds or removes it. */
-export function pickStation(current: Station[], station: Station): Station[] {
-  return allStations(current) ? [station] : toggleStation(current, station);
+/**
+ * A tap on a station chip: from "all", picks just that one; after that, adds
+ * or removes it. Returns what the tablet keeps (empty once all are on again).
+ */
+export function pickStation(saved: string[], station: string, stations: Station[]): string[] {
+  const picked = pickedStations(saved, stations);
+  const next = allStations(picked, stations) ? [station] : toggleStation(picked, station, stations);
+  return allStations(next, stations) ? [] : next;
 }
 
 /** How long a done ticket stays on the kitchen screen, greyed. */
@@ -86,10 +100,12 @@ const oldestFirst = (a: Order, b: Order) => (a.createdAt < b.createdAt ? -1 : 1)
  * first), then orders done in the last 15 minutes. Nothing is left out for
  * the filter; tickets say whether they have work for the stations picked.
  */
-export function kitchenTickets(orders: Order[], stations: Station[], memory: DoneMemory, now: number): KitchenTicket[] {
+export function kitchenTickets(orders: Order[], picked: string[], stations: Station[], memory: DoneMemory, now: number): KitchenTicket[] {
+  const everything = allStations(picked, stations);
   const make = (order: Order): KitchenTicket => {
-    const sections = ticketSections(order);
-    return { order, sections, forPicked: sections.some((section) => stations.includes(section.station)) };
+    const sections = ticketSections(order, stations);
+    // With every station on, every ticket has work here, whatever its dishes' stations.
+    return { order, sections, forPicked: everything || sections.some((section) => picked.includes(section.station)) };
   };
   const open = orders.filter((order) => OPEN.includes(order.status)).sort(oldestFirst);
   const done = orders

@@ -31,9 +31,11 @@ import type {
   ServerPing,
   Shop,
   ShopPatch,
+  Station,
   TicketComponent,
 } from "./types";
-import { ALLERGENS, FULFILMENTS, ORDER_SOURCES, ORDER_STATUSES, STATIONS } from "./types";
+import { ALLERGENS, DEFAULT_STATIONS, FULFILMENTS, ORDER_SOURCES, ORDER_STATUSES } from "./types";
+import { checkRemovals, checkStations, normalizeStations } from "./stations";
 import { normalizeTheme, type ThemeChoice } from "./theme";
 
 const NEXT_STATUS: Record<OrderStatus, OrderStatus | null> = {
@@ -168,8 +170,9 @@ export class MockDanServer implements DanClient {
     if (!Number.isInteger(next.pricePence) || next.pricePence < 0 || next.pricePence > 100_000) {
       return Promise.reject(new DanError("invalid", "Check the price."));
     }
-    if (!STATIONS.includes(next.station)) {
-      return Promise.reject(new DanError("invalid", "Choose a station."));
+    next.station = (next.station ?? "").trim();
+    if (next.station !== current.station && next.station && !this.stations().some((station) => station.id === next.station)) {
+      return Promise.reject(new DanError("invalid", "Choose one of the shop's stations."));
     }
     if (!this.state.categories.some((category) => category.id === next.categoryId)) {
       return Promise.reject(new DanError("invalid", "Choose a category."));
@@ -193,7 +196,7 @@ export class MockDanServer implements DanClient {
       nameZh,
       descriptionEn: (input.descriptionEn ?? "").trim(),
       pricePence: input.pricePence,
-      station: input.station ?? "counter",
+      station: input.station?.trim() ?? (this.stations().some((station) => station.id === "counter") ? "counter" : ""),
       allergens: [...new Set(input.allergens ?? [])],
       soldOut: false,
       kind: "item",
@@ -209,7 +212,7 @@ export class MockDanServer implements DanClient {
     if (!Number.isInteger(item.pricePence) || item.pricePence < 0 || item.pricePence > 100_000) {
       return Promise.reject(new DanError("invalid", "Check the price."));
     }
-    if (!STATIONS.includes(item.station) || item.allergens.some((allergen) => !ALLERGENS.includes(allergen))) {
+    if ((item.station && !this.stations().some((station) => station.id === item.station)) || item.allergens.some((allergen) => !ALLERGENS.includes(allergen))) {
       return Promise.reject(new DanError("invalid", "Check the station and allergens."));
     }
     if (!this.state.categories.some((category) => category.id === item.categoryId)) {
@@ -286,6 +289,26 @@ export class MockDanServer implements DanClient {
     if (!next.name) return Promise.reject(new DanError("invalid", "A shop needs a name."));
     this.state.shop = next;
     return Promise.resolve(clone(next));
+  }
+
+  private stations(): Station[] {
+    return normalizeStations(this.state.stations, DEFAULT_STATIONS);
+  }
+
+  getStations(): Promise<Station[]> {
+    return Promise.resolve(clone(this.stations()));
+  }
+
+  /** The whole list, in order. A station still on dishes cannot go. */
+  updateStations(stations: Station[]): Promise<Station[]> {
+    try {
+      const next = checkStations(stations);
+      checkRemovals(this.stations(), next, this.state.items);
+      this.state.stations = next;
+      return Promise.resolve(clone(next));
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   /** The demo's PIN is fixed: there is nothing to sign in to. */

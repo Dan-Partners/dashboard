@@ -677,6 +677,23 @@ const en = {
   pinSaved: "PIN set. Tablets signed in with the old PIN are signed out.",
   pinInvalid: "A PIN is 4 to 6 digits.",
   pinDemo: "The demo's PIN is fixed.",
+  menuNoStation: "No station",
+  printersStationsGone: "This printer's stations no longer exist, so it prints nothing. Edit it and choose again.",
+  printersStationsChoose: "This printer's stations no longer exist. Choose its stations again, or the whole order.",
+  stationsTitle: "Stations",
+  stationsLede: "Where dishes are made or packed. Kitchen screens, tickets and printers split by them. A shop can have none.",
+  stationsAdd: "Add station",
+  stationsNew: "New station",
+  stationsSave: "Save stations",
+  stationsNone: "No stations. Dishes are listed without station headings.",
+  stationsDishes: "dishes",
+  stationsDish: "dish",
+  stationsInUse: "Move its dishes to another station first.",
+  stationsOnPrinter: "A printer still prints this station. Change the printer first.",
+  stationsOwnerOnly: "Only the owner can change stations.",
+  stationsUnsaved: "Changes not saved yet.",
+  stationsNameRule: "Each station needs a name of up to 24 characters.",
+  stationsSizeRule: "Up to 12 stations.",
 } as const;
 
 export type CopyKey = keyof typeof en;
@@ -1355,6 +1372,23 @@ const zhHant: { [K in CopyKey]: string } = {
   pinSaved: "PIN 已設定。用舊 PIN 登入的平板已登出。",
   pinInvalid: "PIN 為 4 至 6 位數字。",
   pinDemo: "示範的 PIN 不能更改。",
+  menuNoStation: "不設工位",
+  printersStationsGone: "此打印機的工位已不存在，所以不會打印。請修改並重新選擇。",
+  printersStationsChoose: "此打印機的工位已不存在。請重新選擇工位，或選擇整張單。",
+  stationsTitle: "工位",
+  stationsLede: "菜式製作或包裝的地方。廚房畫面、單據及打印機會按工位分開。店舖亦可以不設工位。",
+  stationsAdd: "新增工位",
+  stationsNew: "新工位",
+  stationsSave: "儲存工位",
+  stationsNone: "未設工位。菜式會直接列出，不分工位。",
+  stationsDishes: "款菜式",
+  stationsDish: "款菜式",
+  stationsInUse: "請先把這些菜式移到其他工位。",
+  stationsOnPrinter: "仍有打印機負責此工位，請先修改打印機。",
+  stationsOwnerOnly: "只有店主可以更改工位。",
+  stationsUnsaved: "尚未儲存更改。",
+  stationsNameRule: "每個工位需要名稱，最多 24 個字元。",
+  stationsSizeRule: "最多 12 個工位。",
 };
 
 export function useI18n() {
@@ -1422,6 +1456,11 @@ export function messageForError(code: string | undefined, t: (key: CopyKey) => s
     link_invalid: "linkInvalid",
     category_not_empty: "menuCategoryNotEmpty",
     in_a_set: "menuInASet",
+    station_in_use: "stationsInUse",
+    station_on_printer: "stationsOnPrinter",
+    stations_name: "stationsNameRule",
+    stations_size: "stationsSizeRule",
+    printer_station: "printersStationsChoose",
   };
   if (code && map[code]) return t(map[code]);
   return fallback || t("errGeneric");

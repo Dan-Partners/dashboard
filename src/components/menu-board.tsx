@@ -5,7 +5,8 @@ import { isDanError } from "@/lib/errors";
 import { formatPence, parsePoundsToPence, primaryName, secondaryName } from "@/lib/format";
 import { messageForError, useI18n, type CopyKey } from "@/lib/i18n";
 import { useIsOwner, useShop } from "@/lib/shop-context";
-import { ALLERGENS, STATIONS, type Allergen, type Category, type DanClient, type MenuItem, type Station } from "@/lib/types";
+import { defaultStation, stationGloss, stationName } from "@/lib/stations";
+import { ALLERGENS, type Allergen, type Category, type DanClient, type MenuItem } from "@/lib/types";
 import { DishPhoto } from "./dish-photo";
 import { Button, Dialog, PageTitle } from "./ui";
 
@@ -24,13 +25,6 @@ const ALLERGEN_KEY: Record<Allergen, CopyKey> = {
   sesame: "allergenSesame",
   soya: "allergenSoya",
   sulphites: "allergenSulphites",
-};
-
-const STATION_KEY: Record<Station, CopyKey> = {
-  wok: "stationWok",
-  fryer: "stationFryer",
-  rice: "stationRice",
-  counter: "stationCounter",
 };
 
 export function MenuBoard() {
@@ -203,7 +197,7 @@ function DishForm({
   onClose: () => void;
   onDone: (message: string, categoryId?: string) => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const shop = useShop();
   const categories = shop.snapshot?.categories ?? [];
   const [number, setNumber] = useState(String(item?.number ?? nextNumber ?? 1));
@@ -211,7 +205,8 @@ function DishForm({
   const [nameZh, setNameZh] = useState(item && item.nameZh !== item.nameEn ? item.nameZh : "");
   const [price, setPrice] = useState(item ? (item.pricePence / 100).toFixed(2) : "");
   const [categoryId, setCategoryId] = useState(startCategory);
-  const [station, setStation] = useState<Station>(item?.station ?? "counter");
+  const stations = shop.snapshot?.stations ?? [];
+  const [station, setStation] = useState<string>(item ? item.station : defaultStation(stations));
   const [descriptionEn, setDescriptionEn] = useState(item?.descriptionEn ?? "");
   const [allergens, setAllergens] = useState<Allergen[]>(item?.allergens ?? []);
   const [soldOut, setSoldOut] = useState(item?.soldOut ?? false);
@@ -297,16 +292,24 @@ function DishForm({
               ))}
             </select>
           </label>
-          <label className="block">
-            <span className={FIELD_LABEL}>{t("menuStation")}</span>
-            <select value={station} onChange={(event) => setStation(event.target.value as Station)} className={FIELD_INPUT}>
-              {STATIONS.map((value) => (
-                <option key={value} value={value}>
-                  {t(STATION_KEY[value])}
-                </option>
-              ))}
-            </select>
-          </label>
+          {/* A shop with no stations has nothing to choose. */}
+          {stations.length > 0 ? (
+            <label className="block">
+              <span className={FIELD_LABEL}>{t("menuStation")}</span>
+              <select name="dish-station" value={station} onChange={(event) => setStation(event.target.value)} className={FIELD_INPUT}>
+                {stations.map((entry) => {
+                  const gloss = stationGloss(stations, entry.id, locale);
+                  return (
+                    <option key={entry.id} value={entry.id}>
+                      {stationName(stations, entry.id, locale)}
+                      {gloss ? ` ${gloss}` : ""}
+                    </option>
+                  );
+                })}
+                <option value="">{t("menuNoStation")}</option>
+              </select>
+            </label>
+          ) : null}
         </div>
         <label className="block">
           <span className={FIELD_LABEL}>{t("menuNote")}</span>

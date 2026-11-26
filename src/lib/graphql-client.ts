@@ -24,8 +24,9 @@ import type {
   ServerPing,
   Shop,
   ShopPatch,
+  Station,
 } from "./types";
-import { DAN_PRODUCT } from "./types";
+import { DAN_PRODUCT, DEFAULT_STATIONS } from "./types";
 import { normalizeTheme, type ThemeChoice } from "./theme";
 import { DEFAULT_SETUP, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
 import { DEFAULT_BOARD, type Board, type BoardPreview } from "./board";
@@ -44,6 +45,7 @@ const SHOP = "id name nameZh address city phone";
 const THEME = "preset typeface custom { paper ink accent chrome }";
 const STAFF = "id name role";
 const CATEGORY = "id nameEn nameZh sort";
+const STATION = "id nameEn nameZh";
 const MENU_ITEM_BASE =
   "id number categoryId nameEn nameZh descriptionEn pricePence station allergens soldOut kind includes { number qty }";
 const MENU_ITEM = `${MENU_ITEM_BASE} photo`;
@@ -310,6 +312,26 @@ export class GraphQLDanClient implements DanClient {
       { patch },
     );
     return data.updateShop;
+  }
+
+  /** The shop's stations. A server from before stations could be named has the four fixed ones. */
+  async getStations(): Promise<Station[]> {
+    try {
+      const data = await this.run<{ stations: Station[] }>(`query Stations { stations { ${STATION} } }`);
+      return data.stations;
+    } catch (error) {
+      if (error instanceof DanError && error.code === "bad_response") return DEFAULT_STATIONS;
+      throw error;
+    }
+  }
+
+  /** Owner only. */
+  async updateStations(stations: Station[]): Promise<Station[]> {
+    const data = await this.run<{ updateStations: Station[] }>(
+      `mutation UpdateStations($stations: [StationInput!]!) { updateStations(stations: $stations) { ${STATION} } }`,
+      { stations: stations.map(({ id, nameEn, nameZh }) => ({ id, nameEn, nameZh })) },
+    );
+    return data.updateStations;
   }
 
   async setCounterPin(pin: string): Promise<void> {

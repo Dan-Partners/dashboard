@@ -5,17 +5,21 @@ export type TicketLine = {
   nameEn: string;
   nameZh: string;
   qty: number;
-  station: Station;
+  station: string;
 };
 
 export type TicketSection = {
-  station: Station;
+  /** The station's id; "" for dishes with no station. */
+  station: string;
   lines: TicketLine[];
 };
 
-const STATION_ORDER: Station[] = ["wok", "fryer", "rice", "counter"];
-
-export function ticketSections(order: Order): TicketSection[] {
+/**
+ * An order's dishes by station, set meals opened up into their dishes. The
+ * shop's stations come first, in the owner's order; then any station an
+ * older order names that has since gone; then dishes with no station.
+ */
+export function ticketSections(order: Order, stations: Station[]): TicketSection[] {
   const merged = new Map<string, TicketLine>();
 
   const add = (line: TicketComponent) => {
@@ -42,10 +46,14 @@ export function ticketSections(order: Order): TicketSection[] {
     }
   }
 
-  return STATION_ORDER.map((station) => ({
-    station,
-    lines: [...merged.values()]
-      .filter((line) => line.station === station)
-      .sort((a, b) => a.number - b.number),
-  })).filter((section) => section.lines.length > 0);
+  const lines = [...merged.values()];
+  const order_of = stations.map((station) => station.id);
+  for (const line of lines) if (line.station && !order_of.includes(line.station)) order_of.push(line.station);
+  order_of.push("");
+  return order_of
+    .map((station) => ({
+      station,
+      lines: lines.filter((line) => (line.station ?? "") === station).sort((a, b) => a.number - b.number),
+    }))
+    .filter((section) => section.lines.length > 0);
 }

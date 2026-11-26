@@ -43,7 +43,10 @@ import type {
   Session,
   ShopPatch,
   ShopSnapshot,
+  Station,
 } from "./types";
+import { DEFAULT_STATIONS } from "./types";
+import { normalizeStations } from "./stations";
 import type { CloudSession } from "./cloud";
 
 export type Notice = {
@@ -73,6 +76,8 @@ type ShopContextValue = {
   editMenu: <T>(work: (client: DanClient) => Promise<T>) => Promise<T>;
   /** Owner only: the shop's name, address and phone. */
   saveShop: (patch: ShopPatch) => Promise<void>;
+  /** Owner only: the shop's stations, the whole list in order. */
+  saveStations: (stations: Station[]) => Promise<Station[]>;
   enterDemo: () => void;
   logout: () => void;
   resetDemo: () => void;
@@ -129,12 +134,13 @@ function snapshotFromPersisted(persisted: Persisted): ShopSnapshot | null {
     ordering: normalizeSetup(state.ordering),
     board: normalizeBoard(state.board),
     triggers: normalizeTriggers(state.triggers),
+    stations: normalizeStations(state.stations, DEFAULT_STATIONS),
   };
 }
 
 async function pullRemote(baseUrl: string, token: string): Promise<Omit<ShopSnapshot, "shop"> & { theme: ThemeChoice }> {
   const client = new GraphQLDanClient(baseUrl, token);
-  const [menu, orders, customers, theme, ordering, board, triggers] = await Promise.all([
+  const [menu, orders, customers, theme, ordering, board, triggers, stations] = await Promise.all([
     client.getMenu(),
     client.getOrders(),
     client.getCustomers(),
@@ -142,6 +148,7 @@ async function pullRemote(baseUrl: string, token: string): Promise<Omit<ShopSnap
     client.getOrderingSettings(),
     client.getBoard(),
     client.getTriggers(),
+    client.getStations(),
   ]);
   return {
     categories: menu.categories,
@@ -151,6 +158,7 @@ async function pullRemote(baseUrl: string, token: string): Promise<Omit<ShopSnap
     ordering,
     board,
     triggers,
+    stations,
     theme,
   };
 }
@@ -227,13 +235,14 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     writePersisted({ session: next });
     adoptShopTheme(theme);
     const authed = new GraphQLDanClient(next.serverUrl, next.token);
-    const [menu, orders, customers, ordering, board, triggers] = await Promise.all([
+    const [menu, orders, customers, ordering, board, triggers, stations] = await Promise.all([
       authed.getMenu(),
       authed.getOrders(),
       authed.getCustomers(),
       authed.getOrderingSettings(),
       authed.getBoard(),
       authed.getTriggers(),
+      authed.getStations(),
     ]);
     boardNow = board;
     noteBoard(orders.orders, board);
@@ -246,6 +255,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       ordering,
       board,
       triggers,
+      stations,
     });
     setRemoteError(null);
   }, []);
@@ -483,6 +493,14 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         const result = await work(new GraphQLDanClient(end.url, end.token));
         await refreshRemote();
         return result;
+      },
+      async saveStations(stations) {
+        if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.updateStations(stations));
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        const saved = await new GraphQLDanClient(end.url, end.token).updateStations(stations);
+        setRemote((current) => (current ? { ...current, stations: saved } : current));
+        return saved;
       },
       async saveShop(patch) {
         const current = getSnapshot().session;

@@ -3,16 +3,16 @@
 import { TicketSounds } from "./ticket-sounds";
 import { useEffect, useState } from "react";
 import { isDanError } from "@/lib/errors";
-import { kitchenTickets, newDoneMemory, noteOrders, pickStation, type KitchenTicket } from "@/lib/focus";
+import { allStations, kitchenTickets, newDoneMemory, noteOrders, pickedStations, pickStation, type KitchenTicket } from "@/lib/focus";
 import { ago, fulfilmentLabel, orderLabel, primaryName, secondaryName } from "@/lib/format";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
-import { STATION_GLOSS, STATION_LABEL } from "@/lib/stations";
+import { stationGloss, stationName } from "@/lib/stations";
 import { writePersisted } from "@/lib/storage";
 import { useTapGuard, type TapGuard } from "@/lib/tap-guard";
 import { columnName, columnOf, DEFAULT_BOARD, nextStep, type Board } from "@/lib/board";
 import { useBoardColour } from "@/lib/use-board-colour";
-import { STATIONS, type OrderStatus, type Station } from "@/lib/types";
+import type { OrderStatus, Station } from "@/lib/types";
 import { stepLabel } from "./orders-board";
 import { ReprintButton } from "./print-strip";
 import { StationPicker } from "./station-picker";
@@ -46,7 +46,9 @@ export function KitchenView() {
   const [error, setError] = useState<string | null>(null);
   const guard = useTapGuard();
   const locked = shop.persisted.focus?.position === "kitchen";
-  const stations = shop.persisted.kitchenStations;
+  const stations = shop.snapshot?.stations ?? [];
+  const saved = shop.persisted.kitchenStations;
+  const picked = pickedStations(saved, stations);
   const orders = shop.snapshot?.orders ?? [];
   const board = shop.snapshot?.board ?? DEFAULT_BOARD;
 
@@ -56,16 +58,17 @@ export function KitchenView() {
   }, []);
 
   noteOrders(doneMemory, orders, now);
-  const tickets = kitchenTickets(orders, stations, doneMemory, now);
+  const tickets = kitchenTickets(orders, picked, stations, doneMemory, now);
 
   return (
     <div>
       {locked ? null : <PageTitle title={t("kitchenTitle")} gloss={locale === "zh-Hant" ? "Kitchen" : "廚房"} />}
       <TicketSounds place="kitchen" />
       <StationPicker
-        value={stations}
-        onToggle={(station) => writePersisted({ kitchenStations: pickStation(stations, station) })}
-        onAll={() => writePersisted({ kitchenStations: [...STATIONS] })}
+        stations={stations}
+        picked={picked}
+        onToggle={(station) => writePersisted({ kitchenStations: pickStation(saved, station, stations) })}
+        onAll={() => writePersisted({ kitchenStations: [] })}
       />
       {error ? (
         <p className="mt-3 border-l-2 border-accent pl-3" role="alert">
@@ -75,7 +78,7 @@ export function KitchenView() {
       {tickets.length === 0 ? <p className="mt-8 font-display text-2xl text-ink-soft">{t("kitchenEmpty")}</p> : null}
       <div className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(min(100%,19rem),1fr))] items-start gap-5">
         {tickets.map((ticket) => (
-          <KitchenCard key={ticket.order.id} ticket={ticket} board={board} stations={stations} now={now} guard={guard} onError={setError} />
+          <KitchenCard key={ticket.order.id} ticket={ticket} board={board} stations={stations} picked={picked} now={now} guard={guard} onError={setError} />
         ))}
       </div>
     </div>
@@ -86,6 +89,7 @@ function KitchenCard({
   ticket,
   board,
   stations,
+  picked: pickedHere,
   now,
   guard,
   onError,
@@ -93,6 +97,8 @@ function KitchenCard({
   ticket: KitchenTicket;
   board: Board;
   stations: Station[];
+  /** The stations shown large on this tablet. */
+  picked: string[];
   now: number;
   guard: TapGuard;
   onError: (message: string | null) => void;
@@ -101,6 +107,9 @@ function KitchenCard({
   const shop = useShop();
   const [busy, setBusy] = useState(false);
   const { order, sections, forPicked } = ticket;
+  // With every station on, everything is shown large: dishes with no station, and ones whose station has gone, too.
+  const everything = allStations(pickedHere, stations);
+  const isPicked = (station: string) => everything || pickedHere.includes(station);
   const status = order.status;
   const column = columnOf(board, order);
   const word = column ? columnName(column, locale) : t(STATUS_WORD[status]);
@@ -122,18 +131,20 @@ function KitchenCard({
     >
       {/* The highlight: which stations this order needs; the ones picked here, large. */}
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-rule pb-2" data-testid="station-strip">
-        {sections.map((section) => {
-          const picked = stations.includes(section.station);
-          return (
-            <span
-              key={section.station}
-              className={`font-display uppercase ${picked ? "text-3xl leading-none tracking-[0.06em] text-ink" : "text-base tracking-[0.1em] text-ink-soft"}`}
-              data-picked={picked ? "true" : "false"}
-            >
-              {t(STATION_LABEL[section.station])} <span className="font-zh normal-case">{t(STATION_GLOSS[section.station])}</span>
-            </span>
-          );
-        })}
+        {sections
+          .filter((section) => section.station)
+          .map((section) => {
+            const picked = isPicked(section.station);
+            return (
+              <span
+                key={section.station}
+                className={`font-display uppercase ${picked ? "text-3xl leading-none tracking-[0.06em] text-ink" : "text-base tracking-[0.1em] text-ink-soft"}`}
+                data-picked={picked ? "true" : "false"}
+              >
+                {stationName(stations, section.station, locale)} <span className="font-zh normal-case">{stationGloss(stations, section.station, locale)}</span>
+              </span>
+            );
+          })}
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-3">
@@ -150,10 +161,12 @@ function KitchenCard({
 
       <div className="mt-3 space-y-3">
         {sections.map((section) => {
-          const picked = stations.includes(section.station);
+          const picked = isPicked(section.station);
           return (
             <section key={section.station} className={picked ? "" : "opacity-50"} data-picked={picked ? "true" : "false"}>
-              <h4 className="font-display text-[0.72rem] tracking-[0.18em] text-ink-soft uppercase">{t(STATION_LABEL[section.station])}</h4>
+              {section.station ? (
+                <h4 className="font-display text-[0.72rem] tracking-[0.18em] text-ink-soft uppercase">{stationName(stations, section.station, locale)}</h4>
+              ) : null}
               <ul>
                 {section.lines.map((line) => (
                   <li key={line.number} className={`flex gap-2 ${picked ? "text-2xl leading-snug" : "text-sm"}`}>

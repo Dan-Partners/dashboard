@@ -34,8 +34,19 @@ export const ALLERGENS = [
 
 export type Allergen = (typeof ALLERGENS)[number];
 
-export const STATIONS = ["wok", "fryer", "rice", "counter"] as const;
-export type Station = (typeof STATIONS)[number];
+/**
+ * A station: where dishes are made or packed. The owner names them, and a
+ * shop can have none. Dishes, order lines and printers hold a station's `id`.
+ */
+export type Station = { id: string; nameEn: string; nameZh: string };
+
+/** What a shop with nothing saved has: the four a takeaway kitchen starts with. */
+export const DEFAULT_STATIONS: Station[] = [
+  { id: "wok", nameEn: "Wok", nameZh: "鑊" },
+  { id: "fryer", nameEn: "Fryer", nameZh: "炸爐" },
+  { id: "rice", nameEn: "Rice", nameZh: "飯" },
+  { id: "counter", nameEn: "Counter", nameZh: "櫃檯" },
+];
 
 export const ORDER_STATUSES = ["new", "preparing", "ready", "completed"] as const;
 /** The board's four steps, and `cancelled`: called off by staff, final, off the board. */
@@ -106,7 +117,8 @@ export type MenuItem = {
   nameZh: string;
   descriptionEn: string;
   pricePence: number;
-  station: Station;
+  /** The id of the station it is made at; "" for none. */
+  station: string;
   allergens: Allergen[];
   soldOut: boolean;
   kind: "item" | "set";
@@ -123,7 +135,7 @@ export type NewMenuItem = {
   nameZh: string;
   descriptionEn?: string;
   pricePence: number;
-  station?: Station;
+  station?: string;
   allergens?: Allergen[];
 };
 
@@ -158,7 +170,7 @@ export type TicketComponent = {
   nameEn: string;
   nameZh: string;
   qty: number;
-  station: Station;
+  station: string;
 };
 
 export type OrderLine = {
@@ -168,7 +180,7 @@ export type OrderLine = {
   nameZh: string;
   qty: number;
   unitPricePence: number;
-  station: Station;
+  station: string;
   kind: "item" | "set";
   components: TicketComponent[];
 };
@@ -303,6 +315,10 @@ export interface DanClient {
   updateShop(patch: ShopPatch): Promise<Shop>;
   /** Owner only: sets or changes the counter PIN (4 to 6 digits). */
   setCounterPin(pin: string): Promise<void>;
+  /** The shop's stations, in order. */
+  getStations(): Promise<Station[]>;
+  /** Owner only: the whole list. Refused (`station_in_use`) while a station that would go is still on dishes. */
+  updateStations(stations: Station[]): Promise<Station[]>;
   getOrders(): Promise<{ orders: Order[] }>;
   createOrder(input: CreateOrderInput): Promise<Order>;
   updateOrder(id: string, patch: { status: OrderStatus }): Promise<Order>;
@@ -347,6 +363,8 @@ export type ShopSnapshot = {
   triggers: Triggers;
   /** How the shop takes orders and payment. */
   ordering: OrderingSetup;
+  /** The shop's stations, in the kitchen's order. May be empty. */
+  stations: Station[];
   categories: Category[];
   items: MenuItem[];
   orders: Order[];
@@ -362,8 +380,8 @@ export type Printer = {
   host: string;
   port: number;
   paper: Paper;
-  /** Empty: the whole order, with its total. */
-  stations: Station[];
+  /** Station ids. Empty: the whole order, with its total. */
+  stations: string[];
   copies: number;
   enabled: boolean;
 };
