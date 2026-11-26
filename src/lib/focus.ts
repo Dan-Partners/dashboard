@@ -59,6 +59,7 @@ export function newDoneMemory(): DoneMemory {
 
 export function noteOrders(memory: DoneMemory, orders: Order[], now: number) {
   for (const order of orders) {
+    if (order.status === "cancelled") continue;
     if (order.status !== "completed") {
       memory.open.add(order.id);
       memory.doneAt.delete(order.id);

@@ -108,6 +108,8 @@ test("a customer's delivery paid by bank transfer waits until staff mark it paid
   await turn(page, "table", true);
   await turn(page, "collection", true);
   await turn(page, "delivery", true);
+  // Uber off too: with both deliveries on, staff would choose who delivers.
+  if (await sw(page, "uberDirect").isEnabled()) await turn(page, "uberDirect", false);
   await page.getByLabel("Delivery fee (£)").fill("2.50");
   await page.getByLabel("Minimum order for delivery (£)").fill("10");
   await turn(page, "bankTransfer", true);
@@ -125,8 +127,12 @@ test("a customer's delivery paid by bank transfer waits until staff mark it paid
     await customer.getByRole("button", { name: /^Add: 81/ }).click({ timeout: 3000 });
   }).toPass({ timeout: 30_000 });
   await customer.getByRole("button", { name: /^Add: 81/ }).click();
-  await customer.getByTestId("basket-bar").click();
-  await customer.getByTestId("way-delivery").check();
+  // Saved on the shop's server, the settings reach the cloud a moment later.
+  await expect(async () => {
+    await customer.goto(`${customerSite}/checkout`);
+    await customer.getByTestId("way-delivery").check({ timeout: 3000 });
+    await expect(customer.getByTestId("way-delivery").locator("..")).toContainText("£2.50", { timeout: 1000 });
+  }).toPass({ timeout: 30_000 });
   // Two egg fried rice (£7.80) is under the £10 minimum.
   await expect(customer.getByTestId("below-minimum")).toBeVisible();
   await customer.getByRole("button", { name: /^Add: 81/ }).click();

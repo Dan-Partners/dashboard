@@ -11,6 +11,7 @@ import { useTapGuard, type TapGuard } from "@/lib/tap-guard";
 import type { Order, OrderStatus } from "@/lib/types";
 import { Button, PageTitle } from "./ui";
 import { AwaitingTransfers } from "./awaiting-transfers";
+import { CourierPanel, RefundFailures } from "./courier-panel";
 import { ReprintButton } from "./print-strip";
 import { WhereStrip } from "./where-strip";
 
@@ -43,6 +44,7 @@ export function OrdersBoard() {
       {locked ? null : <PageTitle title={t("ordersTitle")} gloss={locale === "zh-Hant" ? "Orders" : "訂單"} />}
       {shop.persisted.session?.mode === "demo" ? <p className="mb-5 text-sm text-ink-soft">{t("ordersDemoNote")}</p> : null}
       <AwaitingTransfers />
+      <RefundFailures orders={orders} />
       {cardError ? (
         <p className="mb-4 border-l-2 border-accent pl-3 text-sm" role="alert">
           {cardError}
@@ -117,10 +119,13 @@ function Docket({
   const shop = useShop();
   const [busy, setBusy] = useState(false);
   const next = nextStep(order, t);
+  const problem = Boolean(order.courier?.problem);
 
   return (
     <div className="torn-wrap">
-      <article className={`torn border border-b-0 border-rule bg-paper-raised px-3 py-3 ${order.status === "new" ? "border-t-[3px] border-t-accent" : "border-t-[3px] border-t-ink/15"}`}>
+      <article
+        className={`torn border border-b-0 border-rule bg-paper-raised px-3 py-3 ${order.status === "new" || problem ? "border-t-[3px] border-t-accent" : "border-t-[3px] border-t-ink/15"}`}
+      >
         {locked ? (
           <div className="mb-2">
             <WhereStrip order={order} size="board" />
@@ -177,6 +182,7 @@ function Docket({
             </span>
           ) : null}
         </p>
+        <CourierPanel order={order} uberReady={shop.snapshot?.ordering.uberReady ?? false} guard={guard} onError={onError} />
         <div className="mt-3 flex flex-wrap gap-2">
           {next ? (
             <Button

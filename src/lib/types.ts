@@ -36,7 +36,8 @@ export const STATIONS = ["wok", "fryer", "rice", "counter"] as const;
 export type Station = (typeof STATIONS)[number];
 
 export const ORDER_STATUSES = ["new", "preparing", "ready", "completed"] as const;
-export type OrderStatus = (typeof ORDER_STATUSES)[number];
+/** The board's four steps, and `cancelled`: called off by staff, final, off the board. */
+export type OrderStatus = (typeof ORDER_STATUSES)[number] | "cancelled";
 
 export const ORDER_SOURCES = ["counter", "phone", "online"] as const;
 export type OrderSource = (typeof ORDER_SOURCES)[number];
@@ -171,8 +172,26 @@ export type Order = {
   payment?: OrderPayment | null;
   /** A delivery's fee, already in the total. */
   deliveryFeePence?: number | null;
-  /** Who carries a delivery: the shop's own driver, or Uber Direct. */
+  /** Who carries a delivery: the shop's own driver, or Uber Direct. Empty: staff choose. */
   deliveryBy?: "shop" | "uber_direct" | null;
+  /** The Uber courier, as the Dan cloud last heard. */
+  courier?: Courier | null;
+  /** For a cancelled card order: "refunded", or "failed" (refund it in Stripe). */
+  refund?: string | null;
+};
+
+export type Courier = {
+  /** Uber's delivery id; empty until booked. */
+  deliveryId: string;
+  /** pending, pickup, pickup_complete, dropoff, delivered, canceled, returned; "failed" when booking failed. */
+  status: string;
+  trackingUrl: string;
+  feePence: number;
+  pickupEta: string;
+  dropoffEta: string;
+  courierName: string;
+  /** Set when staff must decide what next. */
+  problem: string;
 };
 
 export type OrderPayment = {

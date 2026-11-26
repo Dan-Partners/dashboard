@@ -7,7 +7,7 @@ import { DanError, isDanError } from "./errors";
 import { formatPence, fulfilmentLabel, orderLabel } from "./format";
 import { english } from "./i18n";
 import { summarizeSales } from "./sales";
-import { GraphQLDanClient, orderFields, uploadMenuPhoto } from "./graphql-client";
+import { GraphQLDanClient, orderFields, uploadMenuPhoto, type CourierAction } from "./graphql-client";
 import { shrinkPhoto } from "./photos";
 import { normalizeSetup, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
 import { live } from "./live";
@@ -70,6 +70,8 @@ type ShopContextValue = {
   removeItemPhoto: (id: string) => Promise<void>;
   placeOrder: (input: CreateOrderInput) => Promise<Order>;
   setOrderStatus: (id: string, status: OrderStatus) => Promise<void>;
+  /** Courier requests and changes to a delivery; cancelling an order. */
+  courierAction: (action: CourierAction, id: string) => Promise<void>;
   createCustomer: (input: { phone: string; name: string }) => Promise<Customer>;
   addStamp: (phone: string) => Promise<Customer>;
   redeemReward: (phone: string) => Promise<Customer>;
@@ -458,6 +460,16 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         const end = endpointFor(getSnapshot().session);
         if (!end) return;
         await new GraphQLDanClient(end.url, end.token).updateOrder(id, { status });
+        await refreshRemote();
+      },
+      async courierAction(action, id) {
+        if (getSnapshot().session?.mode === "demo") {
+          await demoMutate((server) => server.courierAction(action, id));
+          return;
+        }
+        const end = endpointFor(getSnapshot().session);
+        if (!end) return;
+        await new GraphQLDanClient(end.url, end.token).courierAction(action, id);
         await refreshRemote();
       },
       async createCustomer(input) {

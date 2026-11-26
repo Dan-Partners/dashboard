@@ -24,6 +24,7 @@ import type {
 import { DAN_PRODUCT } from "./types";
 import { normalizeTheme, type ThemeChoice } from "./theme";
 import { DEFAULT_SETUP, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
+import { DEFAULT_UBER, UBER_FIELDS, type UberKeys, type UberOptions, type UberOptionsInput } from "./uber";
 
 /**
  * Talks to a Dan shop server over GraphQL. The wire contract is
@@ -45,10 +46,13 @@ const ORDERING =
 /** The order fields a shop server from before delivery and bank transfer knows. */
 const ORDER_FIELDS_BASE = `id number createdAt source fulfilment status customerName phone address notes table totalPence payment { method status }
   lines { itemId number nameEn nameZh qty unitPricePence station kind components { number nameEn nameZh qty station } }`;
-let ordersWithDelivery = true;
+const COURIER = "courier { deliveryId status trackingUrl feePence pickupEta dropoffEta courierName problem } refund";
+/** What the shop server knows: 2 with couriers (DAN-23), 1 with delivery fees, 0 before them. */
+let orderLevel = 2;
 /** The order fields the dashboard uses, for queries and the live channel alike. */
 export function orderFields(): string {
-  return ordersWithDelivery ? `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy` : ORDER_FIELDS_BASE;
+  if (orderLevel >= 2) return `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy ${COURIER}`;
+  return orderLevel === 1 ? `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy` : ORDER_FIELDS_BASE;
 }
 const CUSTOMER = "id phone name stamps rewardsRedeemed createdAt";
 const SALES =
@@ -262,10 +266,10 @@ export class GraphQLDanClient implements DanClient {
     try {
       return await this.run<{ orders: Order[] }>(`query Orders { orders { ${orderFields()} } }`);
     } catch (error) {
-      // A shop server from before delivery fees: ask without them from now on.
-      if (ordersWithDelivery && error instanceof DanError && error.code === "bad_response") {
-        ordersWithDelivery = false;
-        return this.run<{ orders: Order[] }>(`query Orders { orders { ${orderFields()} } }`);
+      // A shop server from before couriers (or delivery fees): ask for less from now on.
+      if (orderLevel > 0 && error instanceof DanError && error.code === "bad_response") {
+        orderLevel -= 1;
+        return this.getOrders();
       }
       throw error;
     }
@@ -289,6 +293,55 @@ export class GraphQLDanClient implements DanClient {
       { settings, bank: bank ?? null },
     );
     return data.updateOrderingSettings;
+  }
+
+  /** The shop's Uber Direct options. A shop server from before them: not connected. */
+  async getUberOptions(): Promise<UberOptions> {
+    try {
+      const data = await this.run<{ uberOptions: UberOptions }>(`query Uber { uberOptions { ${UBER_FIELDS} } }`);
+      return data.uberOptions;
+    } catch (error) {
+      if (error instanceof DanError && error.code === "bad_response") return DEFAULT_UBER;
+      throw error;
+    }
+  }
+
+  /** Owner only. */
+  async updateUberOptions(input: UberOptionsInput): Promise<UberOptions> {
+    const data = await this.run<{ updateUberOptions: UberOptions }>(
+      `mutation SaveUber($input: UberOptionsInput!) { updateUberOptions(input: $input) { ${UBER_FIELDS} } }`,
+      { input },
+    );
+    return data.updateUberOptions;
+  }
+
+  /** Owner only, on the Dan cloud. */
+  async connectUber(keys: UberKeys): Promise<UberOptions> {
+    const data = await this.run<{ connectUber: UberOptions }>(
+      `mutation ConnectUber($keys: UberKeysInput!) { connectUber(keys: $keys) { ${UBER_FIELDS} } }`,
+      { keys },
+    );
+    return data.connectUber;
+  }
+
+  /** Owner only, on the Dan cloud. */
+  async disconnectUber(): Promise<UberOptions> {
+    const data = await this.run<{ disconnectUber: UberOptions }>(`mutation DisconnectUber { disconnectUber { ${UBER_FIELDS} } }`);
+    return data.disconnectUber;
+  }
+
+  /** A courier request or a change to a delivery: book, cancel the courier, collect, cancel the order, or who delivers. */
+  async courierAction(action: CourierAction, id: string): Promise<Order> {
+    const call = {
+      book: "bookCourier(id: $id)",
+      cancelCourier: "cancelCourier(id: $id)",
+      toCollection: "changeToCollection(id: $id)",
+      cancelOrder: "cancelOrder(id: $id)",
+      byShop: "setDeliveryBy(id: $id, by: shop)",
+      byUber: "setDeliveryBy(id: $id, by: uber_direct)",
+    }[action];
+    const data = await this.run<Record<string, Order>>(`mutation Courier($id: ID!) { result: ${call} { ${orderFields()} } }`, { id });
+    return data.result;
   }
 
   /** Bank transfers waiting for staff (on the Dan cloud, where customers' orders are taken). */
@@ -394,6 +447,8 @@ export class GraphQLDanClient implements DanClient {
  * Sends a dish photo to the shop's staff API on the Dan cloud (owner only).
  * Photos are added only there: a shop's own server answers photos_cloud_only.
  */
+export type CourierAction = "book" | "cancelCourier" | "toCollection" | "cancelOrder" | "byShop" | "byUber";
+
 export async function uploadMenuPhoto(base: string, token: string, itemId: string, photo: Blob, fetchImpl: typeof fetch = fetch): Promise<string> {
   let response: Response;
   try {

@@ -7,6 +7,7 @@ import { messageForError, useI18n, type CopyKey } from "@/lib/i18n";
 import { bankIsEmpty, checkedBank, checkOrdering, DEFAULT_SETUP, sortCodeDisplay, type BankDetails, type OrderingSettings } from "@/lib/ordering";
 import { useIsOwner, useShop } from "@/lib/shop-context";
 import { Button, PageTitle, TextField } from "./ui";
+import { UberSection } from "./uber-section";
 
 type Flag = Exclude<keyof OrderingSettings, "deliveryFeePence" | "deliveryMinimumPence">;
 
@@ -44,7 +45,7 @@ export function OrderingView() {
   const [busy, setBusy] = useState(false);
 
   const toggle = (key: Flag) => setSettings((current) => ({ ...current, [key]: !current[key] }));
-  const delivering = settings.delivery || settings.uberDirect;
+  const delivering = settings.delivery;
   const showBank = settings.bankTransfer || !bankIsEmpty(setup.bank);
 
   const save = () => {
@@ -112,6 +113,8 @@ export function OrderingView() {
           </div>
         ) : null}
       </section>
+
+      <UberSection onChanged={() => void shop.retryRemote()} />
 
       <section aria-labelledby="ordering-payments" className="mt-8">
         <h2 id="ordering-payments" className="font-display text-2xl">

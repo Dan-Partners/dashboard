@@ -34,6 +34,7 @@ const NEXT_STATUS: Record<OrderStatus, OrderStatus | null> = {
   preparing: "ready",
   ready: "completed",
   completed: null,
+  cancelled: null,
 };
 
 function clone<T>(value: T): T {
@@ -247,10 +248,30 @@ export class MockDanServer implements DanClient {
     return Promise.resolve(clone(order));
   }
 
+  /** The demo has no Uber account: it can only change a delivery to collection, or cancel an order. */
+  courierAction(action: "book" | "cancelCourier" | "toCollection" | "cancelOrder" | "byShop" | "byUber", id: string): Promise<Order> {
+    const order = this.state.orders.find((entry) => entry.id === id);
+    if (!order) return Promise.reject(new DanError("not_found", "That order is not on the board."));
+    if (order.status === "completed" || order.status === "cancelled") {
+      return Promise.reject(new DanError("order_finished", "That order is finished."));
+    }
+    if (action === "cancelOrder") {
+      order.status = "cancelled";
+      if (order.payment?.method === "card" && order.payment.status === "paid") order.refund = "refunded";
+    } else if (action === "toCollection" && order.fulfilment === "delivery") {
+      order.fulfilment = "collection";
+    } else if (action === "byShop" && order.fulfilment === "delivery") {
+      order.deliveryBy = "shop";
+    } else {
+      return Promise.reject(new DanError("uber_demo", "Uber Direct is not in the demo."));
+    }
+    return Promise.resolve(clone(order));
+  }
+
   updateOrder(id: string, patch: { status: OrderStatus }): Promise<Order> {
     const order = this.state.orders.find((entry) => entry.id === id);
     if (!order) return Promise.reject(new DanError("not_found", "That order is not on the board."));
-    if (!ORDER_STATUSES.includes(patch.status)) {
+    if (!(ORDER_STATUSES as readonly string[]).includes(patch.status)) {
       return Promise.reject(new DanError("invalid", "Unknown status."));
     }
     if (NEXT_STATUS[order.status] !== patch.status) {

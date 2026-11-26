@@ -22,6 +22,7 @@ export const STATUS_WORD: Record<OrderStatus, CopyKey> = {
   preparing: "statusPreparing",
   ready: "statusReady",
   completed: "statusCompleted",
+  cancelled: "statusCancelled",
 };
 
 /** The colours of the glowing borders, for the status word too. */
@@ -30,6 +31,7 @@ export const STATUS_COLOUR: Record<OrderStatus, string> = {
   preparing: "#2f6fdb",
   ready: "#d7372a",
   completed: "#8a8a8a",
+  cancelled: "#8a8a8a",
 };
 
 /** The kitchen: live tickets, oldest first, filtered by station without hiding any. */
