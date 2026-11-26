@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
+import { openTill } from "./create-order";
 
 /**
  * The counter moves to the Dan cloud when the shop server stops, and back when
@@ -57,7 +58,7 @@ test("the counter carries on through the cloud while the shop server is down, th
   await expect(page.getByRole("alert").filter({ hasText: "stopped answering" })).toHaveCount(0);
 
   // An order taken at the till goes to the cloud.
-  await page.getByRole("link", { name: /^Till/ }).click();
+  await openTill(page);
   for (const key of ["2", "×", "8", "1"]) {
     await page.getByRole("button", { name: key === "×" ? "Times" : key, exact: true }).click();
   }

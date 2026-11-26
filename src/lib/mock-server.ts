@@ -1,3 +1,4 @@
+import { historyPage, type OrderHistoryFilter, type OrderPage } from "./history";
 import { checkPlaces, checkTriggers, DEFAULT_TRIGGERS, normalizeTriggers, onlyOn, type Triggers } from "./triggers";
 import { checkViews, followBoard, kitchenAndPass, normalizeViews, type View } from "./views";
 import { checkBoard, columnOf, DEFAULT_BOARD, nextAfter, normalizeBoard, planMoves, roleOf, startFor, statusAfter, summarise, type Board, type BoardPreview, type PlannedMove } from "./board";
@@ -321,6 +322,14 @@ export class MockDanServer implements DanClient {
   getOrders() {
     const orders = clone(this.state.orders).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return Promise.resolve({ orders });
+  }
+
+  getOrderHistory(filter?: OrderHistoryFilter, before?: string | null, limit?: number): Promise<OrderPage> {
+    try {
+      return Promise.resolve(clone(historyPage(this.state.orders, filter, before, limit)));
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   getOrderingSettings(): Promise<OrderingSetup> {

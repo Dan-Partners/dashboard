@@ -66,7 +66,7 @@ describe("the saved lock", () => {
     expect(normalizeFocus({ position: "kitchen" })).toEqual({ position: "view", view: "kitchen" });
     expect(normalizeFocus({ position: "pass" })).toEqual({ position: "view", view: "pass" });
     expect(focusRoute({ position: "view", view: "kitchen" })).toBe("/shop/view/kitchen");
-    expect(focusRoute({ position: "till" })).toBe("/shop/till");
+    expect(focusRoute({ position: "till" })).toBe("/shop/orders/new");
     expect(focusRoute({ position: "board" })).toBe("/shop/orders");
   });
 });

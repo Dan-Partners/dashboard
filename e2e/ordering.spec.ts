@@ -71,11 +71,16 @@ test("in the demo, the owner switches methods on and off, with the server's rule
   await expect(sw(page, "till")).toHaveAttribute("aria-checked", "false");
   await expect(sw(page, "delivery")).toHaveAttribute("aria-checked", "true");
   await expect(page.getByLabel("Sort code")).toHaveValue("12-34-56");
-  await expect(page.getByRole("link", { name: /^Till/ })).toHaveCount(0);
+  // With the till off there is no Create order, on the Orders page or in focus mode.
+  await page.getByRole("link", { name: /^Orders/ }).first().click();
+  await expect(page.getByTestId("orders-layout-board")).toBeVisible();
+  await expect(page.getByTestId("create-order")).toHaveCount(0);
   await page.getByTestId("focus-button").first().click();
   await expect(page.getByTestId("focus-till")).toHaveCount(0);
   await page.keyboard.press("Escape");
+  // The old Till address leads to Create order, which says the till is off.
   await page.goto("/shop/till");
+  await expect(page).toHaveURL(/\/shop\/orders\/new$/);
   await expect(page.getByTestId("till-off")).toBeVisible();
 });
 

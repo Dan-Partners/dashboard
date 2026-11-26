@@ -9,10 +9,14 @@ import { viewRoute } from "./views";
  */
 export type Focus = { position: "view"; view: string } | { position: "till" } | { position: "board" };
 
+/** Where an order is created: by picking from the menu, or with the till's keypad. */
+export const CREATE_ORDER_ROUTE = "/shop/orders/new";
+
 /** Where a locked tablet's screen lives. */
 export function focusRoute(focus: Focus): string {
   if (focus.position === "view") return viewRoute(focus.view);
-  return focus.position === "till" ? "/shop/till" : "/shop/orders";
+  // The till is create order, in till mode.
+  return focus.position === "till" ? CREATE_ORDER_ROUTE : "/shop/orders";
 }
 
 export function normalizeFocus(value: unknown): Focus | null {

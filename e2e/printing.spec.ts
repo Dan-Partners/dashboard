@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
+import { openTill } from "./create-order";
 
 /**
  * Printing on the shop's network printers, end to end: the owner adds a
@@ -54,7 +55,7 @@ async function signIn(page: Page, who: "owner" | "pin") {
 }
 
 async function sell(page: Page) {
-  await page.getByRole("link", { name: /^Till/ }).first().click();
+  await openTill(page);
   for (const key of ["8", "1"]) await page.getByRole("button", { name: key, exact: true }).click();
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("button", { name: "Send to kitchen" }).click();

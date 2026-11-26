@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { FEATURES } from "@/lib/features";
 import { formatStamp } from "@/lib/format";
 import { useI18n, type CopyKey } from "@/lib/i18n";
+import { CREATE_ORDER_ROUTE } from "@/lib/focus";
 import { useIsOwner, useSessionRedirect, useShop } from "@/lib/shop-context";
 import { viewGloss, viewName, viewRoute } from "@/lib/views";
 import { CloudNotice } from "./cloud-notice";
@@ -21,10 +22,7 @@ import { Button, Dialog, Splash } from "./ui";
 type NavLink = { href: string; label: CopyKey; gloss: CopyKey; ownerOnly?: boolean; cloudOnly?: boolean };
 
 /** Before the owner's views in the menu. */
-const FIRST_LINKS: NavLink[] = [
-  { href: "/shop/orders", label: "navOrders", gloss: "navOrdersZh" },
-  { href: "/shop/till", label: "navTill", gloss: "navTillZh" },
-];
+const FIRST_LINKS: NavLink[] = [{ href: "/shop/orders", label: "navOrders", gloss: "navOrdersZh" }];
 
 /** After them. */
 const LINKS: NavLink[] = [
@@ -79,12 +77,14 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
   type Shown = { href: string; name: string; gloss: string };
   const fixed = (list: NavLink[]): Shown[] =>
     list
-      .filter((link) => (isOwner || !link.ownerOnly) && (!link.cloudOnly || Boolean(session.cloudUrl)) && (tillOn || link.href !== "/shop/till"))
+      .filter((link) => (isOwner || !link.ownerOnly) && (!link.cloudOnly || Boolean(session.cloudUrl)))
       .map((link) => ({ href: link.href, name: t(link.label), gloss: t(link.gloss) }));
   // The owner's views sit where Kitchen and Pass always did: after the till.
   const viewLinks: Shown[] = (shop.snapshot?.views ?? []).map((view) => ({ href: viewRoute(view.id), name: viewName(view, locale), gloss: viewGloss(view, locale) }));
   const links: Shown[] = [...fixed(FIRST_LINKS), ...viewLinks, ...fixed(LINKS)];
-  const mobile = links.filter((link) => ["/shop/orders", "/shop/till", "/shop/menu", "/shop/loyalty"].includes(link.href));
+  // On a phone, creating an order is one tap from anywhere: it sits in the bar where the till was.
+  const newOrder: Shown[] = tillOn ? [{ href: CREATE_ORDER_ROUTE, name: t("navNewOrder"), gloss: t("navNewOrderZh") }] : [];
+  const mobile = [...links.filter((link) => link.href === "/shop/orders"), ...newOrder, ...links.filter((link) => ["/shop/menu", "/shop/loyalty"].includes(link.href))];
   const inMore = (href: string) => href.startsWith("/shop/view/") || ["/shop/ticket", "/shop/sales", "/shop/payments", "/shop/ordering", "/shop/board", "/shop/tools"].includes(href);
 
   return (
@@ -108,7 +108,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="flex flex-col px-2 pt-3" aria-label="Dan">
           {links.map((link) => {
-            const active = pathname === link.href;
+            const active = pathname === link.href || (link.href === "/shop/orders" && pathname.startsWith("/shop/orders/"));
             return (
               <Link
                 key={link.href}

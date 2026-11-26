@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openTill } from "./create-order";
 
 /**
  * Runs the dashboard against a real Dan shop server, not the demo.
@@ -62,7 +63,7 @@ test("the counter PIN runs service but cannot see sales or edit dishes", async (
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-checked", "true");
 
-  await page.getByRole("link", { name: /^Till/ }).click();
+  await openTill(page);
   for (const key of ["2", "×", "8", "1"]) {
     await page.getByRole("button", { name: key === "×" ? "Times" : key, exact: true }).click();
   }
@@ -209,7 +210,8 @@ test("an order from a table's link shows its table and is marked served", async 
   await expect(docket.getByTestId("docket-table")).toHaveText("Eat in · Table 7");
   await docket.getByRole("button", { name: "Accept", exact: true }).click();
   // A person's pause: taps in the moment after a change count as a double tap.
-  await page.waitForTimeout(800);
+  // (The quiet moment starts again when the change has landed, and that takes a real server a moment.)
+  await page.waitForTimeout(1500);
   await docket.getByRole("button", { name: "Ready", exact: true }).click();
   await expect(docket.getByRole("button", { name: "Served", exact: true })).toBeVisible();
 });

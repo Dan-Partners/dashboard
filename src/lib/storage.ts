@@ -29,6 +29,10 @@ export type Persisted = {
   orderingAddress: string | null;
   /** Ticket sounds wanted on this device, per place: a view's id, or `counter` for the orders board. */
   sounds: Record<SoundPlace, boolean>;
+  /** How this device shows the Orders page: the board, or the list. */
+  ordersLayout: "board" | "list";
+  /** How this device creates an order: picking from the menu, or the till's keypad. */
+  createMode: "menu" | "till";
 };
 
 export const STORAGE_KEY = "dan.v1";
@@ -48,6 +52,8 @@ export const EMPTY_PERSISTED: Persisted = {
   kitchenStations: [],
   orderingAddress: null,
   sounds: {},
+  ordersLayout: "board",
+  createMode: "menu",
 };
 
 const listeners = new Set<() => void>();
@@ -81,6 +87,8 @@ export function normalizePersisted(value: unknown): Persisted {
     kitchenStations: normalizeStations(record.kitchenStations),
     orderingAddress: typeof record.orderingAddress === "string" && record.orderingAddress.length <= 200 ? record.orderingAddress : null,
     sounds: normalizeSounds(record.sounds),
+    ordersLayout: record.ordersLayout === "list" ? "list" : "board",
+    createMode: record.createMode === "till" ? "till" : "menu",
   };
 }
 

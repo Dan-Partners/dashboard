@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openTill } from "./create-order";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -22,8 +23,7 @@ test("an unreachable server gets a clear error, then the demo can take an order"
   await expect(page.getByText("Golden Dragon").first()).toBeVisible();
   await expect(page.getByText("金龍").first()).toBeVisible();
 
-  await page.getByRole("link", { name: /^Till/ }).click();
-  await expect(page.getByRole("heading", { name: "Till" })).toBeVisible();
+  await openTill(page);
   await page.getByRole("button", { name: "8", exact: true }).click();
   await page.getByRole("button", { name: "1", exact: true }).click();
   await expect(page.getByText("Egg fried rice · 蛋炒飯")).toBeVisible();

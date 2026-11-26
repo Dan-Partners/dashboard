@@ -432,12 +432,15 @@ function CategoriesDialog({ onClose }: { onClose: () => void }) {
         onSubmit={(event) => {
           event.preventDefault();
           if (!nameEn.trim() && !nameZh.trim()) return setError(t("menuCategoryNeedsName"));
-          run(
-            (client) => client.createCategory({ nameEn, nameZh }),
-            () => {
-              setNameEn("");
-              setNameZh("");
-            },
+          // The form empties as soon as the server has the category, not after the
+          // menu has been read again: the next name may already be being typed.
+          const sent = { nameEn, nameZh };
+          run((client) =>
+            client.createCategory(sent).then((category) => {
+              setNameEn((now) => (now === sent.nameEn ? "" : now));
+              setNameZh((now) => (now === sent.nameZh ? "" : now));
+              return category;
+            }),
           );
         }}
       >

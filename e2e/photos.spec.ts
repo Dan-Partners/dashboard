@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openTill } from "./create-order";
 
 /**
  * Dish photos, end to end: the owner adds one through the Dan cloud; it is
@@ -78,7 +79,7 @@ test("the owner adds a dish photo through the cloud; the menu, till and customer
   await expect(page.locator(`img[src="${src}"]`).first()).toBeVisible({ timeout: 20_000 });
 
   // The till shows the dish being keyed.
-  await page.getByRole("link", { name: /^Till/ }).first().click();
+  await openTill(page);
   for (const key of ["8", "1"]) await page.getByRole("button", { name: key, exact: true }).click();
   await expect(page.locator(`img[src="${src}"]`).first()).toBeVisible();
 

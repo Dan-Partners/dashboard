@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openTill } from "./create-order";
 import { cloudOn, cloudSkip, joinNewShop } from "./cloud-join";
 
 /**
@@ -230,11 +231,11 @@ test("an online shop in the cloud starts with three columns and no views, and ca
   await dish.locator('input[name="dish-price"]').fill("6");
   await dish.getByRole("button", { name: "Add to menu" }).click();
   await expect(page.getByTestId("menu-notice")).toHaveText("Added.");
-  await page.getByRole("link", { name: /^Till/ }).click();
+  await openTill(page);
   await page.getByRole("button", { name: "1", exact: true }).click();
   await page.getByRole("button", { name: "Add", exact: true }).click();
-  await page.getByRole("button", { name: "Send to kitchen" }).click();
-  await expect(page.getByText(/Sent to the kitchen/)).toBeVisible();
+  await page.getByRole("button", { name: "Place order" }).click();
+  await expect(page.getByText(/Order placed/)).toBeVisible();
   await page.getByRole("link", { name: /^Orders/ }).first().click();
   const fresh = page.locator("section[data-column='new'] article");
   await expect(fresh).toHaveCount(1);

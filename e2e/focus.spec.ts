@@ -121,7 +121,8 @@ test("kitchen and pass tablets follow a table's order from new to served", async
   // The glow is the column's own colour (the owner's board).
   await expect(ticket).toHaveAttribute("style", /--glow: #2f6fdb/);
   // A person's pause: taps in the moment after a change count as a double tap.
-  await kitchen.waitForTimeout(800);
+  // (The quiet moment starts again when the change has landed, and that takes a real server a moment.)
+  await kitchen.waitForTimeout(1500);
   await ticket.getByRole("button", { name: "Ready" }).click();
   // The glow is the column's own colour (the owner's board).
   await expect(ticket).toHaveAttribute("style", /--glow: #d7372a/);

@@ -32,6 +32,7 @@ import { DEFAULT_SETUP, type BankDetails, type OrderingSettings, type OrderingSe
 import { DEFAULT_BOARD, type Board, type BoardPreview } from "./board";
 import { DEFAULT_TRIGGERS, TRIGGER_FIELDS, type Triggers } from "./triggers";
 import { kitchenAndPass, VIEW_FIELDS, type View } from "./views";
+import { HISTORY_PAGE, historyPage, type OrderHistoryFilter, type OrderPage } from "./history";
 import { DEFAULT_UBER, UBER_FIELDS, type UberKeys, type UberOptions, type UberOptionsInput } from "./uber";
 
 /**
@@ -383,6 +384,23 @@ export class GraphQLDanClient implements DanClient {
         orderLevel -= 1;
         return this.getOrders();
       }
+      throw error;
+    }
+  }
+
+  /**
+   * The order list. A shop server from before the list answers `bad_response`:
+   * then the list is made from the orders the board has (`fallback`).
+   */
+  async getOrderHistory(filter: OrderHistoryFilter = {}, before?: string | null, limit: number = HISTORY_PAGE, fallback?: Order[]): Promise<OrderPage> {
+    try {
+      const data = await this.run<{ orderHistory: OrderPage }>(
+        `query OrderHistory($filter: OrderHistoryFilter, $before: String, $limit: Int) { orderHistory(filter: $filter, before: $before, limit: $limit) { orders { ${orderFields()} } next } }`,
+        { filter: { search: filter.search ?? null, day: filter.day || null, status: filter.status?.length ? filter.status : null }, before: before ?? null, limit },
+      );
+      return data.orderHistory;
+    } catch (error) {
+      if (fallback && error instanceof DanError && error.code === "bad_response") return historyPage(fallback, filter, before, limit);
       throw error;
     }
   }

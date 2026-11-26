@@ -17,8 +17,64 @@ import { AwaitingTransfers } from "./awaiting-transfers";
 import { CourierPanel, RefundFailures } from "./courier-panel";
 import { ReprintButton } from "./print-strip";
 import { WhereStrip } from "./where-strip";
+import { OrdersList } from "./orders-list";
+import { CREATE_ORDER_ROUTE } from "@/lib/focus";
+import { writePersisted } from "@/lib/storage";
 
-export function OrdersBoard() {
+/**
+ * The Orders page: every order, as the board or as a list (kept per device),
+ * with Create order beside the choice. A tablet locked to the orders board
+ * shows the board, and nothing else.
+ */
+export function OrdersScreen() {
+  const { t, locale } = useI18n();
+  const shop = useShop();
+  const locked = shop.persisted.focus?.position === "board";
+  const layout = locked ? "board" : shop.persisted.ordersLayout;
+  const orders = (shop.snapshot?.orders ?? []).filter((order) => order.status !== "cancelled");
+  // Create order goes with the till, as the owner set it under Ordering & payments.
+  const tillOn = shop.snapshot?.ordering.settings.till ?? true;
+
+  return (
+    <div data-orders-layout={layout}>
+      {locked ? null : <PageTitle className="mb-4" title={t("ordersTitle")} gloss={locale === "zh-Hant" ? "Orders" : "訂單"} />}
+      {locked ? null : (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex" role="group" aria-label={t("ordersLayout")}>
+            {(["board", "list"] as const).map((choice) => (
+              <button
+                key={choice}
+                type="button"
+                aria-pressed={layout === choice}
+                className={`min-h-11 min-w-20 cursor-pointer border px-4 font-display active:scale-[0.97] ${layout === choice ? "border-ink bg-ink text-paper" : "border-rule text-ink-soft hover:bg-paper-deep"}`}
+                onClick={() => writePersisted({ ordersLayout: choice })}
+                data-testid={`orders-layout-${choice}`}
+              >
+                {t(choice === "board" ? "ordersBoard" : "ordersList")}
+              </button>
+            ))}
+          </div>
+          {tillOn ? (
+            <Link
+              href={CREATE_ORDER_ROUTE}
+              className="inline-flex min-h-11 items-center justify-center bg-accent px-4 font-display text-lg leading-none text-on-accent transition-transform duration-75 hover:bg-accent-deep active:scale-[0.97]"
+              data-testid="create-order"
+            >
+              {t("createOrder")}
+            </Link>
+          ) : null}
+        </div>
+      )}
+      {shop.persisted.session?.mode === "demo" ? <p className="mb-5 text-sm text-ink-soft">{t("ordersDemoNote")}</p> : null}
+      <TicketSounds place="counter" />
+      <AwaitingTransfers />
+      <RefundFailures orders={orders} />
+      {layout === "list" ? <OrdersList /> : <OrdersBoard />}
+    </div>
+  );
+}
+
+function OrdersBoard() {
   const { t, locale } = useI18n();
   const shop = useShop();
   const board = shop.snapshot?.board ?? DEFAULT_BOARD;
@@ -42,11 +98,6 @@ export function OrdersBoard() {
 
   return (
     <div>
-      {locked ? null : <PageTitle title={t("ordersTitle")} gloss={locale === "zh-Hant" ? "Orders" : "訂單"} />}
-      {shop.persisted.session?.mode === "demo" ? <p className="mb-5 text-sm text-ink-soft">{t("ordersDemoNote")}</p> : null}
-      <TicketSounds place="counter" />
-      <AwaitingTransfers />
-      <RefundFailures orders={orders} />
       {cardError ? (
         <p className="mb-4 border-l-2 border-accent pl-3 text-sm" role="alert">
           {cardError}
@@ -107,7 +158,8 @@ export function OrdersBoard() {
   );
 }
 
-function Docket({
+/** One order as a docket: on the board, and under its row in the list. */
+export function Docket({
   order,
   board,
   colour,
@@ -116,6 +168,7 @@ function Docket({
   locked,
   guard,
   onError,
+  ticketLink = true,
 }: {
   order: Order;
   board: Board;
@@ -127,6 +180,8 @@ function Docket({
   locked: boolean;
   guard: TapGuard;
   onError: (message: string | null) => void;
+  /** False for an order the ticket page does not have (older than the board's orders). */
+  ticketLink?: boolean;
 }) {
   const { t, locale } = useI18n();
   const shop = useShop();
@@ -234,7 +289,7 @@ function Docket({
             </Button>
           ) : null}
           <ReprintButton orderId={order.id} />
-          {locked ? null : (
+          {locked || !ticketLink ? null : (
             <Link href={`/shop/ticket?order=${order.id}`} className="inline-flex min-h-11 items-center px-2 font-display text-ink-soft">
               {t("viewTicket")}
             </Link>

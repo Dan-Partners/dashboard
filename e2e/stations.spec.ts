@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openTill } from "./create-order";
 import { cloudOn, cloudSkip, joinNewShop } from "./cloud-join";
 
 /**
@@ -59,7 +60,7 @@ test("in the demo, the owner adds a station, moves a dish to it and renames anot
   await expect(page.getByTestId("menu-notice")).toHaveText("Saved.");
 
   // An order of it shows the bar on the kitchen screen, which can be filtered to the bar.
-  await page.getByRole("link", { name: /^Till/ }).click();
+  await openTill(page);
   for (const key of ["8", "1"]) await page.getByRole("button", { name: key, exact: true }).click();
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("button", { name: "Send to kitchen" }).click();
@@ -143,7 +144,7 @@ test("a restaurant in the cloud can have no stations at all", async ({ page }) =
   await dish.getByRole("button", { name: "Add to menu" }).click();
   await expect(page.getByTestId("menu-notice")).toHaveText("Added.");
 
-  await page.getByRole("link", { name: /^Till/ }).click();
+  await openTill(page);
   await page.getByRole("button", { name: "1", exact: true }).click();
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await page.getByRole("button", { name: "Send to kitchen" }).click();

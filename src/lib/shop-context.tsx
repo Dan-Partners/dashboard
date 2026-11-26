@@ -7,6 +7,7 @@ import { DanError, isDanError } from "./errors";
 import { formatPence, fulfilmentLabel, orderLabel } from "./format";
 import { english } from "./i18n";
 import { summarizeSales } from "./sales";
+import { historyPage, type OrderHistoryFilter, type OrderPage } from "./history";
 import { GraphQLDanClient, orderFields, pingServer, uploadMenuPhoto, type CourierAction } from "./graphql-client";
 import { shrinkPhoto } from "./photos";
 import { expectMine, noteBoard, seeOrder } from "./arrivals";
@@ -94,6 +95,8 @@ type ShopContextValue = {
   onServer: <T>(work: (client: GraphQLDanClient) => Promise<T>) => Promise<T>;
   removeItemPhoto: (id: string) => Promise<void>;
   placeOrder: (input: CreateOrderInput) => Promise<Order>;
+  /** The order list: a page of the shop's orders, newest first. */
+  loadOrderHistory: (filter: OrderHistoryFilter, before?: string | null) => Promise<OrderPage>;
   setOrderStatus: (id: string, status: OrderStatus) => Promise<void>;
   /** Moves a ticket to the next column on the owner's board. */
   advanceOrder: (order: Order) => Promise<void>;
@@ -625,6 +628,16 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         writePersisted({ activeOrderId: order.id });
         await refreshRemote();
         return order;
+      },
+      async loadOrderHistory(filter, before) {
+        const current = getSnapshot().session;
+        if (current?.mode === "demo") {
+          return historyPage(getSnapshot().demoState?.orders ?? [], filter, before);
+        }
+        const end = endpointFor(current);
+        if (!end) throw new Error("Sign in first.");
+        // A shop server from before the list: made from the orders the board has.
+        return new GraphQLDanClient(end.url, end.token).getOrderHistory(filter, before, undefined, snapshot?.orders ?? []);
       },
       async setOrderStatus(id, status) {
         if (getSnapshot().session?.mode === "demo") {

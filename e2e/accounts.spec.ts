@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
+import { openTill } from "./create-order";
 
 /**
  * Accounts in the Dan cloud, end to end: the waiting list, an invite link made
@@ -174,7 +175,7 @@ test("a business joins from the waiting list, builds its menu, takes an order an
   await expect(page.getByTestId("pin-status")).toContainText("PIN set");
 
   // An order at the till: with no shop machine, the cloud numbers it at once, from 1.
-  await page.getByRole("link", { name: /^Till/ }).click();
+  await openTill(page);
   await page.getByRole("button", { name: "1", exact: true }).click();
   await expect(page.getByText("Sourdough loaf").first()).toBeVisible();
   await page.getByRole("button", { name: "Add", exact: true }).click();

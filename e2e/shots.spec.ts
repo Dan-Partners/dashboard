@@ -1,5 +1,6 @@
 import { FEATURES } from "../src/lib/features";
 import { expect, test } from "@playwright/test";
+import { openTill } from "./create-order";
 
 const out = "docs/screenshots";
 
@@ -23,7 +24,7 @@ test("capture the connect screen and the counter", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
   await page.screenshot({ path: `${out}/orders.png` });
 
-  await page.getByRole("link", { name: /^Till/ }).click();
+  await openTill(page);
   await page.getByRole("button", { name: "4", exact: true }).click();
   await page.getByRole("button", { name: "2", exact: true }).click();
   await page.getByRole("button", { name: "Add", exact: true }).click();

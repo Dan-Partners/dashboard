@@ -1,4 +1,5 @@
 import type { View } from "./views";
+import type { OrderHistoryFilter, OrderPage } from "./history";
 import type { Triggers } from "./triggers";
 import type { Board } from "./board";
 import type { OrderingSetup } from "./ordering";
@@ -327,6 +328,8 @@ export interface DanClient {
   /** Owner only: the whole list. Refused (`station_in_use`) while a station that would go is still on dishes. */
   updateStations(stations: Station[]): Promise<Station[]>;
   getOrders(): Promise<{ orders: Order[] }>;
+  /** The order list: newest first, a page at a time, back through every order. */
+  getOrderHistory(filter?: OrderHistoryFilter, before?: string | null, limit?: number): Promise<OrderPage>;
   createOrder(input: CreateOrderInput): Promise<Order>;
   updateOrder(id: string, patch: { status: OrderStatus }): Promise<Order>;
   getCustomers(query?: { phone?: string }): Promise<{ customers: Customer[] }>;
