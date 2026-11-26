@@ -1,4 +1,5 @@
 import { DanError } from "./errors";
+import { CONTRAST, ensureContrast } from "./theme";
 import type { Order, OrderSource, OrderStatus } from "./types";
 
 /**
@@ -214,4 +215,23 @@ export function nextStep(board: Board, order: Order): NextStep | null {
   if (next.role === "completed") return { column: next, kind: "done" };
   if (next.role === "ready" && here.role !== "ready") return { column: next, kind: "ready" };
   return { column: next, kind: "move" };
+}
+
+/** The column a ticket may be sent back to: the one before, when it is the same stage. */
+export function backStep(board: Board, order: Order): BoardColumn | null {
+  const here = columnOf(board, order);
+  if (!here || order.status === "completed" || order.status === "cancelled") return null;
+  const at = board.columns.findIndex((column) => column.id === here.id);
+  const before = at > 0 ? board.columns[at - 1] : null;
+  return before && before.role === here.role ? before : null;
+}
+
+/**
+ * A column's colour as it shows on screen: the owner's choice, strengthened
+ * when it would be hard to see on the shop's theme (as the theme does with
+ * its own accent). Printed tickets never use it.
+ */
+export function shownColour(colour: string, paper: string): { colour: string; strengthened: boolean } {
+  const shown = ensureContrast(colour, paper, CONTRAST.fill);
+  return { colour: shown, strengthened: shown.toLowerCase() !== colour.toLowerCase() };
 }

@@ -11,6 +11,7 @@ import { STATION_GLOSS, STATION_LABEL } from "@/lib/stations";
 import { writePersisted } from "@/lib/storage";
 import { useTapGuard, type TapGuard } from "@/lib/tap-guard";
 import { columnName, columnOf, DEFAULT_BOARD, nextStep, type Board } from "@/lib/board";
+import { useBoardColour } from "@/lib/use-board-colour";
 import { STATIONS, type OrderStatus, type Station } from "@/lib/types";
 import { stepLabel } from "./orders-board";
 import { ReprintButton } from "./print-strip";
@@ -103,7 +104,8 @@ function KitchenCard({
   const status = order.status;
   const column = columnOf(board, order);
   const word = column ? columnName(column, locale) : t(STATUS_WORD[status]);
-  const colour = column?.colour ?? STATUS_COLOUR[status];
+  const shown = useBoardColour();
+  const colour = shown(column?.colour ?? STATUS_COLOUR[status]);
   // The kitchen moves tickets on until they are ready; the pass hands them over.
   const step = nextStep(board, order);
   const next = step && step.kind !== "done" && column?.role !== "ready" ? { label: step.kind === "accept" ? t("kitchenStart") : stepLabel(step, order, t, locale) } : null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkBoard, columnName, columnOf, DEFAULT_BOARD, nextStep, planMoves, startFor, type Board } from "./board";
+import { backStep, checkBoard, columnName, columnOf, DEFAULT_BOARD, nextStep, planMoves, shownColour, startFor, type Board } from "./board";
 import type { Order } from "./types";
 
 const packing: Board = {
@@ -53,5 +53,19 @@ describe("the orders board", () => {
     expect(stuck).toBe(0);
     const bare = { columns: DEFAULT_BOARD.columns.filter((column) => column.id !== "preparing") };
     expect(planMoves(DEFAULT_BOARD, bare, [order("c", "preparing")]).stuck).toBe(1);
+  });
+
+  it("sends a ticket back only within its stage", () => {
+    expect(backStep(packing, order("a", "preparing", "packing"))?.id).toBe("preparing");
+    expect(backStep(packing, order("a", "preparing", "preparing"))).toBeNull();
+    expect(backStep(packing, order("a", "ready"))).toBeNull();
+    expect(backStep(packing, order("a", "completed"))).toBeNull();
+  });
+
+  it("strengthens a colour that would be hard to see on the theme, and leaves good ones alone", () => {
+    expect(shownColour("#2f6fdb", "#f4ecdc")).toEqual({ colour: "#2f6fdb", strengthened: false });
+    const pale = shownColour("#fdf6e3", "#f4ecdc");
+    expect(pale.strengthened).toBe(true);
+    expect(pale.colour).not.toBe("#fdf6e3");
   });
 });

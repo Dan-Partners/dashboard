@@ -11,7 +11,7 @@ import { GraphQLDanClient, orderFields, uploadMenuPhoto, type CourierAction } fr
 import { shrinkPhoto } from "./photos";
 import { expectMine, noteBoard, seeOrder } from "./arrivals";
 import { normalizeTriggers, type Triggers } from "./triggers";
-import { columnOf, DEFAULT_BOARD, nextAfter, normalizeBoard, statusAfter, type Board, type BoardPreview } from "./board";
+import { backStep, columnOf, DEFAULT_BOARD, nextAfter, normalizeBoard, statusAfter, type Board, type BoardPreview } from "./board";
 import { normalizeSetup, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
 import { live } from "./live";
 import { endpointFor, useServerHealth, type Servers } from "./server-health";
@@ -75,6 +75,8 @@ type ShopContextValue = {
   setOrderStatus: (id: string, status: OrderStatus) => Promise<void>;
   /** Moves a ticket to the next column on the owner's board. */
   advanceOrder: (order: Order) => Promise<void>;
+  /** Sends a ticket back one column, within the same stage. */
+  sendBack: (order: Order) => Promise<void>;
   /** Owner only: the board's columns. `moveTickets`: the owner agreed to move tickets out of removed columns. */
   previewBoard: (board: Board) => Promise<BoardPreview>;
   saveBoard: (board: Board, moveTickets: boolean) => Promise<Board>;
@@ -542,6 +544,20 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         const end = endpointFor(getSnapshot().session);
         if (!end) return;
         await new GraphQLDanClient(end.url, end.token).moveOrder(order.id, next.id, status);
+        await refreshRemote();
+      },
+      async sendBack(order) {
+        const board = snapshot?.board ?? DEFAULT_BOARD;
+        const back = backStep(board, order);
+        if (!back) return;
+        expectMine(order.id, back.id);
+        if (getSnapshot().session?.mode === "demo") {
+          await demoMutate((server) => server.moveOrder(order.id, back.id));
+          return;
+        }
+        const end = endpointFor(getSnapshot().session);
+        if (!end) return;
+        await new GraphQLDanClient(end.url, end.token).moveOrder(order.id, back.id, order.status);
         await refreshRemote();
       },
       async previewBoard(board) {

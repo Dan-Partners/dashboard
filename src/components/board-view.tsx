@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { checkBoard, columnName, DEFAULT_BOARD, MAX_COLUMNS, newColumnId, type Board, type BoardColumn, type ColumnRole } from "@/lib/board";
+import { useBoardPaper } from "@/lib/use-board-colour";
+import { checkBoard, columnName, DEFAULT_BOARD, shownColour, MAX_COLUMNS, newColumnId, type Board, type BoardColumn, type ColumnRole } from "@/lib/board";
 import { isDanError } from "@/lib/errors";
 import { messageForError, useI18n, type CopyKey } from "@/lib/i18n";
 import { useIsOwner, useShop } from "@/lib/shop-context";
@@ -22,6 +23,7 @@ export function BoardView({ children }: { children?: React.ReactNode }) {
   const { t, locale } = useI18n();
   const shop = useShop();
   const isOwner = useIsOwner();
+  const paper = useBoardPaper();
   const saved = shop.snapshot?.board ?? DEFAULT_BOARD;
   const [draft, setDraft] = useState<Board | null>(null);
   const board = draft ?? saved;
@@ -117,7 +119,7 @@ export function BoardView({ children }: { children?: React.ReactNode }) {
 
   return (
     <div className="max-w-3xl">
-      <PageTitle title={t("boardTitle")} gloss={locale === "zh-Hant" ? "Board & sounds" : "看板及提示音"} />
+      <PageTitle title={t("boardTitle")} gloss={locale === "zh-Hant" ? "Order board" : "訂單看板"} />
       <p className="-mt-2 mb-6 text-ink-soft">{t("boardLede")}</p>
       {!isOwner ? (
         <p className="mb-6 border-l-2 border-accent pl-3" data-testid="board-owner-only">
@@ -131,7 +133,7 @@ export function BoardView({ children }: { children?: React.ReactNode }) {
         </h2>
         <ol className="mt-2 divide-y divide-rule border-y border-rule" data-testid="board-columns">
           {board.columns.map((column, index) => (
-            <li key={column.id} className="flex flex-wrap items-end gap-3 py-3" data-testid={`board-column-${index}`} style={{ borderLeft: `6px solid ${column.colour}`, paddingLeft: "0.75rem" }}>
+            <li key={column.id} className="flex flex-wrap items-end gap-3 py-3" data-testid={`board-column-${index}`} style={{ borderLeft: `6px solid ${shownColour(column.colour, paper).colour}`, paddingLeft: "0.75rem" }}>
               <label className="min-w-[8rem] flex-1">
                 <span className="block font-display text-[0.72rem] tracking-[0.18em] text-ink-soft uppercase">{t("boardNameEn")}</span>
                 <input
@@ -181,6 +183,11 @@ export function BoardView({ children }: { children?: React.ReactNode }) {
                   onChange={(event) => edit((columns) => ((columns[index].colour = event.target.value), columns))}
                 />
               </label>
+              {shownColour(column.colour, paper).strengthened ? (
+                <p className="w-full text-sm text-ink-soft" data-testid={`board-strengthened-${index}`}>
+                  {t("boardStrengthened")}
+                </p>
+              ) : null}
               {isOwner ? (
                 <div className="flex gap-1">
                   <Button variant="line" className="px-3" aria-label={`${t("boardUp")} ${index + 1}`} disabled={!canMove(index, -1)} onClick={() => edit((columns) => ([columns[index - 1], columns[index]] = [columns[index], columns[index - 1]], columns))}>

@@ -9,7 +9,8 @@ import { ago, formatPence, fulfilmentLabel, paymentLabel, orderLabel, phoneDigit
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
 import { useTapGuard, type TapGuard } from "@/lib/tap-guard";
-import { columnGloss, columnName, columnOf, DEFAULT_BOARD, nextStep, type Board, type NextStep } from "@/lib/board";
+import { useBoardColour } from "@/lib/use-board-colour";
+import { backStep, columnGloss, columnName, columnOf, DEFAULT_BOARD, nextStep, type Board, type NextStep } from "@/lib/board";
 import type { Order } from "@/lib/types";
 import { Button, PageTitle } from "./ui";
 import { AwaitingTransfers } from "./awaiting-transfers";
@@ -21,6 +22,7 @@ export function OrdersBoard() {
   const { t, locale } = useI18n();
   const shop = useShop();
   const board = shop.snapshot?.board ?? DEFAULT_BOARD;
+  const shown = useBoardColour();
   const [chosen, setFocus] = useState<string>(board.columns[0].id);
   // A column removed meanwhile: back to the first.
   const focus = board.columns.some((column) => column.id === chosen) ? chosen : board.columns[0].id;
@@ -74,7 +76,7 @@ export function OrdersBoard() {
           const list = inColumn(column.id).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
           return (
             <section key={column.id} className={focus === column.id ? "" : "hidden md:block"} aria-label={columnName(column, locale)} data-column={column.id}>
-              <div className="mb-3 flex items-baseline justify-between border-b-[3px] pb-2" style={{ borderColor: column.colour }}>
+              <div className="mb-3 flex items-baseline justify-between border-b-[3px] pb-2" style={{ borderColor: shown(column.colour) }}>
                 <h2 className="font-display text-2xl leading-none">
                   {columnName(column, locale)}
                   {columnGloss(column, locale) ? <span className="ml-2 font-zh text-sm text-ink-soft">{columnGloss(column, locale)}</span> : null}
@@ -88,7 +90,7 @@ export function OrdersBoard() {
                     key={order.id}
                     order={order}
                     board={board}
-                    colour={column.colour}
+                    colour={shown(column.colour)}
                     now={now}
                     rewardReady={customers.some((customer) => customer.id === phoneDigits(order.phone) && customer.stamps >= 10)}
                     locked={locked}
@@ -131,6 +133,7 @@ function Docket({
   const [busy, setBusy] = useState(false);
   const step = nextStep(board, order);
   const next = step ? { label: stepLabel(step, order, t, locale) } : null;
+  const back = backStep(board, order);
   const problem = Boolean(order.courier?.problem);
 
   return (
@@ -212,6 +215,22 @@ function Docket({
               }}
             >
               {next.label}
+            </Button>
+          ) : null}
+          {back ? (
+            <Button
+              variant="line"
+              disabled={busy}
+              aria-label={`${t("sendBackTo")} ${columnName(back, locale)}`}
+              onClick={() => {
+                const done = guard.run(() => shop.sendBack(order));
+                if (!done) return;
+                setBusy(true);
+                onError(null);
+                void done.catch((error: unknown) => onError(isDanError(error) ? error.message : t("errGeneric"))).finally(() => setBusy(false));
+              }}
+            >
+              ← {columnName(back, locale)}
             </Button>
           ) : null}
           <ReprintButton orderId={order.id} />

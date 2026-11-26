@@ -9,6 +9,7 @@ import { useI18n } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
 import { useTapGuard, type TapGuard } from "@/lib/tap-guard";
 import { columnOf, DEFAULT_BOARD, nextStep } from "@/lib/board";
+import { useBoardColour } from "@/lib/use-board-colour";
 import type { Order } from "@/lib/types";
 import { stepLabel } from "./orders-board";
 import { WhereStrip } from "./where-strip";
@@ -59,12 +60,13 @@ function PassCard({ order, now, guard, onError }: { order: Order; now: number; g
   const [busy, setBusy] = useState(false);
   const board = shop.snapshot?.board ?? DEFAULT_BOARD;
   const column = columnOf(board, order);
+  const shown = useBoardColour();
   const step = nextStep(board, order);
   const done = step ? stepLabel(step, order, t, locale) : t("collected");
   const payment = paymentLabel(order, t);
   const due = payment ? !payment.paid : false;
   return (
-    <article className="glow bg-paper-raised p-4" style={{ "--glow": column?.colour ?? "#d7372a" } as React.CSSProperties} data-testid="pass-ticket" data-column={column?.id}>
+    <article className="glow bg-paper-raised p-4" style={{ "--glow": shown(column?.colour ?? "#d7372a") } as React.CSSProperties} data-testid="pass-ticket" data-column={column?.id}>
       <WhereStrip order={order} size="pass" />
       <div className="mt-3 flex items-baseline justify-between gap-3">
         <h3 className="font-display text-4xl leading-none">{orderLabel(order.number, t("numberWaiting"))}</h3>

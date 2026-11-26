@@ -329,8 +329,11 @@ export class MockDanServer implements DanClient {
     const board = normalizeBoard(this.state.board);
     const here = columnOf(board, order);
     if (!here || order.status === "completed") return Promise.reject(new DanError("order_finished", "That order is finished."));
-    const next = nextAfter(board, here.id);
-    if (!next || next.id !== to) return Promise.reject(new DanError("bad_status", "Move the order on one step at a time."));
+    const forward = nextAfter(board, here.id);
+    const at = board.columns.findIndex((column) => column.id === here.id);
+    const before = at > 0 && board.columns[at - 1].role === here.role ? board.columns[at - 1] : null;
+    const next = forward?.id === to ? forward : before?.id === to ? before : null;
+    if (!next) return Promise.reject(new DanError("bad_status", "Move the order one step at a time; back only within the same stage."));
     Object.assign(order, { column: next.id, columnAt: this.now().toISOString(), columnRemap: false, status: statusAfter(order, next) });
     return Promise.resolve(clone(order));
   }

@@ -50,7 +50,7 @@ test("a held bank transfer stays quiet, dings once in the kitchen when paid, and
   await signIn(counter, "owner");
 
   // Nothing saved for sounds: the default kitchen 叮.
-  await counter.getByRole("link", { name: /^Board & sounds/ }).first().click();
+  await counter.getByRole("link", { name: /^Order board/ }).first().click();
   if ((await counter.getByTestId("sound-list").locator("li").count()) !== 1) {
     await counter.getByTestId("sounds-reset").click();
     await counter.getByTestId("sounds-reset").click();
@@ -115,7 +115,7 @@ test("a held bank transfer stays quiet, dings once in the kitchen when paid, and
   // The counter PIN sees the board and the sounds, but cannot save either.
   const pinPage = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
   await signIn(pinPage, "pin");
-  await pinPage.getByRole("link", { name: /^Board & sounds/ }).first().click();
+  await pinPage.getByRole("link", { name: /^Order board/ }).first().click();
   await expect(pinPage.getByTestId("board-owner-only")).toBeVisible();
   await expect(pinPage.getByRole("button", { name: "Save board" })).toHaveCount(0);
   await expect(pinPage.getByRole("button", { name: "Save sounds" })).toHaveCount(0);
