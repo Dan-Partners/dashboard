@@ -1,3 +1,4 @@
+import type { SoundPlace } from "./triggers";
 import type { DemoState } from "./seed";
 import { DEFAULT_THEME, normalizeTheme, type ThemeChoice } from "./theme";
 import { normalizeFocus, normalizeStations, type Focus } from "./focus";
@@ -22,6 +23,8 @@ export type Persisted = {
   kitchenStations: Station[];
   /** The ordering site address the Tools page last used for table QR codes. */
   orderingAddress: string | null;
+  /** Ticket sounds wanted on this device, per station (kitchen, pass, counter). */
+  sounds: Partial<Record<SoundPlace, boolean>>;
 };
 
 export const STORAGE_KEY = "dan.v1";
@@ -38,6 +41,7 @@ export const EMPTY_PERSISTED: Persisted = {
   focus: null,
   kitchenStations: [...STATIONS],
   orderingAddress: null,
+  sounds: {},
 };
 
 const listeners = new Set<() => void>();
@@ -68,6 +72,7 @@ export function normalizePersisted(value: unknown): Persisted {
     focus: normalizeFocus(record.focus),
     kitchenStations: normalizeStations(record.kitchenStations),
     orderingAddress: typeof record.orderingAddress === "string" && record.orderingAddress.length <= 200 ? record.orderingAddress : null,
+    sounds: normalizeSounds(record.sounds),
   };
 }
 
@@ -92,8 +97,19 @@ export function getServerSnapshot(): Persisted {
   return EMPTY_PERSISTED;
 }
 
+let followingTabs = false;
+
 export function subscribe(listener: () => void): () => void {
   listeners.add(listener);
+  // Another tab on this device saved: follow it (the demo, preferences, sign-in).
+  if (!followingTabs && typeof window !== "undefined") {
+    followingTabs = true;
+    window.addEventListener("storage", (event) => {
+      if (event.key !== STORAGE_KEY) return;
+      cache = read();
+      emit();
+    });
+  }
   return () => listeners.delete(listener);
 }
 
@@ -117,4 +133,14 @@ export function rememberServer(url: string) {
 
 export function forgetServer(url: string) {
   writePersisted({ recentServers: getSnapshot().recentServers.filter((entry) => entry !== url) });
+}
+
+function normalizeSounds(value: unknown): Partial<Record<SoundPlace, boolean>> {
+  if (!value || typeof value !== "object") return {};
+  const record = value as Record<string, unknown>;
+  const sounds: Partial<Record<SoundPlace, boolean>> = {};
+  for (const place of ["kitchen", "pass", "counter"] as const) {
+    if (typeof record[place] === "boolean") sounds[place] = record[place] as boolean;
+  }
+  return sounds;
 }

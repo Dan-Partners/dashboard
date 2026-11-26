@@ -9,6 +9,8 @@ import { english } from "./i18n";
 import { summarizeSales } from "./sales";
 import { GraphQLDanClient, orderFields, uploadMenuPhoto, type CourierAction } from "./graphql-client";
 import { shrinkPhoto } from "./photos";
+import { expectMine, noteBoard, seeOrder } from "./arrivals";
+import { normalizeTriggers, type Triggers } from "./triggers";
 import { columnOf, DEFAULT_BOARD, nextAfter, normalizeBoard, statusAfter, type Board, type BoardPreview } from "./board";
 import { normalizeSetup, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
 import { live } from "./live";
@@ -76,6 +78,9 @@ type ShopContextValue = {
   /** Owner only: the board's columns. `moveTickets`: the owner agreed to move tickets out of removed columns. */
   previewBoard: (board: Board) => Promise<BoardPreview>;
   saveBoard: (board: Board, moveTickets: boolean) => Promise<Board>;
+  /** Owner only: the ticket sounds. */
+  saveTriggers: (triggers: Triggers) => Promise<Triggers>;
+  resetTriggers: () => Promise<Triggers>;
   resetBoard: () => Promise<Board>;
   /** Courier requests and changes to a delivery; cancelling an order. */
   courierAction: (action: CourierAction, id: string) => Promise<void>;
@@ -108,18 +113,20 @@ function snapshotFromPersisted(persisted: Persisted): ShopSnapshot | null {
     customers: state.customers,
     ordering: normalizeSetup(state.ordering),
     board: normalizeBoard(state.board),
+    triggers: normalizeTriggers(state.triggers),
   };
 }
 
 async function pullRemote(baseUrl: string, token: string): Promise<Omit<ShopSnapshot, "shop"> & { theme: ThemeChoice }> {
   const client = new GraphQLDanClient(baseUrl, token);
-  const [menu, orders, customers, theme, ordering, board] = await Promise.all([
+  const [menu, orders, customers, theme, ordering, board, triggers] = await Promise.all([
     client.getMenu(),
     client.getOrders(),
     client.getCustomers(),
     client.getTheme(),
     client.getOrderingSettings(),
     client.getBoard(),
+    client.getTriggers(),
   ]);
   return {
     categories: menu.categories,
@@ -128,6 +135,7 @@ async function pullRemote(baseUrl: string, token: string): Promise<Omit<ShopSnap
     customers: customers.customers,
     ordering,
     board,
+    triggers,
     theme,
   };
 }
@@ -137,6 +145,11 @@ type ShopEvent = { kind: "order" | "menu" | "customers" | "theme" | "settings" |
 
 /** Asked when the live channel opens, with the order fields this server knows. */
 const shopEvents = () => `subscription ShopEvents { shopEvents { kind order { ${orderFields()} } } }`;
+
+/** The board in use, for telling which column a live order entered. */
+let boardNow: Board = DEFAULT_BOARD;
+/** Whether this page has noted the demo's board yet (its first look is not news). */
+let demoNoted = false;
 
 /** The orders currently on the board, read outside React. */
 let remoteOrders: Order[] = [];
@@ -183,6 +196,9 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       const { theme, ...next } = await pullRemote(end.url, end.token);
       adoptShopTheme(theme);
       remoteOrders = next.orders;
+      boardNow = next.board;
+      // What a load brings is noted, never sounded: a refresh or reconnect replays nothing.
+      noteBoard(next.orders, next.board);
       setRemote({ ...next, shop: current.shop });
       setRemoteError(null);
     } catch (error) {
@@ -236,6 +252,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       onData: ({ shopEvents: event }) => {
         if (event.kind === "order" && event.order) {
           const order = event.order;
+          seeOrder(order, boardNow);
           setRemote((current) => {
             if (!current) return current;
             const others = current.orders.filter((entry) => entry.id !== order.id);
@@ -266,7 +283,14 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
             .catch(() => undefined);
           void client
             .getBoard()
-            .then((board) => setRemote((current) => (current ? { ...current, board } : current)))
+            .then((board) => {
+              boardNow = board;
+              setRemote((current) => (current ? { ...current, board } : current));
+            })
+            .catch(() => undefined);
+          void client
+            .getTriggers()
+            .then((triggers) => setRemote((current) => (current ? { ...current, triggers } : current)))
             .catch(() => undefined);
         } else {
           void refreshRemote().catch(() => undefined);
@@ -331,6 +355,27 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
 
   const snapshot = session?.mode === "demo" ? snapshotFromPersisted(persisted) : session?.mode === "remote" ? remote : null;
 
+  /*
+   * The demo has no live channel: its orders change in this browser (and in
+   * other tabs, through storage). The first board this page sees is noted;
+   * every change after that is told, like a live order event.
+   */
+  const demoOrders = session?.mode === "demo" ? snapshot?.orders : undefined;
+  const demoBoard = session?.mode === "demo" ? snapshot?.board : undefined;
+  useEffect(() => {
+    if (!demoOrders || !demoBoard) {
+      demoNoted = false;
+      return;
+    }
+    boardNow = demoBoard;
+    if (!demoNoted) {
+      noteBoard(demoOrders, demoBoard);
+      demoNoted = true;
+      return;
+    }
+    for (const order of demoOrders) seeOrder(order, demoBoard);
+  }, [demoOrders, demoBoard]);
+
   const value = useMemo<ShopContextValue>(() => {
     return {
       ready,
@@ -367,13 +412,16 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         });
         adoptShopTheme(ping.theme);
         const authed = new GraphQLDanClient(baseUrl, result.token);
-        const [menu, orders, customers, ordering, board] = await Promise.all([
+        const [menu, orders, customers, ordering, board, triggers] = await Promise.all([
           authed.getMenu(),
           authed.getOrders(),
           authed.getCustomers(),
           authed.getOrderingSettings(),
           authed.getBoard(),
+          authed.getTriggers(),
         ]);
+        boardNow = board;
+        noteBoard(orders.orders, board);
         setRemote({
           shop: result.shop ?? ping.shop,
           categories: menu.categories,
@@ -382,6 +430,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
           customers: customers.customers,
           ordering,
           board,
+          triggers,
         });
         setRemoteError(null);
       },
@@ -484,6 +533,8 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         const next = here ? nextAfter(board, here.id) : null;
         if (!next) return;
         const status = statusAfter(order, next);
+        // This tablet's own move is not news to it.
+        expectMine(order.id, next.id);
         if (getSnapshot().session?.mode === "demo") {
           await demoMutate((server) => server.moveOrder(order.id, next.id));
           return;
@@ -505,6 +556,22 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         if (!end) throw new Error("Sign in first.");
         const saved = await new GraphQLDanClient(end.url, end.token).updateBoard(board, moveTickets);
         await refreshRemote();
+        return saved;
+      },
+      async saveTriggers(triggers) {
+        if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.updateTriggers(triggers));
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        const saved = await new GraphQLDanClient(end.url, end.token).updateTriggers(triggers);
+        setRemote((current) => (current ? { ...current, triggers: saved } : current));
+        return saved;
+      },
+      async resetTriggers() {
+        if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.resetTriggers());
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        const saved = await new GraphQLDanClient(end.url, end.token).resetTriggers();
+        setRemote((current) => (current ? { ...current, triggers: saved } : current));
         return saved;
       },
       async resetBoard() {

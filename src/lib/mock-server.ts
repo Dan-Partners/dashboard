@@ -1,3 +1,4 @@
+import { checkTriggers, DEFAULT_TRIGGERS, normalizeTriggers, type Triggers } from "./triggers";
 import { checkBoard, columnOf, DEFAULT_BOARD, nextAfter, normalizeBoard, planMoves, roleOf, startFor, statusAfter, summarise, type Board, type BoardPreview, type PlannedMove } from "./board";
 import { bankIsEmpty, checkedBank, checkOrdering, normalizeSetup, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
 import { DanError } from "./errors";
@@ -249,6 +250,25 @@ export class MockDanServer implements DanClient {
     };
     this.state.orders.unshift(order);
     return Promise.resolve(clone(order));
+  }
+
+  getTriggers(): Promise<Triggers> {
+    return Promise.resolve(clone(normalizeTriggers(this.state.triggers)));
+  }
+
+  /** The demo signs in as the owner; the same checks as the shop server. */
+  updateTriggers(triggers: Triggers): Promise<Triggers> {
+    try {
+      this.state.triggers = checkTriggers(triggers);
+      return Promise.resolve(clone(this.state.triggers));
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
+  resetTriggers(): Promise<Triggers> {
+    this.state.triggers = clone(DEFAULT_TRIGGERS);
+    return Promise.resolve(clone(DEFAULT_TRIGGERS));
   }
 
   getBoard(): Promise<Board> {

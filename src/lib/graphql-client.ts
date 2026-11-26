@@ -25,6 +25,7 @@ import { DAN_PRODUCT } from "./types";
 import { normalizeTheme, type ThemeChoice } from "./theme";
 import { DEFAULT_SETUP, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
 import { DEFAULT_BOARD, type Board, type BoardPreview } from "./board";
+import { DEFAULT_TRIGGERS, TRIGGER_FIELDS, type Triggers } from "./triggers";
 import { DEFAULT_UBER, UBER_FIELDS, type UberKeys, type UberOptions, type UberOptionsInput } from "./uber";
 
 /**
@@ -296,6 +297,32 @@ export class GraphQLDanClient implements DanClient {
       { settings, bank: bank ?? null },
     );
     return data.updateOrderingSettings;
+  }
+
+  /** The ticket sounds. A shop server from before them: the kitchen 叮. */
+  async getTriggers(): Promise<Triggers> {
+    try {
+      const data = await this.run<{ triggers: Triggers }>(`query Triggers { triggers { triggers { ${TRIGGER_FIELDS} } } }`);
+      return data.triggers;
+    } catch (error) {
+      if (error instanceof DanError && error.code === "bad_response") return DEFAULT_TRIGGERS;
+      throw error;
+    }
+  }
+
+  /** Owner only. */
+  async updateTriggers(triggers: Triggers): Promise<Triggers> {
+    const data = await this.run<{ updateTriggers: Triggers }>(
+      `mutation SaveTriggers($triggers: [TriggerInput!]!) { updateTriggers(triggers: $triggers) { triggers { ${TRIGGER_FIELDS} } } }`,
+      { triggers: triggers.triggers },
+    );
+    return data.updateTriggers;
+  }
+
+  /** Owner only: back to the kitchen 叮. */
+  async resetTriggers(): Promise<Triggers> {
+    const data = await this.run<{ resetTriggers: Triggers }>(`mutation ResetTriggers { resetTriggers { triggers { ${TRIGGER_FIELDS} } } }`);
+    return data.resetTriggers;
   }
 
   /** The owner's board columns. A shop server from before them: the four defaults. */

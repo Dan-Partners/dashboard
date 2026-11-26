@@ -1,5 +1,6 @@
 "use client";
 
+import { TicketSounds } from "./ticket-sounds";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { isDanError } from "@/lib/errors";
@@ -41,6 +42,7 @@ export function OrdersBoard() {
     <div>
       {locked ? null : <PageTitle title={t("ordersTitle")} gloss={locale === "zh-Hant" ? "Orders" : "訂單"} />}
       {shop.persisted.session?.mode === "demo" ? <p className="mb-5 text-sm text-ink-soft">{t("ordersDemoNote")}</p> : null}
+      <TicketSounds place="counter" />
       <AwaitingTransfers />
       <RefundFailures orders={orders} />
       {cardError ? (

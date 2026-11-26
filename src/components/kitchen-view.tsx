@@ -1,5 +1,6 @@
 "use client";
 
+import { TicketSounds } from "./ticket-sounds";
 import { useEffect, useState } from "react";
 import { isDanError } from "@/lib/errors";
 import { kitchenTickets, newDoneMemory, noteOrders, pickStation, type KitchenTicket } from "@/lib/focus";
@@ -59,6 +60,7 @@ export function KitchenView() {
   return (
     <div>
       {locked ? null : <PageTitle title={t("kitchenTitle")} gloss={locale === "zh-Hant" ? "Kitchen" : "廚房"} />}
+      <TicketSounds place="kitchen" />
       <StationPicker
         value={stations}
         onToggle={(station) => writePersisted({ kitchenStations: pickStation(stations, station) })}

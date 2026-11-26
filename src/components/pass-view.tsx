@@ -1,5 +1,6 @@
 "use client";
 
+import { TicketSounds } from "./ticket-sounds";
 import { useEffect, useState } from "react";
 import { isDanError } from "@/lib/errors";
 import { passOrders } from "@/lib/focus";
@@ -33,6 +34,7 @@ export function PassView() {
   return (
     <div>
       {locked ? null : <PageTitle title={t("passTitle")} gloss={locale === "zh-Hant" ? "Pass" : "出餐"} />}
+      <TicketSounds place="pass" />
       <p className="font-display text-lg text-ink-soft" data-testid="pass-cooking">
         {cooking} {t("passPreparing")}
       </p>

@@ -1,3 +1,4 @@
+import type { Triggers } from "./triggers";
 import type { Board } from "./board";
 import type { OrderingSetup } from "./ordering";
 import type { ThemeChoice } from "./theme";
@@ -689,6 +690,8 @@ export type DemoState = {
   ordering?: OrderingSetup;
   /** The demo shop's board columns. Kept in this browser; the four defaults when missing. */
   board?: Board;
+  /** The demo shop's ticket sounds. Kept in this browser; the kitchen 叮 when missing. */
+  triggers?: Triggers;
 };
 
 function buildItems(): MenuItem[] {

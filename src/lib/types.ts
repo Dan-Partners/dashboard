@@ -1,3 +1,4 @@
+import type { Triggers } from "./triggers";
 import type { Board } from "./board";
 import type { OrderingSetup } from "./ordering";
 /**
@@ -317,6 +318,8 @@ export type ShopSnapshot = {
   shop: Shop;
   /** The owner's board columns. */
   board: Board;
+  /** The ticket sounds. */
+  triggers: Triggers;
   /** How the shop takes orders and payment. */
   ordering: OrderingSetup;
   categories: Category[];
