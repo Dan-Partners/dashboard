@@ -3,29 +3,36 @@
 import { TicketSounds } from "./ticket-sounds";
 import { useEffect, useState } from "react";
 import { isDanError } from "@/lib/errors";
-import { passOrders } from "@/lib/focus";
+import { comingTo, passOrders } from "@/lib/focus";
 import { ago, orderLabel, paymentLabel, primaryName } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
 import { useTapGuard, type TapGuard } from "@/lib/tap-guard";
 import { columnOf, DEFAULT_BOARD, nextStep } from "@/lib/board";
 import { useBoardColour } from "@/lib/use-board-colour";
+import { viewGloss, viewName, type View } from "@/lib/views";
 import type { Order } from "@/lib/types";
 import { stepLabel } from "./orders-board";
 import { WhereStrip } from "./where-strip";
 import { Button, PageTitle } from "./ui";
 
-/** The pass: orders ready to hand over, the table number large, one tap to finish. */
-export function PassView() {
+/**
+ * A view with the "hand over" look (the pass): orders in the view's columns,
+ * who each is for shown large, one tap to move it on.
+ */
+export function HandOverView({ view }: { view: View }) {
   const { t, locale } = useI18n();
   const shop = useShop();
   const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
   const guard = useTapGuard();
-  const locked = shop.persisted.focus?.position === "pass";
+  const focus = shop.persisted.focus;
+  const locked = focus?.position === "view" && focus.view === view.id;
   const orders = shop.snapshot?.orders ?? [];
-  const ready = passOrders(orders);
-  const cooking = orders.filter((order) => order.status === "new" || order.status === "preparing").length;
+  const scope = { board: shop.snapshot?.board ?? DEFAULT_BOARD, columns: view.columns };
+  const ready = passOrders(orders, scope);
+  // Orders still on their way here.
+  const cooking = comingTo(orders, scope);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 20_000);
@@ -34,8 +41,13 @@ export function PassView() {
 
   return (
     <div>
-      {locked ? null : <PageTitle title={t("passTitle")} gloss={locale === "zh-Hant" ? "Pass" : "出餐"} />}
-      <TicketSounds place="pass" />
+      {locked ? null : <PageTitle title={viewName(view, locale)} gloss={viewGloss(view, locale)} />}
+      <TicketSounds place={view.id} />
+      {view.columns.length === 0 ? (
+        <p className="mb-4 border-l-2 border-accent pl-3" data-testid="view-no-columns">
+          {t("viewNoColumns")}
+        </p>
+      ) : null}
       <p className="font-display text-lg text-ink-soft" data-testid="pass-cooking">
         {cooking} {t("passPreparing")}
       </p>

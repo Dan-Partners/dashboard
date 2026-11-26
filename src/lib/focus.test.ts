@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  comingTo,
   DONE_SHOWN_MS,
+  focusRoute,
   kitchenTickets,
   newDoneMemory,
   normalizeFocus,
@@ -11,6 +13,7 @@ import {
   passOrders,
   toggleStation,
 } from "./focus";
+import { DEFAULT_BOARD } from "./board";
 import { DEFAULT_STATIONS, type Order, type OrderLine, type OrderStatus, type Station } from "./types";
 
 /** The four a shop starts with, and a shop that named its own. */
@@ -48,11 +51,23 @@ const order = (id: string, status: OrderStatus, minutesAgo: number, lines: Order
 });
 
 describe("the saved lock", () => {
-  it("keeps only a known position", () => {
-    expect(normalizeFocus({ position: "kitchen" })).toEqual({ position: "kitchen" });
+  it("keeps a view, the till or the orders board, and nothing else", () => {
+    expect(normalizeFocus({ position: "view", view: "packing" })).toEqual({ position: "view", view: "packing" });
+    expect(normalizeFocus({ position: "till" })).toEqual({ position: "till" });
+    expect(normalizeFocus({ position: "board" })).toEqual({ position: "board" });
+    expect(normalizeFocus({ position: "view" })).toBeNull();
+    expect(normalizeFocus({ position: "view", view: "../x" })).toBeNull();
     expect(normalizeFocus({ position: "office" })).toBeNull();
     expect(normalizeFocus("kitchen")).toBeNull();
     expect(normalizeFocus(null)).toBeNull();
+  });
+
+  it("reads a tablet locked before views as locked to the view with that id", () => {
+    expect(normalizeFocus({ position: "kitchen" })).toEqual({ position: "view", view: "kitchen" });
+    expect(normalizeFocus({ position: "pass" })).toEqual({ position: "view", view: "pass" });
+    expect(focusRoute({ position: "view", view: "kitchen" })).toBe("/shop/view/kitchen");
+    expect(focusRoute({ position: "till" })).toBe("/shop/till");
+    expect(focusRoute({ position: "board" })).toBe("/shop/orders");
   });
 });
 
@@ -116,6 +131,43 @@ describe("the kitchen screen", () => {
     const old = order("o", "completed", 40, [line(1, "wok")], now);
     noteOrders(memory, [recent, old], now);
     expect(kitchenTickets([recent, old], ["wok"], FOUR, memory, now).map((ticket) => ticket.order.id)).toEqual(["r"]);
+  });
+});
+
+describe("a view's part of the board", () => {
+  const now = Date.parse("2026-11-25T18:00:00Z");
+  const at = (id: string, status: OrderStatus, column: string, minutesAgo: number): Order => ({ ...order(id, status, minutesAgo, [line(1, "wok")], now), column });
+  const orders = [
+    at("new-1", "new", "new", 1),
+    at("prep-1", "preparing", "preparing", 8),
+    at("prep-2", "preparing", "preparing", 3),
+    at("ready-1", "ready", "ready", 5),
+    at("done-1", "completed", "completed", 20),
+  ];
+
+  it("shows a make view only the tickets in its columns, oldest first", () => {
+    const memory = newDoneMemory();
+    noteOrders(memory, orders, now);
+    const prep = kitchenTickets(orders, [], FOUR, memory, now, { board: DEFAULT_BOARD, columns: ["preparing"] });
+    expect(prep.map((ticket) => ticket.order.id)).toEqual(["prep-1", "prep-2"]);
+    // A bench in the middle of the flow does not see tickets again when they finish.
+    const finished = { ...orders[1], status: "completed" as const, column: "completed" };
+    noteOrders(memory, [finished], now);
+    expect(kitchenTickets([finished], [], FOUR, memory, now, { board: DEFAULT_BOARD, columns: ["preparing"] })).toHaveLength(0);
+    // The kitchen, which shows the ready column, keeps a just-finished ticket for 15 minutes.
+    expect(kitchenTickets([finished], [], FOUR, memory, now, { board: DEFAULT_BOARD, columns: ["new", "preparing", "ready"] })).toHaveLength(1);
+    // A view with no columns shows nothing.
+    expect(kitchenTickets(orders, [], FOUR, memory, now, { board: DEFAULT_BOARD, columns: [] })).toHaveLength(0);
+  });
+
+  it("shows a hand-over view its columns' tickets, and counts the ones still on their way", () => {
+    const pass = { board: DEFAULT_BOARD, columns: ["ready"] };
+    expect(passOrders(orders, pass).map((entry) => entry.id)).toEqual(["ready-1"]);
+    expect(comingTo(orders, pass)).toBe(3);
+    const packing = { board: DEFAULT_BOARD, columns: ["preparing"] };
+    expect(passOrders(orders, packing).map((entry) => entry.id)).toEqual(["prep-1", "prep-2"]);
+    expect(comingTo(orders, packing)).toBe(1);
+    expect(comingTo(orders, { board: DEFAULT_BOARD, columns: [] })).toBe(0);
   });
 });
 

@@ -2,23 +2,17 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { allStations, enterFullscreen, exitFullscreen, fullscreenAvailable, pickedStations, POSITION_ROUTE, type Position } from "@/lib/focus";
-import { useI18n, type CopyKey } from "@/lib/i18n";
+import { allStations, enterFullscreen, exitFullscreen, fullscreenAvailable, focusRoute, pickedStations, type Focus } from "@/lib/focus";
+import { useI18n } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
 import { stationName } from "@/lib/stations";
 import { writePersisted } from "@/lib/storage";
+import { viewName } from "@/lib/views";
 import type { Session } from "@/lib/types";
 import { ConnectionStatus } from "./connection-status";
 import { PrintStrip } from "./print-strip";
 import { ServerSwitchNotice } from "./server-switch-notice";
 import { Button } from "./ui";
-
-export const POSITION_LABEL: Record<Position, CopyKey> = {
-  kitchen: "navKitchen",
-  till: "navTill",
-  pass: "navPass",
-  board: "focusBoard",
-};
 
 /** How long the lock must be held to leave focus mode. */
 export const HOLD_MS = 3000;
@@ -41,10 +35,11 @@ function useIsFullscreen() {
 }
 
 /**
- * The screen of a tablet locked to one position: no menu, one job, a line at
- * the top saying so, and a lock in the corner held for 3 seconds to leave.
+ * The screen of a tablet locked to one place (a view, the till or the orders
+ * board): no menu, one job, a line at the top saying so, and a lock in the
+ * corner held for 3 seconds to leave.
  */
-export function FocusFrame({ session, position, children }: { session: Session; position: Position; children: React.ReactNode }) {
+export function FocusFrame({ session, focus, children }: { session: Session; focus: Focus; children: React.ReactNode }) {
   const { t, locale } = useI18n();
   const shop = useShop();
   const pathname = usePathname();
@@ -52,7 +47,11 @@ export function FocusFrame({ session, position, children }: { session: Session; 
   const fullscreen = useIsFullscreen();
   const stations = shop.snapshot?.stations ?? [];
   const picked = pickedStations(shop.persisted.kitchenStations, stations);
-  const route = POSITION_ROUTE[position];
+  const route = focusRoute(focus);
+  const view = focus.position === "view" ? shop.snapshot?.views.find((entry) => entry.id === focus.view) : undefined;
+  // What the page is locked to, for the touch rules in globals.css and for tests: the view's id, or till, or board.
+  const position = focus.position === "view" ? focus.view : focus.position;
+  const name = focus.position === "view" ? (view ? viewName(view, locale) : focus.view) : t(focus.position === "till" ? "navTill" : "focusBoard");
 
   // Marks the page as locked, for the touch rules in globals.css.
   useEffect(() => {
@@ -68,7 +67,7 @@ export function FocusFrame({ session, position, children }: { session: Session; 
   }, [pathname, route, router]);
 
   const filter =
-    position === "kitchen" && !allStations(picked, stations)
+    view?.look === "make" && stations.length > 1 && !allStations(picked, stations)
       ? ` · ${t("focusFilterBefore")}${picked.map((station) => stationName(stations, station, locale)).join(", ")}${t("focusFilterAfter")}`
       : "";
 
@@ -77,7 +76,7 @@ export function FocusFrame({ session, position, children }: { session: Session; 
       {/* On a phone the lock and lights take the top row (lock in the corner), the line goes under. */}
       <header className="chrome-sm no-print sticky top-0 z-20 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-rule bg-paper/95 py-2 pr-2 pl-4 text-ink backdrop-blur md:pl-6">
         <p className="order-2 min-w-0 basis-full pb-1 font-display text-base leading-tight sm:order-1 sm:flex-1 sm:basis-0 sm:pb-0 md:text-lg" data-testid="focus-status" role="status">
-          <span className="text-accent-ink">{t("focusOn")}:</span> {t(POSITION_LABEL[position])}
+          <span className="text-accent-ink">{t("focusOn")}:</span> {name}
           {filter}
           <span className="text-ink-soft"> · {t("focusHold")}</span>
         </p>

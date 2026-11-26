@@ -36,7 +36,7 @@ test("a tablet locked to the kitchen stays locked, filters by station without hi
   await page.getByTestId("focus-button").first().click();
   await page.getByTestId("focus-dialog").getByRole("button", { name: /^Wok/ }).click();
   await page.getByTestId("focus-kitchen").click();
-  await expect(page).toHaveURL(/\/shop\/kitchen$/);
+  await expect(page).toHaveURL(/\/shop\/view\/kitchen$/);
   const status = page.getByTestId("focus-status");
   await expect(status).toHaveText("Focus mode on: Kitchen · Wok only · Hold the lock 3 seconds to exit");
   // No menu while locked.
@@ -61,7 +61,7 @@ test("a tablet locked to the kitchen stays locked, filters by station without hi
 
   // Another screen goes straight back to the kitchen; a reload stays locked.
   await page.goto("/shop/sales");
-  await expect(page).toHaveURL(/\/shop\/kitchen$/);
+  await expect(page).toHaveURL(/\/shop\/view\/kitchen$/);
   await page.reload();
   await expect(status).toContainText("Kitchen");
 

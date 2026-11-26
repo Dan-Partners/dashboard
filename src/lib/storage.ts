@@ -27,8 +27,8 @@ export type Persisted = {
   kitchenStations: string[];
   /** The ordering site address the Tools page last used for table QR codes. */
   orderingAddress: string | null;
-  /** Ticket sounds wanted on this device, per station (kitchen, pass, counter). */
-  sounds: Partial<Record<SoundPlace, boolean>>;
+  /** Ticket sounds wanted on this device, per place: a view's id, or `counter` for the orders board. */
+  sounds: Record<SoundPlace, boolean>;
 };
 
 export const STORAGE_KEY = "dan.v1";
@@ -143,12 +143,11 @@ export function forgetServer(url: string) {
   writePersisted({ recentServers: getSnapshot().recentServers.filter((entry) => entry !== url) });
 }
 
-function normalizeSounds(value: unknown): Partial<Record<SoundPlace, boolean>> {
+function normalizeSounds(value: unknown): Record<SoundPlace, boolean> {
   if (!value || typeof value !== "object") return {};
-  const record = value as Record<string, unknown>;
-  const sounds: Partial<Record<SoundPlace, boolean>> = {};
-  for (const place of ["kitchen", "pass", "counter"] as const) {
-    if (typeof record[place] === "boolean") sounds[place] = record[place] as boolean;
+  const sounds: Record<SoundPlace, boolean> = {};
+  for (const [place, on] of Object.entries(value as Record<string, unknown>).slice(0, 20)) {
+    if (/^[a-z0-9_-]{1,32}$/.test(place) && typeof on === "boolean") sounds[place] = on;
   }
   return sounds;
 }

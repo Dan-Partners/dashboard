@@ -6,7 +6,8 @@ import { isDanError } from "@/lib/errors";
 import { messageForError, useI18n, type CopyKey } from "@/lib/i18n";
 import { useIsOwner, useShop } from "@/lib/shop-context";
 import { playSound, unlockAudio } from "@/lib/sounds";
-import { checkTriggers, DEFAULT_TRIGGERS, MAX_TRIGGERS, newTriggerId, SOUND_PLACES, SOUNDS, type Sound, type SoundPlace, type Trigger, type Triggers } from "@/lib/triggers";
+import { checkPlaces, checkTriggers, COUNTER_PLACE, DEFAULT_TRIGGERS, MAX_TRIGGERS, newTriggerId, SOUNDS, type Sound, type Trigger, type Triggers } from "@/lib/triggers";
+import { viewName } from "@/lib/views";
 import { Button } from "./ui";
 
 const ROLE_WORD: Record<ColumnRole, CopyKey> = {
@@ -16,12 +17,11 @@ const ROLE_WORD: Record<ColumnRole, CopyKey> = {
   completed: "roleCompleted",
 };
 const SOUND_WORD: Record<Sound, CopyKey> = { ding: "soundDing", chime: "soundChime" };
-const PLACE_WORD: Record<SoundPlace, CopyKey> = { kitchen: "placeKitchen", pass: "placePass", counter: "placeCounter" };
 
 /**
  * The owner's ticket sounds: when a ticket enters a column (or any column
- * of a kind, so a rename keeps it), play a sound at the kitchen, the pass or
- * the counter. The counter PIN sees them read-only.
+ * of a kind, so a rename keeps it), play a sound on any of the shop's views,
+ * or on the orders board. The counter PIN sees them read-only.
  */
 export function SoundsSection() {
   const { t, locale } = useI18n();
@@ -29,6 +29,9 @@ export function SoundsSection() {
   const isOwner = useIsOwner();
   const board = shop.snapshot?.board ?? DEFAULT_BOARD;
   const saved = shop.snapshot?.triggers ?? DEFAULT_TRIGGERS;
+  const views = shop.snapshot?.views ?? [];
+  // Where a sound can play: each view, then the orders board.
+  const places = [...views.map((view) => ({ id: view.id, name: viewName(view, locale) })), { id: COUNTER_PLACE, name: t("placeCounter") }];
   const [draft, setDraft] = useState<Triggers | null>(null);
   const list = (draft ?? saved).triggers;
   const [message, setMessage] = useState<{ text: string; failed: boolean } | null>(null);
@@ -54,6 +57,7 @@ export function SoundsSection() {
     let next: Triggers;
     try {
       next = checkTriggers({ triggers: list });
+      checkPlaces(next, views.map((view) => view.id));
     } catch (error) {
       failed(error);
       return;
@@ -90,7 +94,7 @@ export function SoundsSection() {
   const add = () => {
     setMessage(null);
     setDraft({
-      triggers: [...list, { id: newTriggerId(), event: "ticket_enters_role", column: null, role: "ready", action: "play_sound", sound: "chime", stations: ["pass"], enabled: true }],
+      triggers: [...list, { id: newTriggerId(), event: "ticket_enters_role", column: null, role: "ready", action: "play_sound", sound: "chime", views: [views.find((view) => view.look === "hand_over")?.id ?? views[0]?.id ?? COUNTER_PLACE], enabled: true }],
     });
   };
 
@@ -141,16 +145,16 @@ export function SoundsSection() {
             </label>
             <fieldset className="flex flex-wrap gap-2" disabled={!isOwner}>
               <legend className="font-display text-[0.72rem] tracking-[0.18em] text-ink-soft uppercase">{t("soundWhere")}</legend>
-              {SOUND_PLACES.map((place) => (
-                <label key={place} className="flex min-h-11 items-center gap-1.5">
+              {places.map((place) => (
+                <label key={place.id} className="flex min-h-11 items-center gap-1.5">
                   <input
                     type="checkbox"
                     className="size-5"
-                    checked={trigger.stations.includes(place)}
-                    aria-label={`${t(PLACE_WORD[place])} ${index + 1}`}
-                    onChange={(event) => edit(index, { stations: event.target.checked ? [...trigger.stations, place] : trigger.stations.filter((entry) => entry !== place) })}
+                    checked={trigger.views.includes(place.id)}
+                    aria-label={`${place.name} ${index + 1}`}
+                    onChange={(event) => edit(index, { views: event.target.checked ? [...trigger.views, place.id] : trigger.views.filter((entry) => entry !== place.id) })}
                   />
-                  {t(PLACE_WORD[place])}
+                  {place.name}
                 </label>
               ))}
             </fieldset>

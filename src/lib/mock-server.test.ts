@@ -328,4 +328,33 @@ describe("graphql client", () => {
     // Wok still has dishes, so the list cannot be emptied in the demo.
     await expect(server.updateStations([])).rejects.toMatchObject({ code: "station_in_use" });
   });
+  it("keeps the owner's views in step with the board and their sounds", async () => {
+    const server = new MockDanServer();
+    expect((await server.getViews()).map((view) => view.id)).toEqual(["kitchen", "pass"]);
+    const saved = await server.updateViews([
+      ...(await server.getViews()),
+      { id: "packing", nameEn: "Packing", nameZh: "", look: "make", columns: ["preparing"] },
+    ]);
+    expect(saved[2]).toMatchObject({ id: "packing", nameZh: "Packing", columns: ["preparing"] });
+    await expect(server.updateViews([{ id: "counter", nameEn: "Counter", nameZh: "", look: "make", columns: [] }])).rejects.toMatchObject({ code: "views_ids" });
+
+    // A sound on the new view; one that plays nowhere the shop has is refused.
+    const chime = { id: "packing-chime", event: "ticket_enters_role" as const, column: null, role: "in_progress" as const, action: "play_sound" as const, sound: "chime" as const, enabled: true };
+    await expect(server.updateTriggers({ triggers: [{ ...chime, views: ["nowhere"] }] })).rejects.toMatchObject({ code: "triggers_views" });
+    await server.updateTriggers({ triggers: [...(await server.getTriggers()).triggers, { ...chime, views: ["packing"] }] });
+
+    // A new in-progress column joins the views that showed the whole of that stage.
+    const board = await server.getBoard();
+    const columns = [...board.columns.slice(0, 2), { id: "plating", nameEn: "Plating", nameZh: "", role: "in_progress" as const, colour: "#7a4fd0" }, ...board.columns.slice(2)];
+    await server.updateBoard({ columns }, false);
+    const after = await server.getViews();
+    expect(after[0].columns).toEqual(["new", "preparing", "plating", "ready"]);
+    expect(after[2].columns).toEqual(["preparing", "plating"]);
+    expect(after[1].columns).toEqual(["ready"]);
+
+    // The packing view goes, and its sound with it.
+    await server.updateViews(after.slice(0, 2));
+    expect((await server.getTriggers()).triggers.map((trigger) => trigger.id)).toEqual(["kitchen-ding"]);
+    expect((await server.resetViews()).map((view) => view.id)).toEqual(["kitchen", "pass"]);
+  });
 });

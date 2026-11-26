@@ -7,6 +7,7 @@ import { FEATURES } from "@/lib/features";
 import { formatStamp } from "@/lib/format";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useIsOwner, useSessionRedirect, useShop } from "@/lib/shop-context";
+import { viewGloss, viewName, viewRoute } from "@/lib/views";
 import { CloudNotice } from "./cloud-notice";
 import { ConnectionStatus } from "./connection-status";
 import { FocusDialog } from "./focus-dialog";
@@ -17,11 +18,16 @@ import { ServerSwitchNotice } from "./server-switch-notice";
 import { ThemeButton, ThemeDialog } from "./theme-dialog";
 import { Button, Dialog, Splash } from "./ui";
 
-const LINKS: { href: string; label: CopyKey; gloss: CopyKey; ownerOnly?: boolean; cloudOnly?: boolean }[] = [
+type NavLink = { href: string; label: CopyKey; gloss: CopyKey; ownerOnly?: boolean; cloudOnly?: boolean };
+
+/** Before the owner's views in the menu. */
+const FIRST_LINKS: NavLink[] = [
   { href: "/shop/orders", label: "navOrders", gloss: "navOrdersZh" },
   { href: "/shop/till", label: "navTill", gloss: "navTillZh" },
-  { href: "/shop/kitchen", label: "navKitchen", gloss: "navKitchenZh" },
-  { href: "/shop/pass", label: "navPass", gloss: "navPassZh" },
+];
+
+/** After them. */
+const LINKS: NavLink[] = [
   { href: "/shop/menu", label: "navMenu", gloss: "navMenuZh" },
   { href: "/shop/ticket", label: "navTicket", gloss: "navTicketZh" },
   ...(FEATURES.stamps ? [{ href: "/shop/loyalty", label: "navStamps" as CopyKey, gloss: "navStampsZh" as CopyKey }] : []),
@@ -62,17 +68,24 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
   const focus = shop.persisted.focus;
   if (focus) {
     return (
-      <FocusFrame session={session} position={focus.position}>
+      <FocusFrame session={session} focus={focus}>
         {children}
       </FocusFrame>
     );
   }
 
   const tillOn = shop.snapshot?.ordering.settings.till ?? true;
-  const links = LINKS.filter(
-    (link) => (isOwner || !link.ownerOnly) && (!link.cloudOnly || Boolean(session.cloudUrl)) && (tillOn || link.href !== "/shop/till"),
-  );
+  // What a link shows: its name, and the name in the other language.
+  type Shown = { href: string; name: string; gloss: string };
+  const fixed = (list: NavLink[]): Shown[] =>
+    list
+      .filter((link) => (isOwner || !link.ownerOnly) && (!link.cloudOnly || Boolean(session.cloudUrl)) && (tillOn || link.href !== "/shop/till"))
+      .map((link) => ({ href: link.href, name: t(link.label), gloss: t(link.gloss) }));
+  // The owner's views sit where Kitchen and Pass always did: after the till.
+  const viewLinks: Shown[] = (shop.snapshot?.views ?? []).map((view) => ({ href: viewRoute(view.id), name: viewName(view, locale), gloss: viewGloss(view, locale) }));
+  const links: Shown[] = [...fixed(FIRST_LINKS), ...viewLinks, ...fixed(LINKS)];
   const mobile = links.filter((link) => ["/shop/orders", "/shop/till", "/shop/menu", "/shop/loyalty"].includes(link.href));
+  const inMore = (href: string) => href.startsWith("/shop/view/") || ["/shop/ticket", "/shop/sales", "/shop/payments", "/shop/ordering", "/shop/board", "/shop/tools"].includes(href);
 
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[13.75rem_minmax(0,1fr)]">
@@ -103,8 +116,8 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
                 aria-current={active ? "page" : undefined}
                 className={`flex min-h-11 items-baseline justify-between gap-3 px-3 py-2.5 ${active ? "bg-ink text-paper" : "text-ink-soft hover:bg-paper-deep hover:text-ink"}`}
               >
-                <span className="font-display text-xl leading-none">{t(link.label)}</span>
-                <span className="font-zh text-xs">{t(link.gloss)}</span>
+                <span className="font-display text-xl leading-none">{link.name}</span>
+                <span className="font-zh text-xs">{link.gloss}</span>
               </Link>
             );
           })}
@@ -192,8 +205,8 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
                 aria-current={active ? "page" : undefined}
                 className={`flex min-h-14 flex-col items-center justify-center border-t-[3px] ${active ? "border-accent text-accent-ink" : "border-transparent text-ink-soft"}`}
               >
-                <span className="font-display text-sm leading-none">{t(link.label)}</span>
-                <span className="font-zh text-[10px]">{t(link.gloss)}</span>
+                <span className="font-display text-sm leading-none">{link.name}</span>
+                <span className="font-zh text-[10px]">{link.gloss}</span>
               </Link>
             );
           })}
@@ -210,15 +223,15 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
 
       <Dialog open={more} title={t("moreTitle")} onClose={() => setMore(false)}>
         <div className="flex flex-col">
-          {links.filter((link) => ["/shop/kitchen", "/shop/pass", "/shop/ticket", "/shop/sales", "/shop/payments", "/shop/ordering", "/shop/board", "/shop/tools"].includes(link.href)).map((link) => (
+          {links.filter((link) => inMore(link.href)).map((link) => (
             <Link
               key={link.href}
               href={link.href}
               className="flex min-h-12 items-baseline justify-between border-b border-rule"
               onClick={() => setMore(false)}
             >
-              <span className="font-display text-2xl">{t(link.label)}</span>
-              <span className="font-zh text-accent-ink">{t(link.gloss)}</span>
+              <span className="font-display text-2xl">{link.name}</span>
+              <span className="font-zh text-accent-ink">{link.gloss}</span>
             </Link>
           ))}
           <div className="mt-4 space-y-2">

@@ -1,3 +1,4 @@
+import type { View } from "./views";
 import type { Triggers } from "./triggers";
 import type { Board } from "./board";
 import type { OrderingSetup } from "./ordering";
@@ -692,6 +693,8 @@ export type DemoState = {
   board?: Board;
   /** The demo shop's ticket sounds. Kept in this browser; the kitchen 叮 when missing. */
   triggers?: Triggers;
+  /** The demo shop's views. Kept in this browser; the kitchen and the pass when missing. */
+  views?: View[];
   /** The demo shop's stations. Kept in this browser; wok, fryer, rice and counter when missing. */
   stations?: Station[];
 };

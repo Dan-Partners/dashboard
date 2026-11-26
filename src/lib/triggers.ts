@@ -1,9 +1,10 @@
 import { DanError } from "./errors";
 import type { Board, BoardColumn, ColumnRole } from "./board";
 
-/** Where a sound plays: the kitchen, the pass, or the orders board at the counter. */
-export type SoundPlace = "kitchen" | "pass" | "counter";
-export const SOUND_PLACES: SoundPlace[] = ["kitchen", "pass", "counter"];
+/** Where a sound plays: a view (by its id), or `counter` for the orders board. */
+export type SoundPlace = string;
+/** The orders board, as a place a sound plays. */
+export const COUNTER_PLACE = "counter";
 
 /** The built-in sounds, made by the tablet itself (no recordings). */
 export type Sound = "ding" | "chime";
@@ -18,7 +19,8 @@ export type Trigger = {
   role: ColumnRole | null;
   action: "play_sound";
   sound: Sound;
-  stations: SoundPlace[];
+  /** View ids, and `counter` for the orders board. */
+  views: SoundPlace[];
   enabled: boolean;
 };
 
@@ -29,11 +31,11 @@ export const MAX_TRIGGERS = 20;
 /** Nothing saved: the kitchen 叮 when a ticket enters the incoming column. */
 export const DEFAULT_TRIGGERS: Triggers = {
   triggers: [
-    { id: "kitchen-ding", event: "ticket_enters_role", column: null, role: "incoming", action: "play_sound", sound: "ding", stations: ["kitchen"], enabled: true },
+    { id: "kitchen-ding", event: "ticket_enters_role", column: null, role: "incoming", action: "play_sound", sound: "ding", views: ["kitchen"], enabled: true },
   ],
 };
 
-export const TRIGGER_FIELDS = "id event column role action sound stations enabled";
+export const TRIGGER_FIELDS = "id event column role action sound views enabled";
 
 /** The server's checks, with its codes. Returns them tidied. */
 export function checkTriggers(value: Triggers): Triggers {
@@ -48,9 +50,11 @@ export function checkTriggers(value: Triggers): Triggers {
     if (trigger.event === "ticket_enters_column" ? !/^[a-z0-9_-]{1,32}$/.test(column ?? "") : !role) {
       throw new DanError("triggers_column", "Choose the column for each sound.");
     }
-    const stations = SOUND_PLACES.filter((place) => trigger.stations.includes(place));
-    if (!stations.length) throw new DanError("triggers_stations", "Choose where each sound plays.");
-    return { ...trigger, id, column, role, stations };
+    // Read too from what was saved before views, when the list was called stations.
+    const places = trigger.views ?? (trigger as unknown as { stations?: string[] }).stations ?? [];
+    const views = [...new Set(places.map((place) => place.trim()))];
+    if (!views.length || views.some((place) => !/^[a-z0-9_-]{1,32}$/.test(place))) throw new DanError("triggers_views", "Choose where each sound plays.");
+    return { id, event: trigger.event, column, role, action: trigger.action, sound: trigger.sound, views, enabled: trigger.enabled };
   });
   return { triggers };
 }
@@ -70,7 +74,7 @@ export function soundFor(triggers: Triggers, column: BoardColumn, place: SoundPl
   const match = triggers.triggers.find(
     (trigger) =>
       trigger.enabled &&
-      trigger.stations.includes(place) &&
+      trigger.views.includes(place) &&
       (trigger.event === "ticket_enters_column" ? trigger.column === column.id : trigger.role === column.role),
   );
   return match?.sound ?? null;
@@ -86,4 +90,20 @@ export function newTriggerId(): string {
   let id = "sound-";
   for (let i = 0; i < 6; i++) id += letters[Math.floor(Math.random() * letters.length)];
   return id;
+}
+
+/** Sounds only where they can still play: a view that has gone takes its sounds with it. */
+export function onlyOn(triggers: Triggers, viewIds: string[]): Triggers {
+  return {
+    triggers: triggers.triggers
+      .map((trigger) => ({ ...trigger, views: trigger.views.filter((place) => place === COUNTER_PLACE || viewIds.includes(place)) }))
+      .filter((trigger) => trigger.views.length > 0),
+  };
+}
+
+/** Refuses a sound that plays somewhere the shop does not have, as the server does. */
+export function checkPlaces(triggers: Triggers, viewIds: string[]) {
+  if (triggers.triggers.some((trigger) => trigger.views.some((place) => place !== COUNTER_PLACE && !viewIds.includes(place)))) {
+    throw new DanError("triggers_views", "Choose where each sound plays: one of the shop's views, or the orders board.");
+  }
 }

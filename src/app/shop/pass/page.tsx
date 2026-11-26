@@ -1,8 +1,6 @@
-import type { Metadata } from "next";
-import { PassView } from "@/components/pass-view";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Pass" };
-
+/** The pass is a view now. Old links and bookmarks still arrive. */
 export default function PassPage() {
-  return <PassView />;
+  redirect("/shop/view/pass");
 }

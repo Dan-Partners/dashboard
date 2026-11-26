@@ -1,5 +1,5 @@
-import { execFileSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
+import { cloudOn, cloudSkip, joinNewShop } from "./cloud-join";
 
 /**
  * Owner-named stations. In the demo: add one, move a dish to it, see it on the
@@ -8,12 +8,10 @@ import { expect, test, type Page } from "@playwright/test";
  *
  * With a real shop server (DAN_E2E_SERVER_URL, DAN_E2E_PIN) the counter PIN
  * sees the list read-only. With a Dan cloud (as e2e/accounts.spec.ts needs) a
- * new shop removes every station and works without them.
+ * new restaurant removes every station and works without them.
  */
 const server = process.env.DAN_E2E_SERVER_URL;
 const pin = process.env.DAN_E2E_PIN ?? "";
-const cloudBin = process.env.DAN_E2E_CLOUD_BIN;
-const cloudOn = Boolean(process.env.DAN_E2E_ACCOUNTS && process.env.DAN_E2E_CLOUD && cloudBin);
 
 async function openDemo(page: Page) {
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -112,30 +110,10 @@ test("the counter PIN sees the stations but cannot change them", async ({ page }
   await expect(section.getByRole("button", { name: "Add station" })).toHaveCount(0);
 });
 
-test("a shop in the cloud can have no stations at all", async ({ page }) => {
-  test.skip(!cloudOn, "Needs a running Dan cloud and its command; see e2e/accounts.spec.ts.");
+test("a restaurant in the cloud can have no stations at all", async ({ page }) => {
+  test.skip(!cloudOn, cloudSkip);
   test.setTimeout(120_000);
-  const stamp = Date.now().toString(36);
-  const email = `stations-${stamp}@e2e.example`;
-  const invite = execFileSync(cloudBin!, ["waitlist", "invite", email], {
-    encoding: "utf8",
-    env: {
-      ...process.env,
-      DAN_MONGODB_URI: process.env.DAN_E2E_CLOUD_MONGODB_URI ?? "mongodb://127.0.0.1:27017",
-      DAN_DATABASE: process.env.DAN_E2E_CLOUD_DATABASE ?? "dan_cloud",
-      DAN_DASHBOARD_ORIGINS: "http://localhost:3000",
-    },
-  }).match(/http:\/\/localhost:3000\/join#[0-9a-f]{64}/)![0];
-  await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/");
-  await page.evaluate(() => localStorage.clear());
-  await page.goto(invite);
-  await page.getByLabel("Your name").fill("Sam Lee");
-  await page.getByLabel("Choose a password").fill("three small words");
-  await page.getByLabel("Shop name").fill(`Plain Shop ${stamp}`);
-  await expect(page.getByTestId("join-address")).toHaveAttribute("data-available", "true");
-  await page.getByRole("button", { name: "Create my shop" }).click();
-  await expect(page.getByTestId("menu-empty")).toBeVisible({ timeout: 20_000 });
+  await joinNewShop(page, "Restaurant", "stations");
 
   // Every station goes: there are no dishes on them yet.
   await page.getByRole("link", { name: /^Order board/ }).click();

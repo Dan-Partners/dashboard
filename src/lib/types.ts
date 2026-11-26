@@ -1,3 +1,4 @@
+import type { View } from "./views";
 import type { Triggers } from "./triggers";
 import type { Board } from "./board";
 import type { OrderingSetup } from "./ordering";
@@ -315,6 +316,12 @@ export interface DanClient {
   updateShop(patch: ShopPatch): Promise<Shop>;
   /** Owner only: sets or changes the counter PIN (4 to 6 digits). */
   setCounterPin(pin: string): Promise<void>;
+  /** The owner's views. */
+  getViews(): Promise<View[]>;
+  /** Owner only: the whole list. A view that goes takes its sounds with it. */
+  updateViews(views: View[]): Promise<View[]>;
+  /** Owner only: back to the views the shop started with. */
+  resetViews(): Promise<View[]>;
   /** The shop's stations, in order. */
   getStations(): Promise<Station[]>;
   /** Owner only: the whole list. Refused (`station_in_use`) while a station that would go is still on dishes. */
@@ -365,6 +372,8 @@ export type ShopSnapshot = {
   ordering: OrderingSetup;
   /** The shop's stations, in the kitchen's order. May be empty. */
   stations: Station[];
+  /** The owner's views of the order flow (a kitchen, a pass). May be empty. */
+  views: View[];
   categories: Category[];
   items: MenuItem[];
   orders: Order[];

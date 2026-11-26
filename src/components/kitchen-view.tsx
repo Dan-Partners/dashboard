@@ -12,6 +12,7 @@ import { writePersisted } from "@/lib/storage";
 import { useTapGuard, type TapGuard } from "@/lib/tap-guard";
 import { columnName, columnOf, DEFAULT_BOARD, nextStep, type Board } from "@/lib/board";
 import { useBoardColour } from "@/lib/use-board-colour";
+import { viewGloss, viewName, type View } from "@/lib/views";
 import type { OrderStatus, Station } from "@/lib/types";
 import { stepLabel } from "./orders-board";
 import { ReprintButton } from "./print-strip";
@@ -38,14 +39,19 @@ export const STATUS_COLOUR: Record<OrderStatus, string> = {
   cancelled: "#8a8a8a",
 };
 
-/** The kitchen: live tickets, oldest first, filtered by station without hiding any. */
-export function KitchenView() {
+/**
+ * A view with the "make" look (a kitchen, a packing bench): live tickets in
+ * the view's columns, oldest first, what to make shown large, filtered by
+ * station without hiding any.
+ */
+export function MakeView({ view }: { view: View }) {
   const { t, locale } = useI18n();
   const shop = useShop();
   const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
   const guard = useTapGuard();
-  const locked = shop.persisted.focus?.position === "kitchen";
+  const focus = shop.persisted.focus;
+  const locked = focus?.position === "view" && focus.view === view.id;
   const stations = shop.snapshot?.stations ?? [];
   const saved = shop.persisted.kitchenStations;
   const picked = pickedStations(saved, stations);
@@ -58,12 +64,17 @@ export function KitchenView() {
   }, []);
 
   noteOrders(doneMemory, orders, now);
-  const tickets = kitchenTickets(orders, picked, stations, doneMemory, now);
+  const tickets = kitchenTickets(orders, picked, stations, doneMemory, now, { board, columns: view.columns });
 
   return (
     <div>
-      {locked ? null : <PageTitle title={t("kitchenTitle")} gloss={locale === "zh-Hant" ? "Kitchen" : "廚房"} />}
-      <TicketSounds place="kitchen" />
+      {locked ? null : <PageTitle title={viewName(view, locale)} gloss={viewGloss(view, locale)} />}
+      <TicketSounds place={view.id} />
+      {view.columns.length === 0 ? (
+        <p className="mb-4 border-l-2 border-accent pl-3" data-testid="view-no-columns">
+          {t("viewNoColumns")}
+        </p>
+      ) : null}
       <StationPicker
         stations={stations}
         picked={picked}
@@ -115,9 +126,9 @@ function KitchenCard({
   const word = column ? columnName(column, locale) : t(STATUS_WORD[status]);
   const shown = useBoardColour();
   const colour = shown(column?.colour ?? STATUS_COLOUR[status]);
-  // The kitchen moves tickets on until they are ready; the pass hands them over.
+  // A make view moves tickets on until the last step; a hand-over view (the pass) finishes them.
   const step = nextStep(board, order);
-  const next = step && step.kind !== "done" && column?.role !== "ready" ? { label: step.kind === "accept" ? t("kitchenStart") : stepLabel(step, order, t, locale) } : null;
+  const next = step && step.kind !== "done" ? { label: step.kind === "accept" ? t("kitchenStart") : stepLabel(step, order, t, locale) } : null;
 
   return (
     <article

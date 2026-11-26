@@ -23,8 +23,8 @@ describe("missing settings", () => {
     const triggers: Triggers = {
       triggers: [
         ...DEFAULT_TRIGGERS.triggers,
-        { id: "pass", event: "ticket_enters_role", column: null, role: "ready", action: "play_sound", sound: "chime", stations: ["pass"], enabled: true },
-        { id: "off", event: "ticket_enters_column", column: "completed", role: null, action: "play_sound", sound: "ding", stations: ["counter"], enabled: false },
+        { id: "pass", event: "ticket_enters_role", column: null, role: "ready", action: "play_sound", sound: "chime", views: ["pass"], enabled: true },
+        { id: "off", event: "ticket_enters_column", column: "completed", role: null, action: "play_sound", sound: "ding", views: ["counter"], enabled: false },
       ],
     };
     expect(soundFor(triggers, column("ready"), "pass")).toBe("chime");

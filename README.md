@@ -1,6 +1,6 @@
 # Dan
 
-Dan (單, Cantonese *daan1*, an order slip) is the counter for a Chinese takeaway. Each shop runs its own Dan server on the premises. This repository is the web client — the glass on the counter — served at [my.dan.partners](https://my.dan.partners). The name is a pun on 埋單夥記.
+Dan (單, Cantonese *daan1*, an order slip) is the counter for a Chinese takeaway. A shop lives in the Dan cloud, and can also run its own Dan server on the premises. This repository is the web client — the glass on the counter — served at [my.dan.partners](https://my.dan.partners). The name is a pun on 埋單夥記.
 
 The client signs in to a shop in the **Dan cloud**, connects to a shop's own server, or opens a full mock of **Golden Dragon, Watford** that lives entirely in the browser.
 
@@ -47,12 +47,13 @@ npm run build
 A business joins in the [Dan cloud](https://github.com/DanPartners/cloud), with no machine to set up. The dashboard talks to the cloud's own address for this (`NEXT_PUBLIC_DAN_CLOUD_URL` at build time; `https://cloud.dan.partners` when unset), then to the shop's own staff API, which the cloud hands back.
 
 - **Waiting list.** The first page takes an email (`POST /v1/waitlist`). The answer is the same whoever asks.
-- **Invite.** Dan picks people from the list and sends each a one-time link by hand (`dan-cloud waitlist invite <email>`): `/join#<token>`. The page takes the token out of the address bar, then asks for a name, a password (at least 10 characters), the shop's name, its address name (checked as it is typed) and a template: **online shop** or **restaurant**. The shop is made and the owner is signed in, on an empty menu.
+- **Invite.** Dan picks people from the list and sends each a one-time link by hand (`dan-cloud waitlist invite <email>`): `/join#<token>`. The page takes the token out of the address bar, then asks for a name, a password (at least 10 characters), the shop's name, its address name (checked as it is typed) and a template: **online shop** (three columns: New, Ready, Completed; no stations, no views, no sounds) or **restaurant** (New, Preparing, Ready, Completed; four stations; Kitchen and Pass; the kitchen's 叮). Everything a template sets can be changed later on the Order board page. The shop is made and the owner is signed in, on an empty menu.
 - **Sign in.** Email and password find the owner's shop (`POST /v1/login`). A counter tablet signs in with the shop's address name and PIN; the device remembers the address name.
 - **Forgotten password.** Dan sends a one-time link (`dan-cloud shop reset-link <email>`): `/reset#<token>`. Choosing a new password ends the old sign-ins.
 - **A shop that lives in the cloud** has one server. The status corner shows one light, "Dan cloud", and there is nothing to sync or switch to.
 - **Building the menu** (owner): on Menu, **Add dish**, **Edit categories** (add, rename, put in order, remove an empty one), and **Remove dish** inside a dish. One name is enough for a dish or a category; it is used for both languages. The demo does the same in the browser.
-- **Stations** (owner, on the Order board page): add, rename, reorder and remove the shop's stations, or have none. A station with dishes on it cannot be removed. The dish form, the kitchen's filter, tickets and printers follow the list. The counter PIN sees it read-only. `e2e/stations.spec.ts` covers the demo, the PIN and a cloud shop with no stations.
+- **Stations** (owner, on the Order board page): add, rename, reorder and remove the shop's stations, or have none. A station with dishes on it cannot be removed. The dish form, the kitchen's filter, tickets and printers follow the list. The counter PIN sees it read-only. `e2e/stations.spec.ts` covers the demo, the PIN and a cloud restaurant with no stations.
+- **Views** (owner, on the Order board page): see [Views](#views) below.
 - **Tools** (owner): **Shop details** (name, Chinese name, address, town, phone) and **Counter PIN** (set or change it; tablets on the old PIN are signed out).
 - Passwords are cleared from a form once it has signed in, because a page already visited can stay in memory.
 
@@ -106,6 +107,8 @@ With the stop and start commands set, the tests run one at a time, so nothing el
 
 `e2e/touch.spec.ts` runs the demo on an iPad-sized touch screen: a double tap moves an order one step, the lock is held with a finger, nothing is selected by a long press, and controls are big enough.
 
+`e2e/views.spec.ts` adds a view in the demo, locks a tablet to it, gives it a sound, changes the board under it and removes it. With a real shop server the counter PIN sees views read-only; with a Dan cloud (as `e2e/accounts.spec.ts` needs) an online shop starts with none and a restaurant with Kitchen and Pass.
+
 `e2e/focus.spec.ts` locks the demo to the kitchen. With `DAN_E2E_PUBLIC_URL` (the shop's customer API on the cloud) it also places a table's order and follows it on a kitchen tablet and a pass tablet. The customer API limits orders from one address, so a rerun a minute later may be refused; the test says so.
 
 ## In the browser
@@ -116,23 +119,38 @@ With the stop and start commands set, the tests run one at a time, so nothing el
 | Till | Key a dish number. `2`, `×`, `81`, Add is two egg fried rice. Send the slip to the kitchen. |
 | Bank transfers | With bank transfer on, the orders board lists transfers waiting for payment (held in the Dan cloud, so the dashboard must be connected to it): reference, amount, customer, when it lapses. **Paid** sends the order to the board, "Paid by bank transfer"; **Not received** tells the customer. Unmarked, it lapses after 30 minutes. Dockets also show "Delivery · Shop delivery" or "Uber Direct", the delivery fee, and cash on delivery. |
 | Printing | When a printer is not answering, or tickets were given up after 30 minutes, every tablet shows a red strip (which printer, how many tickets) with **Retry now** and, after 30 minutes, **Dismiss**. **Reprint** on the kitchen screen, the orders board and the ticket page prints an order again (shown when the shop has printers). |
-| Kitchen | Live tickets, oldest first, for the cooks. Borders glow by status: green new, blue preparing, red ready, grey once done (kept 15 minutes). A station filter (wok, fryer, rice, counter) greys and shrinks the rest; nothing is hidden. Start and Ready move the whole order. |
-| Pass | Orders ready to hand over. The table number, very large, at the top; collection or delivery with the name otherwise. Served, collected or delivered in one tap. |
+| Views | The owner's screens for one part of the order flow, each in the menu after Till. A restaurant starts with **Kitchen** and **Pass**; an online shop with none. See [Views](#views). |
 | Menu | English and Traditional Chinese, dish numbers, allergens, prices in pounds. Edit a dish. Toggle sold out. **Dish photos** (owner): Add, Replace or Remove in the dish's editor, with the tablet's camera or photos. Added only while the dashboard is connected to the Dan cloud: the photo is shrunk on the device (and turned upright, HEIC included where the browser reads it), then sent to the cloud, which checks it, strips its metadata and keeps it. Shown as a thumbnail here, on the till beside the dish being keyed and on the slip, and on the customer site. Without internet the counter simply shows none. A shop server from before photos still works: the menu is asked for again without them. |
 | Ticket | An 80mm bill, wok / fryer / rice / counter, in Chinese and English. One slip, or torn by station. Print uses the browser. |
 | Stamps | Customers by phone. Ten stamps, then a reward. **Switched off for now** (`FEATURES.stamps` in [`src/lib/features.ts`](src/lib/features.ts)): hidden everywhere, data kept. |
 | Sales | Today and this week. |
 | Ordering & payments | Which order methods (Till, Table QR codes, Collection, Delivery by the shop, Delivery by Uber Direct) and payment methods (In person, Card online, Bank transfer) are on, the shop's delivery fee and minimum order, and the bank details for transfers. The owner saves; the counter PIN sees it read-only. Saved on the shop server and checked there (at least one of each stays on; delivery needs its fee and minimum; bank transfer its details; Uber Direct its account, DAN-23). With the till off, the Till and its focus mode go. The demo keeps its own copy in this browser. |
+| Order board | The owner's set-up for how orders flow: the board's **columns** (name, kind, colour, order), **views**, **sounds** (when a ticket enters a column, play a sound on any view or on the orders board) and **stations**. The counter PIN sees all of it read-only. Reset puts each back to what the shop's template started with. |
 | Tools | At the bottom of the menu, for everyone. **Table QR codes:** the ordering address comes from the Dan cloud address (`https://<shop>.dan.partners`), or the demo's `https://order.dan.partners`, and can be changed to the shop's own domain (kept on this device). Tables as `1-12, 20, A1` (letters and digits; a hyphen is a range; up to 200). Each card links to `<address>/?table=<n>`. Print gives A4, 6 cards a page, black on white with lines to cut along; each card also downloads as a PNG for a print shop. QR codes come from [`qrcode`](https://www.npmjs.com/package/qrcode) (MIT), drawn as SVG squares. **Printers:** the shop's receipt printers, which the shop's machine prints every new order on by itself (see the server README). The owner adds and edits them (name, address on the shop's network, port, 58/80 mm, the whole order or stations, copies, on/off); anyone can send a test print. Each shows Ready, Off or Not answering. Set up on the shop's machine only: through the cloud, Tools says so. |
+
+### Views
+
+A **view** is a screen for one part of the order flow: a kitchen, a pass, a packing bench. The owner makes them on the Order board page. Each has:
+
+- **A name**, in one or two languages. One name is used for both.
+- **A look.** **Make**: what to make, large, split by station, oldest first; borders glow in the column's colour (grey once done, kept 15 minutes); a station filter greys and shrinks the rest, nothing is hidden; a tap moves the whole order on. **Hand over**: who it is for, large (the table number, or the name for collection and delivery); served, collected or delivered in one tap.
+- **The board columns it shows.** A ticket is on a view while it is in one of those columns.
+
+Each view is in the menu after Till, at `/shop/view/<id>`. Kitchen and Pass are views (`/shop/view/kitchen`, `/shop/view/pass`; the old `/shop/kitchen` and `/shop/pass` lead there). The id is made from the name when the view is first saved and never changes, so a rename keeps locked tablets and sounds. Up to 12 views. The orders board is not a view: it always shows every column.
+
+- **Views follow the board.** A removed column leaves every view. A new column joins each view that showed every column of its kind (a kitchen showing every in-progress column takes a new in-progress one), and the owner can untick it.
+- **Removing a view** removes the sounds that played only on it. A tablet open on it says the view is no longer here; a tablet locked to it is unlocked.
+- **Reset to starting views** gives a restaurant Kitchen and Pass on today's board, and an online shop none.
+- Saved on the server (`views`, `updateViews`, `resetViews`); the demo keeps its own copy in this browser. A shop server from before views is treated as having Kitchen and Pass. Logic in [`src/lib/views.ts`](src/lib/views.ts).
 
 ### Focus mode
 
 ![Kitchen locked to the wok station](docs/screenshots/focus-kitchen.png)
 
-**Focus mode** locks a tablet to one job: Kitchen, Till, Pass or Orders board. Anyone signed in can turn it on (the Focus mode button). The tablet goes full screen with no menu, a line at the top says what it is locked to ("Focus mode on: Kitchen · Wok only · Hold the lock 3 seconds to exit"), and any other address sends it back. Each ticket starts with what that job needs most: the stations in the kitchen, the table at the pass and on the board.
+**Focus mode** locks a tablet to one job: one of the shop's views (Kitchen, Pass, or any the owner added), the Till, or the Orders board. Anyone signed in can turn it on (the Focus mode button). The tablet goes full screen with no menu, a line at the top says what it is locked to ("Focus mode on: Kitchen · Wok only · Hold the lock 3 seconds to exit"), and any other address sends it back. Each ticket starts with what that job needs most: the stations on a make view, the table on a hand-over view and on the board.
 
 - **To leave:** hold the lock in the top right corner for 3 seconds. A tap only says to hold it. It stops accidents; it is not a security lock.
-- The lock and the kitchen's station filter are saved on the tablet, so a reload stays locked. Browsers need a tap to go full screen again: a Full screen button shows until then. iPhones have no full screen for web pages; the simplified screen still applies.
+- The lock and the station filter are saved on the tablet, so a reload stays locked. Browsers need a tap to go full screen again: a Full screen button shows until then. iPhones have no full screen for web pages; the simplified screen still applies.
 - Signing out unlocks the tablet.
 - Done tickets stay 15 minutes from when the tablet saw them finish (after a reload, from when they were placed): orders do not record when they were finished yet (Linear DAN-17).
 - **Made for touch.** After a status button is tapped, the kitchen, pass and board ignore action taps for 0.7 seconds ([`src/lib/tap-guard.ts`](src/lib/tap-guard.ts)): Start puts Ready in the same spot, and Served slides the next ticket under the finger, so a double tap must count once. Locked screens have no pull-to-refresh or bounce (a reload leaves full screen) and no text selection or copy menu on a long press; the till's fields still type. Buttons visibly press. Every control on the kitchen and till is at least 44 by 44 pixels. Pinch zoom stays on, for anyone who needs it larger.
@@ -142,7 +160,7 @@ With the stop and start commands set, the tests run one at a time, so nothing el
 
 The demo also drops in an online order every so often while the tab is visible. Reset demo puts Golden Dragon back to the seeded service.
 
-On a real shop server, the owner sees a warning across the top when the nightly backup to the Dan cloud is off, failed last night, or is more than two days old. It can be hidden for the rest of the day. The counter PIN never sees it.
+On a real shop server with no Dan cloud set up, the owner sees a warning across the top: the shop's data is only on the shop server. It can be hidden for the rest of the day. The counter PIN never sees it.
 
 UI copy is English, with Chinese beside the labels that staff already say. The language control switches the chrome to Traditional Chinese (`zh-Hant`). Strings live in [`src/lib/i18n.ts`](src/lib/i18n.ts); dish names are data, not chrome, and both languages are always stored on the menu.
 

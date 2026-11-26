@@ -31,6 +31,7 @@ import { normalizeTheme, type ThemeChoice } from "./theme";
 import { DEFAULT_SETUP, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
 import { DEFAULT_BOARD, type Board, type BoardPreview } from "./board";
 import { DEFAULT_TRIGGERS, TRIGGER_FIELDS, type Triggers } from "./triggers";
+import { kitchenAndPass, VIEW_FIELDS, type View } from "./views";
 import { DEFAULT_UBER, UBER_FIELDS, type UberKeys, type UberOptions, type UberOptionsInput } from "./uber";
 
 /**
@@ -312,6 +313,32 @@ export class GraphQLDanClient implements DanClient {
       { patch },
     );
     return data.updateShop;
+  }
+
+  /** The owner's views. A server from before views has the kitchen and the pass. */
+  async getViews(board: Board = DEFAULT_BOARD): Promise<View[]> {
+    try {
+      const data = await this.run<{ views: View[] }>(`query Views { views { ${VIEW_FIELDS} } }`);
+      return data.views;
+    } catch (error) {
+      if (error instanceof DanError && error.code === "bad_response") return kitchenAndPass(board);
+      throw error;
+    }
+  }
+
+  /** Owner only. */
+  async updateViews(views: View[]): Promise<View[]> {
+    const data = await this.run<{ updateViews: View[] }>(
+      `mutation UpdateViews($views: [ViewInput!]!) { updateViews(views: $views) { ${VIEW_FIELDS} } }`,
+      { views: views.map(({ id, nameEn, nameZh, look, columns }) => ({ id, nameEn, nameZh, look, columns })) },
+    );
+    return data.updateViews;
+  }
+
+  /** Owner only. */
+  async resetViews(): Promise<View[]> {
+    const data = await this.run<{ resetViews: View[] }>(`mutation ResetViews { resetViews { ${VIEW_FIELDS} } }`);
+    return data.resetViews;
   }
 
   /** The shop's stations. A server from before stations could be named has the four fixed ones. */

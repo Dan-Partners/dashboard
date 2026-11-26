@@ -10,7 +10,7 @@ import { summarizeSales } from "./sales";
 import { GraphQLDanClient, orderFields, pingServer, uploadMenuPhoto, type CourierAction } from "./graphql-client";
 import { shrinkPhoto } from "./photos";
 import { expectMine, noteBoard, seeOrder } from "./arrivals";
-import { normalizeTriggers, type Triggers } from "./triggers";
+import { normalizeTriggers, onlyOn, type Triggers } from "./triggers";
 import { backStep, columnOf, DEFAULT_BOARD, nextAfter, normalizeBoard, statusAfter, type Board, type BoardPreview } from "./board";
 import { normalizeSetup, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
 import { live } from "./live";
@@ -47,6 +47,7 @@ import type {
 } from "./types";
 import { DEFAULT_STATIONS } from "./types";
 import { normalizeStations } from "./stations";
+import { normalizeViews, type View } from "./views";
 import type { CloudSession } from "./cloud";
 
 export type Notice = {
@@ -76,6 +77,9 @@ type ShopContextValue = {
   editMenu: <T>(work: (client: DanClient) => Promise<T>) => Promise<T>;
   /** Owner only: the shop's name, address and phone. */
   saveShop: (patch: ShopPatch) => Promise<void>;
+  /** Owner only: the views of the order flow. A view that goes takes its sounds with it. */
+  saveViews: (views: View[]) => Promise<View[]>;
+  resetViews: () => Promise<View[]>;
   /** Owner only: the shop's stations, the whole list in order. */
   saveStations: (stations: Station[]) => Promise<Station[]>;
   enterDemo: () => void;
@@ -133,8 +137,10 @@ function snapshotFromPersisted(persisted: Persisted): ShopSnapshot | null {
     customers: state.customers,
     ordering: normalizeSetup(state.ordering),
     board: normalizeBoard(state.board),
-    triggers: normalizeTriggers(state.triggers),
     stations: normalizeStations(state.stations, DEFAULT_STATIONS),
+    views: normalizeViews(state.views, normalizeBoard(state.board)),
+    // Sounds only where they can still play, as the server returns them.
+    triggers: onlyOn(normalizeTriggers(state.triggers), normalizeViews(state.views, normalizeBoard(state.board)).map((view) => view.id)),
   };
 }
 
@@ -150,6 +156,8 @@ async function pullRemote(baseUrl: string, token: string): Promise<Omit<ShopSnap
     client.getTriggers(),
     client.getStations(),
   ]);
+  // After the board: a server from before views has the kitchen and the pass on it.
+  const views = await client.getViews(board);
   return {
     categories: menu.categories,
     items: menu.items,
@@ -159,6 +167,7 @@ async function pullRemote(baseUrl: string, token: string): Promise<Omit<ShopSnap
     board,
     triggers,
     stations,
+    views,
     theme,
   };
 }
@@ -244,6 +253,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       authed.getTriggers(),
       authed.getStations(),
     ]);
+    const views = await authed.getViews(board);
     boardNow = board;
     noteBoard(orders.orders, board);
     setRemote({
@@ -256,6 +266,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       board,
       triggers,
       stations,
+      views,
     });
     setRemoteError(null);
   }, []);
@@ -493,6 +504,23 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         const result = await work(new GraphQLDanClient(end.url, end.token));
         await refreshRemote();
         return result;
+      },
+      async saveViews(views) {
+        if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.updateViews(views));
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        const saved = await new GraphQLDanClient(end.url, end.token).updateViews(views);
+        // The sounds too: a view that went took its sounds with it.
+        await refreshRemote();
+        return saved;
+      },
+      async resetViews() {
+        if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.resetViews());
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        const saved = await new GraphQLDanClient(end.url, end.token).resetViews();
+        await refreshRemote();
+        return saved;
       },
       async saveStations(stations) {
         if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.updateStations(stations));

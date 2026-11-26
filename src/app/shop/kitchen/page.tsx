@@ -1,8 +1,6 @@
-import type { Metadata } from "next";
-import { KitchenView } from "@/components/kitchen-view";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Kitchen" };
-
+/** The kitchen is a view now. Old links and bookmarks still arrive. */
 export default function KitchenPage() {
-  return <KitchenView />;
+  redirect("/shop/view/kitchen");
 }

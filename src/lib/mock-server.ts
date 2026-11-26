@@ -1,4 +1,5 @@
-import { checkTriggers, DEFAULT_TRIGGERS, normalizeTriggers, type Triggers } from "./triggers";
+import { checkPlaces, checkTriggers, DEFAULT_TRIGGERS, normalizeTriggers, onlyOn, type Triggers } from "./triggers";
+import { checkViews, followBoard, kitchenAndPass, normalizeViews, type View } from "./views";
 import { checkBoard, columnOf, DEFAULT_BOARD, nextAfter, normalizeBoard, planMoves, roleOf, startFor, statusAfter, summarise, type Board, type BoardPreview, type PlannedMove } from "./board";
 import { bankIsEmpty, checkedBank, checkOrdering, normalizeSetup, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
 import { DanError } from "./errors";
@@ -404,23 +405,53 @@ export class MockDanServer implements DanClient {
     return Promise.resolve(clone(order));
   }
 
+  /** Only where they can still play: a view that has gone takes its sounds with it. */
   getTriggers(): Promise<Triggers> {
-    return Promise.resolve(clone(normalizeTriggers(this.state.triggers)));
+    return Promise.resolve(clone(onlyOn(normalizeTriggers(this.state.triggers), this.views().map((view) => view.id))));
   }
 
   /** The demo signs in as the owner; the same checks as the shop server. */
   updateTriggers(triggers: Triggers): Promise<Triggers> {
     try {
-      this.state.triggers = checkTriggers(triggers);
-      return Promise.resolve(clone(this.state.triggers));
+      const next = checkTriggers(triggers);
+      checkPlaces(next, this.views().map((view) => view.id));
+      this.state.triggers = next;
+      return Promise.resolve(clone(next));
     } catch (error) {
       return Promise.reject(error);
     }
   }
 
   resetTriggers(): Promise<Triggers> {
-    this.state.triggers = clone(DEFAULT_TRIGGERS);
-    return Promise.resolve(clone(DEFAULT_TRIGGERS));
+    const next = onlyOn(DEFAULT_TRIGGERS, this.views().map((view) => view.id));
+    this.state.triggers = clone(next);
+    return Promise.resolve(clone(next));
+  }
+
+  private views(): View[] {
+    return normalizeViews(this.state.views, normalizeBoard(this.state.board));
+  }
+
+  getViews(): Promise<View[]> {
+    return Promise.resolve(clone(this.views()));
+  }
+
+  /** The demo signs in as the owner; the same checks as the shop server. */
+  updateViews(views: View[]): Promise<View[]> {
+    try {
+      const next = checkViews(views, normalizeBoard(this.state.board));
+      this.state.views = next;
+      return Promise.resolve(clone(next));
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
+  /** The demo is a restaurant: back to the kitchen and the pass. */
+  resetViews(): Promise<View[]> {
+    const next = kitchenAndPass(normalizeBoard(this.state.board));
+    this.state.views = next;
+    return Promise.resolve(clone(next));
   }
 
   getBoard(): Promise<Board> {
@@ -444,6 +475,8 @@ export class MockDanServer implements DanClient {
       const { moves, stuck } = planMoves(normalizeBoard(this.state.board), next, this.state.orders);
       if (stuck > 0) throw new DanError("board_tickets_stuck", `${stuck} tickets are in a column being removed and cannot go back a step. Move them on first.`);
       if (moves.length && !moveTickets) throw new DanError("board_has_tickets", `${moves.length} tickets are in columns being removed.`);
+      // Saved views keep up with the board; ones never saved are worked out from it each time.
+      if (this.state.views) this.state.views = followBoard(this.views(), normalizeBoard(this.state.board), next);
       this.state.board = next;
       this.remap(moves);
       return Promise.resolve(clone(next));
@@ -461,6 +494,7 @@ export class MockDanServer implements DanClient {
       const target = at ? DEFAULT_BOARD.columns.find((column) => column.role === at.role) : undefined;
       if (at && target && order.column !== target.id) moves.push({ orderId: order.id, from: at.id, to: target.id });
     }
+    if (this.state.views) this.state.views = followBoard(this.views(), current, DEFAULT_BOARD);
     this.state.board = clone(DEFAULT_BOARD);
     this.remap(moves);
     return Promise.resolve(clone(DEFAULT_BOARD));
