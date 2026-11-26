@@ -7,6 +7,7 @@ import { formatPence, orderLabel, primaryName, secondaryName } from "@/lib/forma
 import { messageForError, useI18n } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
 import type { MenuItem } from "@/lib/types";
+import { DishPhoto } from "./dish-photo";
 import { Button, PageTitle } from "./ui";
 
 type Entry = { phase: "dish" | "qty"; qty: number; digits: string };
@@ -162,6 +163,7 @@ export function Till() {
               {lines.length === 0 ? <li className="py-4 text-ink-soft">{t("tillEmpty")}</li> : null}
               {lines.map((line) => (
                 <li key={line.number} className="flex items-center gap-3 py-3">
+                  <DishPhoto photo={items.find((item) => item.number === line.number)?.photo} size="thumb" className="size-11 shrink-0" />
                   <span className="w-10 font-display text-xl text-accent-ink">{line.number}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block">{primaryName(line.nameEn, line.nameZh, locale)}</span>
@@ -187,7 +189,9 @@ export function Till() {
         </div>
 
         <section className="lg:sticky lg:top-20">
-          <div className="border border-rule bg-paper-raised px-4 py-3" aria-live="polite">
+          <div className="relative border border-rule bg-paper-raised px-4 py-3" aria-live="polite">
+            {/* The dish being keyed, so the right one is added. */}
+            <DishPhoto photo={exact?.photo} size="thumb" className="absolute top-3 right-3 size-20" alt="" />
             <p className="font-display text-[0.72rem] tracking-[0.18em] text-ink-soft uppercase">{t("tillLede")}</p>
             <p className="font-display text-5xl leading-none tabular-nums">{display}</p>
             <p className="mt-2 min-h-6 font-zh text-ink-soft">{previewText(exact, locale)}</p>

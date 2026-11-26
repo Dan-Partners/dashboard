@@ -107,6 +107,8 @@ export type MenuItem = {
   soldOut: boolean;
   kind: "item" | "set";
   includes: MenuInclude[];
+  /** The dish's photo, `images/<hash>`, served by the Dan cloud at the shop's address. */
+  photo?: string | null;
 };
 
 export type MenuItemPatch = Partial<

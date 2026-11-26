@@ -7,7 +7,8 @@ import { DanError, isDanError } from "./errors";
 import { formatPence, fulfilmentLabel, orderLabel } from "./format";
 import { english } from "./i18n";
 import { summarizeSales } from "./sales";
-import { GraphQLDanClient, ORDER_FIELDS } from "./graphql-client";
+import { GraphQLDanClient, ORDER_FIELDS, uploadMenuPhoto } from "./graphql-client";
+import { shrinkPhoto } from "./photos";
 import { live } from "./live";
 import { endpointFor, useServerHealth, type Servers } from "./server-health";
 import type { ServerName } from "./server-links";
@@ -59,6 +60,9 @@ type ShopContextValue = {
   logout: () => void;
   resetDemo: () => void;
   updateItem: (id: string, patch: MenuItemPatch) => Promise<void>;
+  /** Owner only, through the Dan cloud. */
+  addItemPhoto: (id: string, file: Blob) => Promise<void>;
+  removeItemPhoto: (id: string) => Promise<void>;
   placeOrder: (input: CreateOrderInput) => Promise<Order>;
   setOrderStatus: (id: string, status: OrderStatus) => Promise<void>;
   createCustomer: (input: { phone: string; name: string }) => Promise<Customer>;
@@ -376,6 +380,26 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         const end = endpointFor(getSnapshot().session);
         if (!end) return;
         await new GraphQLDanClient(end.url, end.token).updateMenuItem(id, patch);
+        await refreshRemote();
+      },
+      async addItemPhoto(id, file) {
+        const current = getSnapshot().session;
+        if (current?.mode === "demo") {
+          throw new DanError("photos_demo", english("menuPhotoDemo"));
+        }
+        if (!current?.cloudUrl || !current.cloudToken) {
+          throw new DanError("photos_cloud_only", english("menuPhotoNeedsCloud"));
+        }
+        const photo = await uploadMenuPhoto(current.cloudUrl, current.cloudToken, id, await shrinkPhoto(file));
+        // Shown at once; the shop server has it after its next sync.
+        setRemote((snapshot) =>
+          snapshot ? { ...snapshot, items: snapshot.items.map((item) => (item.id === id ? { ...item, photo } : item)) } : snapshot,
+        );
+      },
+      async removeItemPhoto(id) {
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        await new GraphQLDanClient(end.url, end.token).removeMenuItemPhoto(id);
         await refreshRemote();
       },
       async placeOrder(input) {

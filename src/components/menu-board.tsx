@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { isDanError } from "@/lib/errors";
 import { formatPence, parsePoundsToPence, primaryName, secondaryName } from "@/lib/format";
 import { messageForError, useI18n, type CopyKey } from "@/lib/i18n";
 import { useIsOwner, useShop } from "@/lib/shop-context";
 import { ALLERGENS, STATIONS, type Allergen, type MenuItem, type Station } from "@/lib/types";
+import { DishPhoto } from "./dish-photo";
 import { Button, Dialog, PageTitle } from "./ui";
 
 const ALLERGEN_KEY: Record<Allergen, CopyKey> = {
@@ -92,6 +93,7 @@ export function MenuBoard() {
                   </span>
                 ) : null}
               </button>
+              <DishPhoto photo={item.photo} size="thumb" className="mt-1 size-11 shrink-0 border border-rule" />
               <button
                 type="button"
                 role="switch"
@@ -173,6 +175,7 @@ function EditDish({ item, onClose, onSaved }: { item: MenuItem; onClose: () => v
 
   return (
     <Dialog open title={t("menuEdit")} onClose={onClose}>
+      <PhotoPicker itemId={item.id} />
       <form onSubmit={save} className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block">
@@ -256,5 +259,77 @@ function EditDish({ item, onClose, onSaved }: { item: MenuItem; onClose: () => v
         </div>
       </form>
     </Dialog>
+  );
+}
+
+/**
+ * The dish's photo: added or replaced through the Dan cloud (taken with the
+ * tablet's camera or chosen from its photos), removed on any server. It
+ * saves at once, apart from the form below.
+ */
+function PhotoPicker({ itemId }: { itemId: string }) {
+  const { t } = useI18n();
+  const shop = useShop();
+  const item = shop.snapshot?.items.find((entry) => entry.id === itemId);
+  const session = shop.persisted.session;
+  const input = useRef<HTMLInputElement>(null);
+  const [state, setState] = useState<{ busy: boolean; message: string | null; failed: boolean }>({ busy: false, message: null, failed: false });
+  const demo = session?.mode === "demo";
+  const cloudReady = Boolean(session?.cloudUrl && session.cloudToken) && shop.servers.cloud === "connected";
+  const why = demo ? t("menuPhotoDemo") : cloudReady ? null : t("menuPhotoNeedsCloud");
+
+  const run = (work: () => Promise<void>, done: string) => {
+    setState({ busy: true, message: null, failed: false });
+    void work()
+      .then(() => setState({ busy: false, message: done, failed: false }))
+      .catch((error: unknown) =>
+        setState({ busy: false, message: error instanceof Error ? error.message : t("errGeneric"), failed: true }),
+      );
+  };
+
+  return (
+    <section className="mb-5 border-b border-rule pb-5" aria-label={t("menuPhoto")} data-testid="photo-picker">
+      <p className="font-display text-[0.72rem] tracking-[0.16em] text-ink-soft uppercase">{t("menuPhoto")}</p>
+      <div className="mt-2 flex items-start gap-4">
+        {item?.photo ? (
+          <DishPhoto photo={item.photo} size="thumb" className="size-24 shrink-0 border border-rule" alt={item.nameEn} />
+        ) : (
+          <div className="grid size-24 shrink-0 place-items-center border border-dashed border-rule text-ink-soft" aria-hidden>
+            <svg viewBox="0 0 24 24" className="size-7" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <rect x="3" y="5" width="18" height="14" rx="1" />
+              <circle cx="9" cy="10" r="2" />
+              <path d="m21 16-5-5-8 8" />
+            </svg>
+          </div>
+        )}
+        <div className="min-w-0 flex-1 space-y-2">
+          <input
+            ref={input}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            data-testid="photo-input"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) run(() => shop.addItemPhoto(itemId, file), t("menuPhotoSaved"));
+            }}
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="line" disabled={Boolean(why) || state.busy} onClick={() => input.current?.click()}>
+              {item?.photo ? t("menuPhotoReplace") : t("menuPhotoAdd")}
+            </Button>
+            {item?.photo ? (
+              <Button type="button" variant="ghost" disabled={state.busy} onClick={() => run(() => shop.removeItemPhoto(itemId), t("menuPhotoRemoved"))}>
+                {t("menuPhotoRemove")}
+              </Button>
+            ) : null}
+          </div>
+          <p className={`text-sm ${state.failed ? "text-accent-ink" : "text-ink-soft"}`} role={state.failed ? "alert" : "status"} data-testid="photo-status">
+            {state.busy ? t("menuPhotoSending") : (state.message ?? why ?? t("menuPhotoHint"))}
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }

@@ -31,8 +31,9 @@ const PING_TIMEOUT_MS = 6000;
 const SHOP = "id name nameZh address city phone";
 const THEME = "preset typeface custom { paper ink accent chrome }";
 const STAFF = "id name role";
-const MENU_ITEM =
+const MENU_ITEM_BASE =
   "id number categoryId nameEn nameZh descriptionEn pricePence station allergens soldOut kind includes { number qty }";
+const MENU_ITEM = `${MENU_ITEM_BASE} photo`;
 /** The order fields the dashboard uses, for queries and the live channel alike. */
 export const ORDER_FIELDS = `id number createdAt source fulfilment status customerName phone address notes table totalPence payment { method status }
   lines { itemId number nameEn nameZh qty unitPricePence station kind components { number nameEn nameZh qty station } }`;
@@ -159,10 +160,25 @@ export class GraphQLDanClient implements DanClient {
   }
 
   async getMenu(): Promise<MenuPayload> {
-    const data = await this.run<{ menu: MenuPayload }>(
-      `query Menu { menu { categories { id nameEn nameZh sort } items { ${MENU_ITEM} } } }`,
+    const query = (fields: string) => `query Menu { menu { categories { id nameEn nameZh sort } items { ${fields} } } }`;
+    try {
+      return (await this.run<{ menu: MenuPayload }>(query(MENU_ITEM))).menu;
+    } catch (error) {
+      // A shop server from before dish photos does not know the field: ask again without it.
+      if (error instanceof Error && /photo/.test(error.message)) {
+        return (await this.run<{ menu: MenuPayload }>(query(MENU_ITEM_BASE))).menu;
+      }
+      throw error;
+    }
+  }
+
+  /** Owner only. Takes a dish's photo off (any server). */
+  async removeMenuItemPhoto(id: string): Promise<MenuItem> {
+    const data = await this.run<{ removeMenuItemPhoto: MenuItem }>(
+      `mutation RemoveMenuItemPhoto($id: ID!) { removeMenuItemPhoto(id: $id) { ${MENU_ITEM} } }`,
+      { id },
     );
-    return data.menu;
+    return data.removeMenuItemPhoto;
   }
 
   async updateMenuItem(id: string, patch: MenuItemPatch): Promise<MenuItem> {
@@ -258,4 +274,27 @@ export class GraphQLDanClient implements DanClient {
     );
     return data.sales;
   }
+}
+
+/**
+ * Sends a dish photo to the shop's staff API on the Dan cloud (owner only).
+ * Photos are added only there: a shop's own server answers photos_cloud_only.
+ */
+export async function uploadMenuPhoto(base: string, token: string, itemId: string, photo: Blob, fetchImpl: typeof fetch = fetch): Promise<string> {
+  let response: Response;
+  try {
+    response = await fetchImpl(`${base}/photos/${encodeURIComponent(itemId)}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": photo.type || "image/jpeg" },
+      body: photo,
+      credentials: "omit",
+    });
+  } catch {
+    throw new DanError("unreachable", "The Dan cloud could not be reached. Check the internet connection.");
+  }
+  const body = (await response.json().catch(() => null)) as { photo?: string; code?: string; message?: string } | null;
+  if (!response.ok || !body?.photo) {
+    throw new DanError(body?.code ?? "photo_failed", body?.message ?? "The photo was not saved. Try again.");
+  }
+  return body.photo;
 }
