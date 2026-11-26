@@ -13,8 +13,8 @@ import { expect, test, type Page } from "@playwright/test";
  * It changes data on that server (an order, a sold-out flag, a price), so
  * never point it at a shop in service.
  *
- * The backup warning test expects a server with no cloud backup set up (no
- * DAN_CLOUD_URL), so the owner is told backups are off.
+ * The no-cloud warning test expects a server with no Dan cloud set up (no
+ * DAN_CLOUD_URL), so the owner is told the data is on that machine only.
  */
 const server = process.env.DAN_E2E_SERVER_URL;
 const ownerEmail = process.env.DAN_E2E_OWNER_EMAIL ?? "";
@@ -214,7 +214,7 @@ test("an order from a table's link shows its table and is marked served", async 
   await expect(docket.getByRole("button", { name: "Served", exact: true })).toBeVisible();
 });
 
-test("the owner is warned when backups are off, the counter is not", async ({ page }) => {
+test("the owner is warned when there is no Dan cloud, the counter is not", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await connect(page);
   await page.getByRole("button", { name: "PIN", exact: true }).click();
@@ -222,15 +222,14 @@ test("the owner is warned when backups are off, the counter is not", async ({ pa
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
   await page.waitForTimeout(1000);
-  await expect(page.getByTestId("backup-notice")).toHaveCount(0);
+  await expect(page.getByTestId("cloud-notice")).toHaveCount(0);
 
   await connect(page);
   await page.getByLabel("Email").fill(ownerEmail);
   await page.getByLabel("Password").fill(ownerPassword);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  const notice = page.getByTestId("backup-notice");
-  await expect(notice).toHaveAttribute("data-health", "off");
-  await expect(notice).toContainText("Backups are off");
+  const notice = page.getByTestId("cloud-notice");
+  await expect(notice).toContainText("No Dan cloud: this shop's data is only on the shop server");
 
   // Hidden for the rest of the day, even after a reload.
   await notice.getByRole("button", { name: "Hide for today" }).click();
@@ -238,7 +237,7 @@ test("the owner is warned when backups are off, the counter is not", async ({ pa
   await page.reload();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
   await page.waitForTimeout(1000);
-  await expect(page.getByTestId("backup-notice")).toHaveCount(0);
+  await expect(page.getByTestId("cloud-notice")).toHaveCount(0);
 });
 
 test("the status corner shows the shop server connected, no cloud yet, and stamps are off", async ({ page }) => {

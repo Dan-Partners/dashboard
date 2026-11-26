@@ -2,7 +2,6 @@ import { asDanError, DanError } from "./errors";
 import { normalizeServerUrl } from "./url";
 import type {
   AwaitingPayment,
-  BackupStatus,
   CreateOrderInput,
   Customer,
   DanClient,
@@ -502,14 +501,6 @@ export class GraphQLDanClient implements DanClient {
   async getSyncStatus(): Promise<SyncStatus> {
     const data = await this.run<{ syncStatus: SyncStatus }>("query SyncStatus { syncStatus { mode pending lastSyncedAt } }");
     return data.syncStatus;
-  }
-
-  /** Owner only. Not part of DanClient: see BackupStatus. */
-  async getBackupStatus(): Promise<BackupStatus> {
-    const data = await this.run<{ backupStatus: BackupStatus }>(
-      "query BackupStatus { backupStatus { health lastRunAt lastSuccessAt lastResult } }",
-    );
-    return data.backupStatus;
   }
 
   async getSales(range: SalesRange): Promise<SalesSummary> {

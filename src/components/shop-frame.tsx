@@ -7,7 +7,7 @@ import { FEATURES } from "@/lib/features";
 import { formatStamp } from "@/lib/format";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useIsOwner, useSessionRedirect, useShop } from "@/lib/shop-context";
-import { BackupNotice } from "./backup-notice";
+import { CloudNotice } from "./cloud-notice";
 import { ConnectionStatus } from "./connection-status";
 import { FocusDialog } from "./focus-dialog";
 import { FocusFrame } from "./focus-frame";
@@ -172,7 +172,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
           </div>
         ) : null}
 
-        <BackupNotice session={session} />
+        <CloudNotice session={session} />
 
         <main id="main" className="px-4 py-6 pb-28 md:px-8 md:py-8 md:pb-10">
           {children}

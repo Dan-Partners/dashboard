@@ -258,20 +258,6 @@ export type SalesSummary = {
  * What a shop server implements, and what the dashboard calls. Each method
  * is one GraphQL operation; see graphql-client.ts.
  */
-/**
- * Whether the shop's data is safe off this machine: the shop server's nightly
- * encrypted backup to the Dan cloud. Owner only, and only from a real shop
- * server, so it is not part of DanClient (the demo has nothing to back up).
- */
-export type BackupHealth = "off" | "waiting" | "ok" | "failed" | "stale";
-
-export type BackupStatus = {
-  health: BackupHealth;
-  lastRunAt: string | null;
-  lastSuccessAt: string | null;
-  lastResult: string | null;
-};
-
 /** Whether the shop's changes are in step with the Dan cloud. Any signed-in staff. */
 export type SyncStatus = {
   mode: "not_running" | "synced" | "waiting";
