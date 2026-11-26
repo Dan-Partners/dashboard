@@ -20,6 +20,8 @@ export type Persisted = {
   focus: Focus | null;
   /** The kitchen screen's station filter on this tablet. */
   kitchenStations: Station[];
+  /** The ordering site address the Tools page last used for table QR codes. */
+  orderingAddress: string | null;
 };
 
 export const STORAGE_KEY = "dan.v1";
@@ -35,6 +37,7 @@ export const EMPTY_PERSISTED: Persisted = {
   theme: DEFAULT_THEME,
   focus: null,
   kitchenStations: [...STATIONS],
+  orderingAddress: null,
 };
 
 const listeners = new Set<() => void>();
@@ -64,6 +67,7 @@ export function normalizePersisted(value: unknown): Persisted {
     theme: normalizeTheme(record.theme),
     focus: normalizeFocus(record.focus),
     kitchenStations: normalizeStations(record.kitchenStations),
+    orderingAddress: typeof record.orderingAddress === "string" && record.orderingAddress.length <= 200 ? record.orderingAddress : null,
   };
 }
 

@@ -91,6 +91,7 @@ With the stop and start commands set, the tests run one at a time, so nothing el
 | Ticket | An 80mm bill, wok / fryer / rice / counter, in Chinese and English. One slip, or torn by station. Print uses the browser. |
 | Stamps | Customers by phone. Ten stamps, then a reward. **Switched off for now** (`FEATURES.stamps` in [`src/lib/features.ts`](src/lib/features.ts)): hidden everywhere, data kept. |
 | Sales | Today and this week. |
+| Tools | At the bottom of the menu, for everyone. **Table QR codes:** the ordering address comes from the Dan cloud address (`https://<shop>.dan.partners`), or the demo's `https://order.dan.partners`, and can be changed to the shop's own domain (kept on this device). Tables as `1-12, 20, A1` (letters and digits; a hyphen is a range; up to 200). Each card links to `<address>/?table=<n>`. Print gives A4, 6 cards a page, black on white with lines to cut along; each card also downloads as a PNG for a print shop. QR codes come from [`qrcode`](https://www.npmjs.com/package/qrcode) (MIT), drawn as SVG squares. Printers come next (Linear DAN-21). |
 
 ### Focus mode
 

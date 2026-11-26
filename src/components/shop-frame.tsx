@@ -26,6 +26,8 @@ const LINKS: { href: string; label: CopyKey; gloss: CopyKey; ownerOnly?: boolean
   ...(FEATURES.stamps ? [{ href: "/shop/loyalty", label: "navStamps" as CopyKey, gloss: "navStampsZh" as CopyKey }] : []),
   { href: "/shop/sales", label: "navSales", gloss: "navSalesZh", ownerOnly: true },
   { href: "/shop/payments", label: "navPayments", gloss: "navPaymentsZh", ownerOnly: true, cloudOnly: true },
+  // Last, at the bottom of the menu: setting-up tools.
+  { href: "/shop/tools", label: "navTools", gloss: "navToolsZh" },
 ];
 
 export function ShopFrame({ children }: { children: React.ReactNode }) {
@@ -201,7 +203,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
 
       <Dialog open={more} title={t("moreTitle")} onClose={() => setMore(false)}>
         <div className="flex flex-col">
-          {links.filter((link) => ["/shop/kitchen", "/shop/pass", "/shop/ticket", "/shop/sales", "/shop/payments"].includes(link.href)).map((link) => (
+          {links.filter((link) => ["/shop/kitchen", "/shop/pass", "/shop/ticket", "/shop/sales", "/shop/payments", "/shop/tools"].includes(link.href)).map((link) => (
             <Link
               key={link.href}
               href={link.href}
