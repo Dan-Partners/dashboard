@@ -50,3 +50,34 @@ test("a link with ?demo=1 opens the demo straight on the orders board", async ({
   await page.goto("/shop/orders");
   await expect(page.getByTestId("sign-in")).toBeVisible();
 });
+
+test("opened from the shop's own machine, the first page goes to its shop server", async ({ page }) => {
+  // On the shop's machine the dashboard and the shop server share one address,
+  // so a ping at this page's own address answers. (Stood in for here.)
+  await page.route("http://localhost:3000/graphql", (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          ping: {
+            ok: true,
+            product: "dan",
+            version: "0.1.0",
+            shop: { id: "golden-dragon", name: "Golden Dragon", nameZh: "金龍", address: "1 High St", city: "Leeds", phone: "" },
+            auth: { password: true, pin: true },
+            theme: null,
+          },
+        },
+      },
+    }),
+  );
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/connect$/);
+  await expect(page.getByRole("heading", { name: "Connect" })).toBeVisible();
+  await expect(page.getByLabel("Shop server")).toHaveValue("http://localhost:3000");
+
+  // Choosing the Dan cloud there is remembered: the first page stays put.
+  await page.getByTestId("use-cloud").click();
+  await expect(page.getByTestId("sign-in").filter({ visible: true })).toBeVisible();
+  await page.waitForTimeout(1500);
+  await expect(page).toHaveURL(/localhost:3000\/$/);
+});
