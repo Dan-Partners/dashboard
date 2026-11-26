@@ -135,6 +135,17 @@ export function Till() {
     }
   }
 
+  if (shop.snapshot && !shop.snapshot.ordering.settings.till) {
+    return (
+      <div>
+        {locked ? null : <PageTitle title={t("tillTitle")} gloss={locale === "zh-Hant" ? "Till" : "收銀"} />}
+        <p className="max-w-xl border-l-2 border-accent pl-3" data-testid="till-off">
+          {t("tillOff")}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div>
       {locked ? null : <PageTitle title={t("tillTitle")} gloss={locale === "zh-Hant" ? "Till" : "收銀"} />}

@@ -13,12 +13,39 @@ export function orderLabel(number: number, waiting = "…"): string {
   return number > 0 ? `#${number}` : waiting;
 }
 
-type FulfilmentKey = "fulfilCollection" | "fulfilDelivery" | "fulfilEatIn" | "table";
+type FulfilmentKey = "fulfilCollection" | "fulfilDelivery" | "fulfilEatIn" | "table" | "deliveryShop" | "deliveryUber";
 
-/** "Collection", "Delivery", or "Eat in · Table 3" for an order brought to a table. */
-export function fulfilmentLabel(order: { fulfilment: string; table?: string | null }, t: (key: FulfilmentKey) => string): string {
+/** "Collection", "Delivery · Uber Direct", or "Eat in · Table 3" for an order brought to a table. */
+export function fulfilmentLabel(
+  order: { fulfilment: string; table?: string | null; deliveryBy?: string | null },
+  t: (key: FulfilmentKey) => string,
+): string {
   if (order.fulfilment === "eat_in") return order.table ? `${t("fulfilEatIn")} · ${t("table")} ${order.table}` : t("fulfilEatIn");
-  return t(order.fulfilment === "delivery" ? "fulfilDelivery" : "fulfilCollection");
+  if (order.fulfilment === "delivery") {
+    if (order.deliveryBy === "uber_direct") return `${t("fulfilDelivery")} · ${t("deliveryUber")}`;
+    if (order.deliveryBy === "shop") return `${t("fulfilDelivery")} · ${t("deliveryShop")}`;
+    return t("fulfilDelivery");
+  }
+  return t("fulfilCollection");
+}
+
+type PaymentKey = "paymentPaidCard" | "paymentPaidBank" | "paymentDueShop" | "paymentCashOnDelivery" | "paidShort";
+
+/**
+ * How an order is paid, as the docket says it: paid by card or by bank
+ * transfer, or the amount still to take (at the shop, or cash on delivery).
+ */
+export function paymentLabel(
+  order: { payment?: { method: string; status: string } | null; fulfilment: string; totalPence: number },
+  t: (key: PaymentKey) => string,
+): { text: string; paid: boolean } | null {
+  if (!order.payment) return null;
+  if (order.payment.status === "paid") {
+    const key = order.payment.method === "bank_transfer" ? "paymentPaidBank" : order.payment.method === "card" ? "paymentPaidCard" : "paidShort";
+    return { text: t(key), paid: true };
+  }
+  const due = order.fulfilment === "delivery" ? t("paymentCashOnDelivery") : t("paymentDueShop");
+  return { text: `${due} · ${formatPence(order.totalPence)}`, paid: false };
 }
 
 export function formatPence(pence: number): string {

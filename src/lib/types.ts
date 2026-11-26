@@ -1,3 +1,4 @@
+import type { OrderingSetup } from "./ordering";
 /**
  * Dan shop-server contract.
  *
@@ -168,10 +169,14 @@ export type Order = {
   totalPence: number;
   /** Orders from the customer site say how they are paid. Counter and phone orders have none. */
   payment?: OrderPayment | null;
+  /** A delivery's fee, already in the total. */
+  deliveryFeePence?: number | null;
+  /** Who carries a delivery: the shop's own driver, or Uber Direct. */
+  deliveryBy?: "shop" | "uber_direct" | null;
 };
 
 export type OrderPayment = {
-  method: "card" | "at_shop";
+  method: "card" | "at_shop" | "bank_transfer";
   status: "due" | "paid";
 };
 
@@ -284,6 +289,8 @@ export type Session = {
 
 export type ShopSnapshot = {
   shop: Shop;
+  /** How the shop takes orders and payment. */
+  ordering: OrderingSetup;
   categories: Category[];
   items: MenuItem[];
   orders: Order[];
@@ -315,4 +322,19 @@ export type PrinterStatus = {
   failed: number;
   failing: boolean;
   lastError: string | null;
+};
+
+/** A bank transfer waiting for staff to see it arrive (held in the Dan cloud). */
+export type AwaitingPayment = {
+  id: string;
+  reference: string;
+  customerName: string;
+  phone: string;
+  fulfilment: Fulfilment;
+  table: string | null;
+  address: string;
+  lines: { number: number; nameEn: string; nameZh: string; qty: number; unitPricePence: number }[];
+  totalPence: number;
+  createdAt: string;
+  expiresAt: string;
 };

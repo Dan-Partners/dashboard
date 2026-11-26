@@ -36,7 +36,8 @@ export function FocusDialog({ open, onClose }: { open: boolean; onClose: () => v
     <Dialog open={open} title={t("focusTitle")} onClose={onClose}>
       <p className="mb-4 text-ink-soft">{t("focusLede")}</p>
       <div className="space-y-3" data-testid="focus-dialog">
-        {POSITIONS.map((position) => (
+        {/* The till's focus mode goes with the till. */}
+        {POSITIONS.filter((position) => position !== "till" || (shop.snapshot?.ordering.settings.till ?? true)).map((position) => (
           <div key={position} className="border border-rule bg-paper-raised p-3">
             <button
               type="button"

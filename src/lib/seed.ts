@@ -1,3 +1,4 @@
+import type { OrderingSetup } from "./ordering";
 import type { ThemeChoice } from "./theme";
 import type {
   Allergen,
@@ -683,6 +684,8 @@ export type DemoState = {
   nextOrderNumber: number;
   /** The demo shop's theme. The demo keeps it in this browser. */
   theme?: ThemeChoice;
+  /** How the demo shop takes orders and payment. Kept in this browser; v0.1's defaults when missing. */
+  ordering?: OrderingSetup;
 };
 
 function buildItems(): MenuItem[] {

@@ -1,6 +1,7 @@
 import { asDanError, DanError } from "./errors";
 import { normalizeServerUrl } from "./url";
 import type {
+  AwaitingPayment,
   BackupStatus,
   CreateOrderInput,
   Customer,
@@ -22,6 +23,7 @@ import type {
 } from "./types";
 import { DAN_PRODUCT } from "./types";
 import { normalizeTheme, type ThemeChoice } from "./theme";
+import { DEFAULT_SETUP, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
 
 /**
  * Talks to a Dan shop server over GraphQL. The wire contract is
@@ -38,9 +40,16 @@ const MENU_ITEM_BASE =
   "id number categoryId nameEn nameZh descriptionEn pricePence station allergens soldOut kind includes { number qty }";
 const MENU_ITEM = `${MENU_ITEM_BASE} photo`;
 const PRINTER = "id name host port paper stations copies enabled";
-/** The order fields the dashboard uses, for queries and the live channel alike. */
-export const ORDER_FIELDS = `id number createdAt source fulfilment status customerName phone address notes table totalPence payment { method status }
+const ORDERING =
+  "settings { till table collection delivery uberDirect payInPerson stripe bankTransfer deliveryFeePence deliveryMinimumPence } bank { accountName sortCode accountNumber referencePrefix } uberReady";
+/** The order fields a shop server from before delivery and bank transfer knows. */
+const ORDER_FIELDS_BASE = `id number createdAt source fulfilment status customerName phone address notes table totalPence payment { method status }
   lines { itemId number nameEn nameZh qty unitPricePence station kind components { number nameEn nameZh qty station } }`;
+let ordersWithDelivery = true;
+/** The order fields the dashboard uses, for queries and the live channel alike. */
+export function orderFields(): string {
+  return ordersWithDelivery ? `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy` : ORDER_FIELDS_BASE;
+}
 const CUSTOMER = "id phone name stamps rewardsRedeemed createdAt";
 const SALES =
   "range orderCount totalPence averagePence collectionCount deliveryCount eatInCount openCount topItems { number nameEn nameZh qty totalPence }";
@@ -250,12 +259,57 @@ export class GraphQLDanClient implements DanClient {
   }
 
   async getOrders(): Promise<{ orders: Order[] }> {
-    return this.run<{ orders: Order[] }>(`query Orders { orders { ${ORDER_FIELDS} } }`);
+    try {
+      return await this.run<{ orders: Order[] }>(`query Orders { orders { ${orderFields()} } }`);
+    } catch (error) {
+      // A shop server from before delivery fees: ask without them from now on.
+      if (ordersWithDelivery && error instanceof DanError && error.code === "bad_response") {
+        ordersWithDelivery = false;
+        return this.run<{ orders: Order[] }>(`query Orders { orders { ${orderFields()} } }`);
+      }
+      throw error;
+    }
+  }
+
+  /** How the shop takes orders and payment. A shop server from before them: v0.1's defaults. */
+  async getOrderingSettings(): Promise<OrderingSetup> {
+    try {
+      const data = await this.run<{ orderingSettings: OrderingSetup }>(`query Ordering { orderingSettings { ${ORDERING} } }`);
+      return data.orderingSettings;
+    } catch (error) {
+      if (error instanceof DanError && error.code === "bad_response") return DEFAULT_SETUP;
+      throw error;
+    }
+  }
+
+  /** Owner only. `bank` replaces the bank details (all empty clears them); left out, they stay. */
+  async updateOrderingSettings(settings: OrderingSettings, bank?: BankDetails | null): Promise<OrderingSetup> {
+    const data = await this.run<{ updateOrderingSettings: OrderingSetup }>(
+      `mutation SaveOrdering($settings: OrderingSettingsInput!, $bank: BankDetailsInput) { updateOrderingSettings(settings: $settings, bank: $bank) { ${ORDERING} } }`,
+      { settings, bank: bank ?? null },
+    );
+    return data.updateOrderingSettings;
+  }
+
+  /** Bank transfers waiting for staff (on the Dan cloud, where customers' orders are taken). */
+  async getAwaitingPayments(): Promise<AwaitingPayment[]> {
+    const data = await this.run<{ awaitingPayments: AwaitingPayment[] }>(
+      "query Awaiting { awaitingPayments { id reference customerName phone fulfilment table address totalPence createdAt expiresAt lines { number nameEn nameZh qty unitPricePence } } }",
+    );
+    return data.awaitingPayments;
+  }
+
+  async markBankTransferPaid(id: string): Promise<void> {
+    await this.run("mutation Paid($id: ID!) { markBankTransferPaid(id: $id) { id } }", { id });
+  }
+
+  async rejectBankTransfer(id: string): Promise<void> {
+    await this.run("mutation Reject($id: ID!) { rejectBankTransfer(id: $id) }", { id });
   }
 
   async createOrder(input: CreateOrderInput): Promise<Order> {
     const data = await this.run<{ createOrder: Order }>(
-      `mutation CreateOrder($input: CreateOrderInput!) { createOrder(input: $input) { ${ORDER_FIELDS} } }`,
+      `mutation CreateOrder($input: CreateOrderInput!) { createOrder(input: $input) { ${orderFields()} } }`,
       { input },
     );
     return data.createOrder;
@@ -263,7 +317,7 @@ export class GraphQLDanClient implements DanClient {
 
   async updateOrder(id: string, patch: { status: OrderStatus }): Promise<Order> {
     const data = await this.run<{ updateOrder: Order }>(
-      `mutation UpdateOrder($id: ID!, $status: OrderStatus!) { updateOrder(id: $id, status: $status) { ${ORDER_FIELDS} } }`,
+      `mutation UpdateOrder($id: ID!, $status: OrderStatus!) { updateOrder(id: $id, status: $status) { ${orderFields()} } }`,
       { id, status: patch.status },
     );
     return data.updateOrder;

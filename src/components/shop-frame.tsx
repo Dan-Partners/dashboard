@@ -27,6 +27,7 @@ const LINKS: { href: string; label: CopyKey; gloss: CopyKey; ownerOnly?: boolean
   ...(FEATURES.stamps ? [{ href: "/shop/loyalty", label: "navStamps" as CopyKey, gloss: "navStampsZh" as CopyKey }] : []),
   { href: "/shop/sales", label: "navSales", gloss: "navSalesZh", ownerOnly: true },
   { href: "/shop/payments", label: "navPayments", gloss: "navPaymentsZh", ownerOnly: true, cloudOnly: true },
+  { href: "/shop/ordering", label: "navOrdering", gloss: "navOrderingZh" },
   // Last, at the bottom of the menu: setting-up tools.
   { href: "/shop/tools", label: "navTools", gloss: "navToolsZh" },
 ];
@@ -66,7 +67,10 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const links = LINKS.filter((link) => (isOwner || !link.ownerOnly) && (!link.cloudOnly || Boolean(session.cloudUrl)));
+  const tillOn = shop.snapshot?.ordering.settings.till ?? true;
+  const links = LINKS.filter(
+    (link) => (isOwner || !link.ownerOnly) && (!link.cloudOnly || Boolean(session.cloudUrl)) && (tillOn || link.href !== "/shop/till"),
+  );
   const mobile = links.filter((link) => ["/shop/orders", "/shop/till", "/shop/menu", "/shop/loyalty"].includes(link.href));
 
   return (
@@ -205,7 +209,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
 
       <Dialog open={more} title={t("moreTitle")} onClose={() => setMore(false)}>
         <div className="flex flex-col">
-          {links.filter((link) => ["/shop/kitchen", "/shop/pass", "/shop/ticket", "/shop/sales", "/shop/payments", "/shop/tools"].includes(link.href)).map((link) => (
+          {links.filter((link) => ["/shop/kitchen", "/shop/pass", "/shop/ticket", "/shop/sales", "/shop/payments", "/shop/ordering", "/shop/tools"].includes(link.href)).map((link) => (
             <Link
               key={link.href}
               href={link.href}

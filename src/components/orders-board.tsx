@@ -4,12 +4,13 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { isDanError } from "@/lib/errors";
 import { FEATURES } from "@/lib/features";
-import { ago, formatPence, fulfilmentLabel, orderLabel, phoneDigits, primaryName, secondaryName } from "@/lib/format";
+import { ago, formatPence, fulfilmentLabel, paymentLabel, orderLabel, phoneDigits, primaryName, secondaryName } from "@/lib/format";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
 import { useTapGuard, type TapGuard } from "@/lib/tap-guard";
 import type { Order, OrderStatus } from "@/lib/types";
 import { Button, PageTitle } from "./ui";
+import { AwaitingTransfers } from "./awaiting-transfers";
 import { ReprintButton } from "./print-strip";
 import { WhereStrip } from "./where-strip";
 
@@ -41,6 +42,7 @@ export function OrdersBoard() {
     <div>
       {locked ? null : <PageTitle title={t("ordersTitle")} gloss={locale === "zh-Hant" ? "Orders" : "訂單"} />}
       {shop.persisted.session?.mode === "demo" ? <p className="mb-5 text-sm text-ink-soft">{t("ordersDemoNote")}</p> : null}
+      <AwaitingTransfers />
       {cardError ? (
         <p className="mb-4 border-l-2 border-accent pl-3 text-sm" role="alert">
           {cardError}
@@ -144,7 +146,7 @@ function Docket({
             data-testid="docket-payment"
             className={`mt-2 inline-block px-1.5 py-0.5 font-display text-sm leading-tight ${order.payment.status === "paid" ? "bg-ink text-paper" : "border border-accent text-accent-ink"}`}
           >
-            {order.payment.status === "paid" ? t("paymentPaidCard") : `${t("paymentDueShop")} · ${formatPence(order.totalPence)}`}
+            {paymentLabel(order, t)?.text}
           </p>
         ) : null}
         <ul className="mt-3 space-y-1">
@@ -167,7 +169,14 @@ function Docket({
         ) : null}
         {order.address ? <p className="text-sm text-ink-soft">{order.address}</p> : null}
         {order.notes ? <p className="mt-1 text-sm italic text-ink-soft">{order.notes}</p> : null}
-        <p className="mt-3 font-display text-xl">{formatPence(order.totalPence)}</p>
+        <p className="mt-3 font-display text-xl">
+          {formatPence(order.totalPence)}
+          {order.deliveryFeePence ? (
+            <span className="ml-2 font-body text-sm text-ink-soft">
+              {t("deliveryFeeShort")} {formatPence(order.deliveryFeePence)}
+            </span>
+          ) : null}
+        </p>
         <div className="mt-3 flex flex-wrap gap-2">
           {next ? (
             <Button

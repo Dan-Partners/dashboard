@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { isDanError } from "@/lib/errors";
 import { passOrders } from "@/lib/focus";
-import { ago, formatPence, orderLabel, primaryName } from "@/lib/format";
+import { ago, orderLabel, paymentLabel, primaryName } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
 import { useTapGuard, type TapGuard } from "@/lib/tap-guard";
@@ -54,7 +54,8 @@ function PassCard({ order, now, guard, onError }: { order: Order; now: number; g
   const shop = useShop();
   const [busy, setBusy] = useState(false);
   const done = order.fulfilment === "delivery" ? t("delivered") : order.fulfilment === "eat_in" ? t("served") : t("collected");
-  const due = order.payment?.status === "due";
+  const payment = paymentLabel(order, t);
+  const due = payment ? !payment.paid : false;
   return (
     <article className="glow glow-ready bg-paper-raised p-4" data-testid="pass-ticket">
       <WhereStrip order={order} size="pass" />
@@ -64,7 +65,7 @@ function PassCard({ order, now, guard, onError }: { order: Order; now: number; g
       </div>
       {due ? (
         <p className="mt-2 inline-block border-2 border-accent px-2 py-1 font-display text-lg text-accent-ink" data-testid="pass-due">
-          {t("paymentDueShop")} · {formatPence(order.totalPence)}
+          {payment?.text}
         </p>
       ) : null}
       <ul className="mt-3 space-y-0.5 text-lg">

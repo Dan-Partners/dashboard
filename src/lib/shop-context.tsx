@@ -7,8 +7,9 @@ import { DanError, isDanError } from "./errors";
 import { formatPence, fulfilmentLabel, orderLabel } from "./format";
 import { english } from "./i18n";
 import { summarizeSales } from "./sales";
-import { GraphQLDanClient, ORDER_FIELDS, uploadMenuPhoto } from "./graphql-client";
+import { GraphQLDanClient, orderFields, uploadMenuPhoto } from "./graphql-client";
 import { shrinkPhoto } from "./photos";
+import { normalizeSetup, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
 import { live } from "./live";
 import { endpointFor, useServerHealth, type Servers } from "./server-health";
 import type { ServerName } from "./server-links";
@@ -62,6 +63,8 @@ type ShopContextValue = {
   updateItem: (id: string, patch: MenuItemPatch) => Promise<void>;
   /** Owner only, through the Dan cloud. */
   addItemPhoto: (id: string, file: Blob) => Promise<void>;
+  /** Owner only: how the shop takes orders and payment (and its bank details). */
+  saveOrdering: (settings: OrderingSettings, bank?: BankDetails | null) => Promise<OrderingSetup>;
   /** Runs something on the server in use (printers, reprints). Not in the demo. */
   onServer: <T>(work: (client: GraphQLDanClient) => Promise<T>) => Promise<T>;
   removeItemPhoto: (id: string) => Promise<void>;
@@ -94,30 +97,34 @@ function snapshotFromPersisted(persisted: Persisted): ShopSnapshot | null {
     items: state.items,
     orders: state.orders,
     customers: state.customers,
+    ordering: normalizeSetup(state.ordering),
   };
 }
 
 async function pullRemote(baseUrl: string, token: string): Promise<Omit<ShopSnapshot, "shop"> & { theme: ThemeChoice }> {
   const client = new GraphQLDanClient(baseUrl, token);
-  const [menu, orders, customers, theme] = await Promise.all([
+  const [menu, orders, customers, theme, ordering] = await Promise.all([
     client.getMenu(),
     client.getOrders(),
     client.getCustomers(),
     client.getTheme(),
+    client.getOrderingSettings(),
   ]);
   return {
     categories: menu.categories,
     items: menu.items,
     orders: orders.orders,
     customers: customers.customers,
+    ordering,
     theme,
   };
 }
 
 /** What the shop server's live channel sends. */
-type ShopEvent = { kind: "order" | "menu" | "customers" | "theme" | "resync"; order: Order | null };
+type ShopEvent = { kind: "order" | "menu" | "customers" | "theme" | "settings" | "resync"; order: Order | null };
 
-const SHOP_EVENTS = `subscription ShopEvents { shopEvents { kind order { ${ORDER_FIELDS} } } }`;
+/** Asked when the live channel opens, with the order fields this server knows. */
+const shopEvents = () => `subscription ShopEvents { shopEvents { kind order { ${orderFields()} } } }`;
 
 /** The orders currently on the board, read outside React. */
 let remoteOrders: Order[] = [];
@@ -197,7 +204,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     const stop = live<{ shopEvents: ShopEvent }>({
       base: serverUrl,
       payload: { token },
-      query: SHOP_EVENTS,
+      query: shopEvents(),
       onOpen: () => {
         void refreshRemote()
           .then(() => {
@@ -240,6 +247,11 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
             .catch(() => undefined);
         } else if (event.kind === "theme") {
           void client.getTheme().then(adoptShopTheme).catch(() => undefined);
+        } else if (event.kind === "settings") {
+          void client
+            .getOrderingSettings()
+            .then((ordering) => setRemote((current) => (current ? { ...current, ordering } : current)))
+            .catch(() => undefined);
         } else {
           void refreshRemote().catch(() => undefined);
         }
@@ -339,10 +351,11 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         });
         adoptShopTheme(ping.theme);
         const authed = new GraphQLDanClient(baseUrl, result.token);
-        const [menu, orders, customers] = await Promise.all([
+        const [menu, orders, customers, ordering] = await Promise.all([
           authed.getMenu(),
           authed.getOrders(),
           authed.getCustomers(),
+          authed.getOrderingSettings(),
         ]);
         setRemote({
           shop: result.shop ?? ping.shop,
@@ -350,6 +363,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
           items: menu.items,
           orders: orders.orders,
           customers: customers.customers,
+          ordering,
         });
         setRemoteError(null);
       },
@@ -383,6 +397,16 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         if (!end) return;
         await new GraphQLDanClient(end.url, end.token).updateMenuItem(id, patch);
         await refreshRemote();
+      },
+      async saveOrdering(settings, bank) {
+        if (getSnapshot().session?.mode === "demo") {
+          return demoMutate((server) => server.updateOrderingSettings(settings, bank));
+        }
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        const saved = await new GraphQLDanClient(end.url, end.token).updateOrderingSettings(settings, bank);
+        setRemote((current) => (current ? { ...current, ordering: saved } : current));
+        return saved;
       },
       onServer(work) {
         const current = getSnapshot().session;

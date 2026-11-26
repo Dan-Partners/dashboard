@@ -1,3 +1,4 @@
+import { bankIsEmpty, checkedBank, checkOrdering, normalizeSetup, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
 import { DanError } from "./errors";
 import { phoneDigits } from "./format";
 import { summarizeSales } from "./sales";
@@ -166,9 +167,35 @@ export class MockDanServer implements DanClient {
     return Promise.resolve({ orders });
   }
 
+  getOrderingSettings(): Promise<OrderingSetup> {
+    return Promise.resolve(clone(normalizeSetup(this.state.ordering)));
+  }
+
+  /** The demo signs in as the owner, so it may change them; the same checks as the shop server. */
+  updateOrderingSettings(settings: OrderingSettings, bank?: BankDetails | null): Promise<OrderingSetup> {
+    try {
+      const current = normalizeSetup(this.state.ordering);
+      const nextBank = bank === undefined ? current.bank : bankIsEmpty(bank) ? null : checkedBank(bank!);
+      checkOrdering(settings, nextBank, false);
+      this.state.ordering = { settings: clone(settings), bank: nextBank, uberReady: false };
+      return Promise.resolve(clone(this.state.ordering));
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
   createOrder(input: CreateOrderInput): Promise<Order> {
     if (!ORDER_SOURCES.includes(input.source) || !FULFILMENTS.includes(input.fulfilment)) {
       return Promise.reject(new DanError("invalid", "Choose collection or delivery."));
+    }
+    const rules = normalizeSetup(this.state.ordering).settings;
+    if (input.source !== "online" && !rules.till) {
+      return Promise.reject(new DanError("till_off", "The till is switched off for this shop."));
+    }
+    // The demo's own online orders follow the owner's methods, as the cloud would.
+    if (input.source === "online") {
+      const allowed = input.table ? rules.table : input.fulfilment === "delivery" ? rules.delivery : rules.collection;
+      if (!allowed) return Promise.reject(new DanError("method_off", "This shop is not taking that kind of order."));
     }
     const table = input.table?.split(/\s+/).filter(Boolean).join(" ") || null;
     if (table && ([...table].length > 10 || !/^[\p{L}\p{N} -]+$/u.test(table))) {
@@ -213,13 +240,8 @@ export class MockDanServer implements DanClient {
       table,
       lines,
       totalPence: lines.reduce((sum, line) => sum + line.qty * line.unitPricePence, 0),
-      // Online orders in the demo alternate between paid by card and pay at the shop.
-      payment:
-        input.source === "online"
-          ? number % 2 === 0
-            ? { method: "card", status: "paid" }
-            : { method: "at_shop", status: "due" }
-          : null,
+      // Online orders in the demo alternate between the ways the shop takes payment.
+      payment: input.source === "online" ? demoPayment(rules, number) : null,
     };
     this.state.orders.unshift(order);
     return Promise.resolve(clone(order));
@@ -323,4 +345,12 @@ export class MockDanServer implements DanClient {
     this.state.customers.unshift(created);
     return created;
   }
+}
+
+function demoPayment(rules: OrderingSettings, number: number): Order["payment"] {
+  const ways: NonNullable<Order["payment"]>[] = [];
+  if (rules.stripe) ways.push({ method: "card", status: "paid" });
+  if (rules.payInPerson) ways.push({ method: "at_shop", status: "due" });
+  if (rules.bankTransfer) ways.push({ method: "bank_transfer", status: "paid" });
+  return ways.length ? ways[number % ways.length] : { method: "at_shop", status: "due" };
 }

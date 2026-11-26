@@ -118,9 +118,19 @@ function Slip({ order, shopInfo, sections }: { order: Order; shopInfo: Shop; sec
           <span>{t("tillTotal").toUpperCase()}</span>
           <span>{formatPence(order.totalPence)}</span>
         </p>
+        {order.deliveryFeePence ? (
+          <p className="flex justify-between">
+            <span>{t("deliveryFeeShort")}</span>
+            <span>{formatPence(order.deliveryFeePence)}</span>
+          </p>
+        ) : null}
         {order.payment ? (
           <p className="mt-1 border border-slip-ink px-2 py-1 text-center font-display text-base tracking-[0.12em]" data-testid="ticket-payment">
-            {order.payment.status === "paid" ? t("ticketPaidCard") : `${t("ticketToPay")} ${formatPence(order.totalPence)}`}
+            {order.payment.status === "paid"
+              ? order.payment.method === "bank_transfer"
+                ? t("ticketPaidBank")
+                : t("ticketPaidCard")
+              : `${order.fulfilment === "delivery" ? t("ticketCashOnDelivery") : t("ticketToPay")} ${formatPence(order.totalPence)}`}
           </p>
         ) : null}
         <p className="mt-3 text-center font-zh">{t("ticketThanks")}</p>
