@@ -51,6 +51,7 @@ import type {
 import { DEFAULT_STATIONS } from "./types";
 import { normalizeStations } from "./stations";
 import { normalizeAddons } from "./addons";
+import { afterFetch, newLiveOrders, tellOrder } from "./live-orders";
 import { normalizeViews, type View } from "./views";
 import type { CloudSession } from "./cloud";
 
@@ -199,6 +200,9 @@ type ShopEvent = { kind: "order" | "menu" | "customers" | "theme" | "settings" |
 /** Asked when the live channel opens, with the order fields this server knows. */
 const shopEvents = () => `subscription ShopEvents { shopEvents { kind order { ${orderFields()} } } }`;
 
+/** What the live channel has told of, so a full fetch does not put an older copy of an order back. */
+const liveOrders = newLiveOrders();
+
 /** The board in use, for telling which column a live order entered. */
 let boardNow: Board = DEFAULT_BOARD;
 /** Whether this page has noted the demo's board yet (its first look is not news). */
@@ -299,8 +303,11 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     const end = endpointFor(current);
     if (!current || !end) return;
     try {
+      const startedAt = liveOrders.tick;
       const { theme, ...next } = await pullRemote(end.url, end.token);
       adoptShopTheme(theme);
+      // A change the live channel brought while this was on its way is newer than what it fetched.
+      next.orders = afterFetch(liveOrders, next.orders, startedAt);
       remoteOrders = next.orders;
       boardNow = next.board;
       // What a load brings is noted, never sounded: a refresh or reconnect replays nothing.
@@ -358,6 +365,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       onData: ({ shopEvents: event }) => {
         if (event.kind === "order" && event.order) {
           const order = event.order;
+          tellOrder(liveOrders, order);
           seeOrder(order, boardNow);
           setRemote((current) => {
             if (!current) return current;
