@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectPinCannotSee, openSettings } from "./settings";
 
 /**
  * Ticket sounds with a real shop server syncing to a cloud, and the
@@ -50,7 +51,7 @@ test("a held bank transfer stays quiet, dings once in the kitchen when paid, and
   await signIn(counter, "owner");
 
   // Nothing saved for sounds: the default kitchen 叮.
-  await counter.getByRole("link", { name: /^Order board/ }).first().click();
+  await openSettings(counter, "flow");
   if ((await counter.getByTestId("sound-list").locator("li").count()) !== 1) {
     await counter.getByTestId("sounds-reset").click();
     await counter.getByTestId("sounds-reset").click();
@@ -58,7 +59,7 @@ test("a held bank transfer stays quiet, dings once in the kitchen when paid, and
   await expect(counter.getByLabel("When 1")).toHaveValue("role:incoming");
 
   // Collection paid by bank transfer.
-  await counter.getByRole("link", { name: /^Ordering & payments/ }).first().click();
+  await openSettings(counter, "ordering");
   await turn(counter, "collection", true);
   if (await sw(counter, "uberDirect").isEnabled()) await turn(counter, "uberDirect", false);
   await turn(counter, "bankTransfer", true);
@@ -112,17 +113,15 @@ test("a held bank transfer stays quiet, dings once in the kitchen when paid, and
   await kitchen.waitForTimeout(3000);
   expect(await played(kitchen)).toEqual([]);
 
-  // The counter PIN sees the board and the sounds, but cannot save either.
+  // The counter PIN does not see the board's set-up or the sounds (RK, 27 Nov 2026).
   const pinPage = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
   await signIn(pinPage, "pin");
-  await pinPage.getByRole("link", { name: /^Order board/ }).first().click();
-  await expect(pinPage.getByTestId("board-owner-only")).toBeVisible();
+  await expectPinCannotSee(pinPage, "flow");
   await expect(pinPage.getByRole("button", { name: "Save board" })).toHaveCount(0);
   await expect(pinPage.getByRole("button", { name: "Save sounds" })).toHaveCount(0);
-  await expect(pinPage.getByLabel("When 1")).toBeDisabled();
 
   // Put the shop back as it was.
-  await counter.getByRole("link", { name: /^Ordering & payments/ }).first().click();
+  await openSettings(counter, "ordering");
   await turn(counter, "bankTransfer", false);
   await counter.getByRole("button", { name: "Save", exact: true }).click();
   await expect(counter.getByTestId("ordering-message")).toContainText("Saved.");

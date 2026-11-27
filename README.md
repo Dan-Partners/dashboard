@@ -58,9 +58,9 @@ A business joins in the [Dan cloud](https://github.com/DanPartners/cloud), with 
 - **Forgotten password.** Dan sends a one-time link (`dan-cloud shop reset-link <email>`): `/reset#<token>`. Choosing a new password ends the old sign-ins.
 - **A shop that lives in the cloud** has one server. The status corner shows one light, "Dan cloud", and there is nothing to sync or switch to.
 - **Building the menu** (owner): on Menu, **Add dish**, **Edit categories** (add, rename, put in order, remove an empty one), and **Remove dish** inside a dish. One name is enough for a dish or a category; it is used for both languages. The demo does the same in the browser.
-- **Stations** (owner, on the Order board page): add, rename, reorder and remove the shop's stations, or have none. A station with dishes on it cannot be removed. The dish form, the kitchen's filter, tickets and printers follow the list. The counter PIN sees it read-only. `e2e/stations.spec.ts` covers the demo, the PIN and a cloud restaurant with no stations.
-- **Views** (owner, on the Order board page): see [Views](#views) below.
-- **Tools** (owner): **Shop details** (name, Chinese name, address, town, phone) and **Counter PIN** (set or change it; tablets on the old PIN are signed out).
+- **Stations** (owner, in Settings, Order flow): add, rename, reorder and remove the shop's stations, or have none. A station with dishes on it cannot be removed. The dish form, the kitchen's filter, tickets and printers follow the list. The counter PIN sees it read-only. `e2e/stations.spec.ts` covers the demo, the PIN and a cloud restaurant with no stations.
+- **Views** (owner, in Settings, Order flow): see [Views](#views) below.
+- **Settings, Shop** (owner): **Shop details** (name, Chinese name, address, town, phone) and **Counter PIN** (set or change it; tablets on the old PIN are signed out).
 - Passwords are cleared from a form once it has signed in, because a page already visited can stay in memory.
 
 `e2e/accounts.spec.ts` runs the whole of it against a real cloud: waiting list, an invite made with the cloud's command, joining, building a menu, an order numbered 1, signing in again by email and by PIN, and a reset link. It is skipped unless you point it at a cloud that allows this dashboard's address, with the dashboard built for that cloud:
@@ -142,9 +142,7 @@ It also cancels orders as the owner (the refund said first, a card given back wh
 | Ticket | An 80mm bill, by station, in Chinese and English. One slip, or torn by station. What was chosen for a dish is under it; the bill's add-ons are above the total. Print uses the browser. |
 | Stamps | Customers by phone. Ten stamps, then a reward. **Switched off for now** (`FEATURES.stamps` in [`src/lib/features.ts`](src/lib/features.ts)): hidden everywhere, data kept. |
 | Sales | Today and this week. |
-| Ordering & payments | Which order methods (Till, Table QR codes, Collection, Delivery by the shop, Delivery by Uber Direct) and payment methods (In person, Card online, Bank transfer) are on, the shop's delivery fee and minimum order, and the bank details for transfers. The owner saves; the counter PIN sees it read-only. Saved on the shop server and checked there (at least one of each stays on; delivery needs its fee and minimum; bank transfer its details; Uber Direct its account, DAN-23). With the till off, the Till and its focus mode go. The demo keeps its own copy in this browser. |
-| Order board | The owner's set-up for how orders flow: the board's **columns** (name, kind, colour, order), **views**, **sounds** (when a ticket enters a column, play a sound on any view or on the orders board) and **stations**. The counter PIN sees all of it read-only. Reset puts each back to what the shop's template started with. |
-| Tools | At the bottom of the menu, for everyone. **Table QR codes:** the ordering address comes from the Dan cloud address (`https://<shop>.dan.partners`), or the demo's `https://order.dan.partners`, and can be changed to the shop's own domain (kept on this device). Tables as `1-12, 20, A1` (letters and digits; a hyphen is a range; up to 200). Each card links to `<address>/?table=<n>`. Print gives A4, 6 cards a page, black on white with lines to cut along; each card also downloads as a PNG for a print shop. QR codes come from [`qrcode`](https://www.npmjs.com/package/qrcode) (MIT), drawn as SVG squares. **Printers:** the shop's receipt printers, which the shop's machine prints every new order on by itself (see the server README). The owner adds and edits them (name, address on the shop's network, port, 58/80 mm, the whole order or stations, copies, on/off); anyone can send a test print. Each shows Ready, Off or Not answering. Set up on the shop's machine only: through the cloud, Tools says so. |
+| Settings | At the bottom of the menu (in **More** on a phone): every setting of the shop, one page per section, from a list (DAN-33). **Shop**: details, counter PIN, and **Theme** (the dialog that used to sit beside the menu). **Ordering**: order types, ways to pay, delivery fee and minimum, bank details. **Order flow**: board columns, views, sounds, stations. **Tables & printers**: table QR cards and receipt printers. **Integrations**: Stripe and Uber Direct, each with its state and its own page. **Subscription**: Dan's deal and terms. The counter PIN sees **Tables & printers only**. See [Settings](#settings). |
 
 ### Options and add-ons
 
@@ -174,9 +172,27 @@ Every change the owner makes to an order is recorded on the server: who, when, e
 - The same rules run in the browser ([`src/lib/order-edit.ts`](src/lib/order-edit.ts)) to show the bill before saving, and for the demo, which keeps its own record in this browser. The server decides.
 - A shop server from before this is asked for orders without the new fields; the Edit page then says what the server answers.
 
+### Settings
+
+Decided 27 Nov 2026 (RK), built in DAN-33. Every setting of the shop in one place, `/shop/settings`: a list of sections, each its own page.
+
+| Section | Address | What is there |
+|---|---|---|
+| Shop | `/shop/settings/shop` | Shop details, counter PIN, theme. |
+| Ordering | `/shop/settings/ordering` | Order types, ways to pay, delivery fee and minimum, bank details. While Uber Direct or Stripe is not connected, its switch is greyed with a link to connect it. |
+| Order flow | `/shop/settings/flow` | Board columns, views, sounds, stations. |
+| Tables & printers | `/shop/settings/tables` | Table QR cards; receipt printers (set up on the shop's machine only). |
+| Integrations | `/shop/settings/integrations` | Stripe (`/stripe`) and Uber Direct (`/uber`), each with its state: Connected, Needs attention, Not connected, or Needs the Dan cloud. |
+| Subscription | `/shop/settings/subscription` | The shop's deal on card payments and free card orders used, Dan's terms and their acceptance, and "Dan charges nothing else today." |
+
+- **Stripe** (owner, through the Dan cloud): connect the shop's own account; then whether card payments are on (or waiting for Dan's terms, accepted under Subscription), and whether **Stripe is paying out** to the shop's bank or has payouts **on hold** (it needs something from the owner), with a link to the owner's own Stripe dashboard. Stripe pays card takings straight into the shop's bank; Dan never holds the money. A payout hold makes the integration say Needs attention.
+- **The counter PIN** sees Settings with **Tables & printers** only, where it prints table cards and test tickets (RK, 27 Nov 2026). Any other section, opened by its address, says it is the owner's. The server still refuses every owner-only change from the PIN; it still sends the PIN the board, views and ordering switches, which service needs.
+- **Old addresses forward**: `/shop/ordering`, `/shop/board`, `/shop/tools` and `/shop/payments` (where Stripe used to send owners back) go to their section, with the address's details. The forward is temporary (307), not permanent, because browsers remember a permanent one for good. See [`src/lib/old-addresses.ts`](src/lib/old-addresses.ts).
+- Add-ons stay on the Menu page, beside the dishes.
+
 ### Views
 
-A **view** is a screen for one part of the order flow: a kitchen, a pass, a packing bench. The owner makes them on the Order board page. Each has:
+A **view** is a screen for one part of the order flow: a kitchen, a pass, a packing bench. The owner makes them in Settings, Order flow. Each has:
 
 - **A name**, in one or two languages. One name is used for both.
 - **A look.** **Make**: what to make, large, split by station, oldest first; borders glow in the column's colour (grey once done, kept 15 minutes); a station filter greys and shrinks the rest, nothing is hidden; a tap moves the whole order on. **Hand over**: who it is for, large (the table number, or the name for collection and delivery); served, collected or delivered in one tap.
@@ -212,7 +228,7 @@ UI copy is English, with Chinese beside the labels that staff already say. The l
 
 ## Themes
 
-The theme belongs to the **shop**. It is stored on the shop server, and every tablet and the shop's [customer site](https://github.com/DanPartners/customer) use it. **Theme / 主題** is in the side menu and in **More** on a phone. Only the owner can change it, because customers see it; with the counter PIN the dialog shows the current theme without letting anyone change it. In the browser demo it stays in the browser.
+The theme belongs to the **shop**. It is stored on the shop server, and every tablet and the shop's [customer site](https://github.com/DanPartners/customer) use it. **Theme / 主題** is in Settings, Shop (it was beside the menu until DAN-33). Only the owner can change it, because customers see it; the counter PIN does not see it. In the browser demo it stays in the browser.
 
 | View | What it does |
 | --- | --- |

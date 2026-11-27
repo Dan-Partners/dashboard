@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectPinCannotSee, openSettings } from "./settings";
 import { openTill } from "./create-order";
 import { cloudOn, cloudSkip, joinNewShop } from "./cloud-join";
 
@@ -44,7 +45,7 @@ test("in the demo, the owner adds a view, locks a tablet to it, gives it a sound
   await expect(page).toHaveURL(/\/shop\/view\/pass$/);
   await expect(page.getByRole("heading", { name: "Pass" })).toBeVisible();
 
-  await page.getByRole("link", { name: /^Order board/ }).click();
+  await openSettings(page, "flow");
   const section = page.getByTestId("views-section");
   const rows = section.getByTestId("view-row");
   await expect(rows).toHaveCount(2);
@@ -93,7 +94,7 @@ test("in the demo, the owner adds a view, locks a tablet to it, gives it a sound
   await expect(status).toHaveCount(0);
 
   // A sound that plays on Packing only, when a ticket enters Preparing.
-  await page.getByRole("link", { name: /^Order board/ }).click();
+  await openSettings(page, "flow");
   const sounds = page.getByTestId("sounds-section");
   await expect(sounds.getByTestId("sound-list").locator("> li")).toHaveCount(1);
   await sounds.getByRole("button", { name: "Add a sound" }).click();
@@ -126,7 +127,7 @@ test("in the demo, the owner adds a view, locks a tablet to it, gives it a sound
 
   // The board gains a second in-progress column. Kitchen and Packing each showed the
   // whole of that stage, so they take the new column too; the pass does not.
-  await page.getByRole("link", { name: /^Order board/ }).click();
+  await openSettings(page, "flow");
   await page.getByRole("button", { name: "Add a column" }).click();
   await page.getByLabel("English name 3").fill("Boxing");
   await page.getByRole("button", { name: "Save board" }).click();
@@ -178,19 +179,14 @@ test("the counter PIN sees the views but cannot change them", async ({ page }) =
   await page.getByLabel("PIN").fill(pin);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
-  await page.getByRole("link", { name: /^Order board/ }).click();
-  const section = page.getByTestId("views-section");
-  await expect(section.getByTestId("views-owner-only")).toBeVisible();
-  const row = section.getByTestId("view-row").first();
-  await expect(row.locator("input").first()).toBeDisabled();
-  await expect(row.getByRole("radio").first()).toBeDisabled();
-  await expect(row.getByRole("checkbox").first()).toBeDisabled();
-  await expect(section.getByRole("button", { name: "Save views" })).toHaveCount(0);
-  await expect(section.getByRole("button", { name: "Add view" })).toHaveCount(0);
-  await expect(section.getByRole("button", { name: /^Remove/ })).toHaveCount(0);
+  // Settings shows the counter PIN Tables & printers only (RK, 27 Nov 2026); the views are the owner's.
+  await expectPinCannotSee(page, "flow");
+  await expect(page.getByTestId("views-section")).toHaveCount(0);
   // Anyone signed in can still open a view and lock a tablet to it.
+  const view = page.locator('nav[aria-label="Dan"] a[href^="/shop/view/"]').first();
+  const id = (await view.getAttribute("href"))!.replace("/shop/view/", "");
   await page.getByTestId("focus-button").first().click();
-  await expect(page.getByTestId("focus-dialog").getByTestId(`focus-${await row.getAttribute("data-view")}`)).toBeVisible();
+  await expect(page.getByTestId("focus-dialog").getByTestId(`focus-${id}`)).toBeVisible();
 });
 
 test("an online shop in the cloud starts with three columns and no views, and can add one", async ({ page }) => {
@@ -201,7 +197,7 @@ test("an online shop in the cloud starts with three columns and no views, and ca
   // No Kitchen, no Pass: staff work from the orders board.
   await expect(page.getByRole("link", { name: /^Kitchen/ })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /^Pass/ })).toHaveCount(0);
-  await page.getByRole("link", { name: /^Order board/ }).click();
+  await openSettings(page, "flow");
   await expect(page.getByTestId("board-columns").locator("> li")).toHaveCount(3);
   await expect(page.getByLabel("English name 1")).toHaveValue("New");
   await expect(page.getByLabel("English name 2")).toHaveValue("Ready");
@@ -245,7 +241,7 @@ test("an online shop in the cloud starts with three columns and no views, and ca
   await expect(fresh).toHaveCount(0);
 
   // The owner adds a packing bench for what is ready to hand over.
-  await page.getByRole("link", { name: /^Order board/ }).click();
+  await openSettings(page, "flow");
   await section.getByRole("button", { name: "Add view" }).click();
   const row = section.getByTestId("view-row").first();
   await row.getByPlaceholder("Name", { exact: true }).fill("Packing bench");
@@ -262,7 +258,7 @@ test("an online shop in the cloud starts with three columns and no views, and ca
   await expect(waiting).toHaveCount(0);
 
   // Reset takes an online shop back to no views, not to Kitchen and Pass.
-  await page.getByRole("link", { name: /^Order board/ }).click();
+  await openSettings(page, "flow");
   await section.getByTestId("views-reset").click();
   await section.getByTestId("views-reset").click();
   await expect(section.getByTestId("views-status")).toHaveText("Views reset.");
@@ -276,7 +272,7 @@ test("a restaurant in the cloud starts with Kitchen and Pass", async ({ page }) 
   await joinNewShop(page, "Restaurant", "views-restaurant");
   await expect(page.getByRole("link", { name: /^Kitchen/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /^Pass/ })).toBeVisible();
-  await page.getByRole("link", { name: /^Order board/ }).click();
+  await openSettings(page, "flow");
   await expect(page.getByTestId("board-columns").locator("> li")).toHaveCount(4);
   const section = page.getByTestId("views-section");
   await expect(section.getByTestId("view-row")).toHaveCount(2);

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectPinCannotSee, openSettings } from "./settings";
 
 /**
  * Order and payment methods. The first test runs on the demo. The second
@@ -34,8 +35,8 @@ test("in the demo, the owner switches methods on and off, with the server's rule
   await page.evaluate(() => localStorage.clear());
   await page.goto("/shop/orders?demo=1");
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
-  await page.getByRole("link", { name: /^Ordering & payments/ }).first().click();
-  await expect(page.getByRole("heading", { name: "Ordering & payments" })).toBeVisible();
+  await openSettings(page, "ordering");
+  await expect(page.getByRole("heading", { name: "Ordering", exact: true })).toBeVisible();
 
   // v0.1's offer.
   for (const [key, on] of [["till", true], ["table", true], ["collection", true], ["delivery", false], ["uberDirect", false], ["payInPerson", true], ["stripe", true], ["bankTransfer", false]] as const) {
@@ -109,7 +110,7 @@ test("a customer's delivery paid by bank transfer waits until staff mark it paid
   const who = `Grace ${String(Date.now()).slice(-6)}`;
   await page.setViewportSize({ width: 1280, height: 900 });
   await signIn(page, "owner");
-  await page.getByRole("link", { name: /^Ordering & payments/ }).first().click();
+  await openSettings(page, "ordering");
   await turn(page, "table", true);
   await turn(page, "collection", true);
   await turn(page, "delivery", true);
@@ -177,7 +178,7 @@ test("a customer's delivery paid by bank transfer waits until staff mark it paid
   await expect(customer.getByTestId("order-payment")).toHaveText("Paid by bank transfer");
 
   // Table ordering off: a table's link offers collection instead.
-  await page.getByRole("link", { name: /^Ordering & payments/ }).first().click();
+  await openSettings(page, "ordering");
   await turn(page, "table", false);
   await expect(await save(page)).toContainText("Saved.");
   await expect(async () => {
@@ -192,16 +193,14 @@ test("a customer's delivery paid by bank transfer waits until staff mark it paid
   await customer.getByRole("button", { name: /Rice/ }).first().click();
   await expect(customer.getByRole("button", { name: /^Add: 81/ })).toBeVisible();
 
-  // The counter PIN sees the settings but cannot change them.
+  // The counter PIN does not see them (RK, 27 Nov 2026: Settings shows it Tables & printers only).
   await signIn(page, "pin");
-  await page.getByRole("link", { name: /^Ordering & payments/ }).first().click();
-  await expect(page.getByTestId("ordering-owner-only")).toBeVisible();
-  await expect(sw(page, "till")).toBeDisabled();
+  await expectPinCannotSee(page, "ordering");
   await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
 
   // Put the shop back as it was.
   await signIn(page, "owner");
-  await page.getByRole("link", { name: /^Ordering & payments/ }).first().click();
+  await openSettings(page, "ordering");
   await turn(page, "delivery", false);
   await turn(page, "bankTransfer", false);
   await turn(page, "table", true);

@@ -151,7 +151,7 @@ export function UberSection({ onChanged }: { onChanged: () => void }) {
   const editable = isOwner && !demo;
 
   return (
-    <section aria-labelledby="ordering-uber" className="mt-8" data-testid="uber-section">
+    <section aria-labelledby="ordering-uber" data-testid="uber-section">
       <h2 id="ordering-uber" className="font-display text-2xl">
         {t("uberTitle")}
       </h2>
@@ -232,5 +232,15 @@ export function UberSection({ onChanged }: { onChanged: () => void }) {
         </p>
       ) : null}
     </section>
+  );
+}
+
+/** Settings, Integrations, Uber Direct: the shop's own Uber Direct account and how couriers are booked. */
+export function UberIntegration() {
+  const shop = useShop();
+  return (
+    <div className="max-w-3xl">
+      <UberSection onChanged={() => void shop.retryRemote()} />
+    </div>
   );
 }

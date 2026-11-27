@@ -8,28 +8,21 @@ import { writePersisted } from "@/lib/storage";
 import { normalizeOrderingAddress, orderingAddressFromCloud, parseTables, tableLink } from "@/lib/tables";
 import type { Shop } from "@/lib/types";
 import { PrintersSection } from "./printers-section";
-import { CounterPinSection, ShopDetailsSection } from "./shop-settings-section";
 import { QrCode, qrModules } from "./qr-code";
-import { Button, PageTitle, TextField } from "./ui";
+import { Button, TextField } from "./ui";
 
 /** The demo's own ordering site: the website's "Try the demo" QR code opens it too. */
 const DEMO_ORDERING = "https://order.dan.partners";
 
 /** Setting-up tools: table QR codes and the shop's printers. */
-export function ToolsView() {
-  const { t, locale } = useI18n();
+/** Settings, Tables & printers: table QR cards and the shop's receipt printers. */
+export function TablesSettings() {
   return (
     <div>
       {/* Printing from this page is the A4 card sheet; tickets keep their own size elsewhere. */}
       <style>{"@page { size: A4; margin: 10mm; }"}</style>
-      <div className="no-print">
-        <PageTitle title={t("toolsTitle")} gloss={locale === "zh-Hant" ? "Tools" : "工具"} />
-        <p className="-mt-2 mb-6 text-ink-soft">{t("toolsLede")}</p>
-      </div>
       <TableQrCodes />
       <PrintersSection />
-      <ShopDetailsSection />
-      <CounterPinSection />
     </div>
   );
 }

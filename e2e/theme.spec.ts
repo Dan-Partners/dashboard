@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { openSettings } from "./settings";
 
 const token = (page: Page, name: string) =>
   page.evaluate((property) => document.documentElement.style.getPropertyValue(property), name);
@@ -20,8 +21,14 @@ async function reloadWithoutReact(page: Page) {
 async function openThemeInDemo(page: Page) {
   await page.getByTestId("demo-button").click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
-  await page.getByTestId("theme-button").first().click();
-  await expect(page.getByRole("heading", { name: "Theme" })).toBeVisible();
+  await openTheme(page);
+}
+
+/** The theme is in Settings, Shop (DAN-33). */
+async function openTheme(page: Page) {
+  await openSettings(page, "shop");
+  await page.getByTestId("theme-button").filter({ visible: true }).click();
+  await expect(page.getByRole("heading", { name: "Theme", exact: true }).last()).toBeVisible();
 }
 
 const fontOf = (locator: Locator) => locator.evaluate((element) => getComputedStyle(element).fontFamily);
@@ -63,7 +70,7 @@ test("the theme follows the counter, and the printed ticket stays black on white
   await page.getByTestId("demo-button").click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
 
-  await page.getByTestId("theme-button").first().click();
+  await openTheme(page);
   await page.getByTestId("theme-seal").click();
   await page.getByRole("button", { name: "Done" }).click();
   // Seal: the side menu sits on vermilion, the page stays ivory.
@@ -71,7 +78,7 @@ test("the theme follows the counter, and the printed ticket stays black on white
   expect(await menu.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgb(184, 58, 46)");
   expect(await background(page)).toBe("rgb(245, 238, 220)");
 
-  await page.getByTestId("theme-button").first().click();
+  await openTheme(page);
   await page.getByTestId("theme-ink").click();
   await page.getByRole("button", { name: "Done" }).click();
   await page.getByRole("link", { name: /^Ticket/ }).click();
@@ -111,7 +118,7 @@ test("a custom theme keeps text readable, rejects half a colour, and can be rese
   await expect(page.locator("html")).toHaveAttribute("data-theme", "custom");
   expect(await token(page, "--dan-paper")).toBe("#102030");
 
-  await page.getByTestId("theme-button").first().click();
+  await openTheme(page);
   await page.getByRole("button", { name: "Customise" }).click();
   await page.getByRole("button", { name: "Reset to Dan" }).click();
   await expect(page.getByTestId("theme-dan")).toHaveAttribute("aria-pressed", "true");
@@ -126,7 +133,8 @@ test("the typeface can be changed and is saved, and the wordmark keeps the brand
   expect(await fontOf(page.getByText("Dan", { exact: true }).first())).toMatch(/Bodoni/i);
 
   await openThemeInDemo(page);
-  const heading = page.getByRole("heading", { name: "Orders" });
+  // The theme is opened from Settings, Shop: that page's heading shows the typeface.
+  const heading = page.getByRole("heading", { level: 1, name: "Shop" });
   const wordmark = page.getByText("Dan", { exact: true }).first();
   await expect(page.getByTestId("typeface-plex")).toHaveAttribute("aria-pressed", "true");
   await page.getByTestId("typeface-inter").click();
@@ -146,7 +154,7 @@ test("the typeface can be changed and is saved, and the wordmark keeps the brand
   expect(await fontOf(heading)).toMatch(/Inter/i);
 
   // The earlier look is still there to pick, and resetting colours leaves the typeface alone.
-  await page.getByTestId("theme-button").first().click();
+  await openTheme(page);
   await page.getByTestId("typeface-classic").click();
   expect(await fontOf(heading)).toMatch(/Bodoni/i);
   expect(await fontOf(page.locator("body"))).toMatch(/Source.Serif/i);

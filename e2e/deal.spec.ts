@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openSettings } from "./settings";
 
 /**
  * Dan's deal and terms, end to end: a shop server syncing to a Dan cloud run
@@ -35,7 +36,7 @@ test("card payments wait for the owner to accept Dan's terms and deal; then cust
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1280, height: 900 });
   await signIn(page);
-  await page.getByRole("link", { name: /^Payments/ }).first().click();
+  await openSettings(page, "subscription");
 
   // Stripe is ready, but cards wait for the terms.
   await expect(page.getByTestId("payments-waiting-terms")).toBeVisible({ timeout: 15_000 });
@@ -60,10 +61,21 @@ test("card payments wait for the owner to accept Dan's terms and deal; then cust
   await page.getByLabel("Your full name").fill("Mei Chan");
   await page.getByTestId("deal-agree").check();
   await page.getByTestId("deal-accept-button").click();
-  await expect(page.getByTestId("payments-on")).toBeVisible();
+  await expect(page.getByTestId("payments-waiting-terms")).toHaveCount(0);
   await expect(page.getByTestId("deal-accepted")).toContainText(`Mei Chan (${ownerEmail})`);
   await expect(page.getByTestId("deal-accepted")).toContainText("Terms version 2026-11-26");
   await expect(page.getByTestId("deal-accept")).toHaveCount(0);
+  // Dan's subscription, while no membership exists (RK, 27 Nov 2026).
+  await expect(page.getByTestId("nothing-else")).toHaveText("Dan charges nothing else today.");
+
+  // Integrations says Stripe is connected; its page says cards are on and Stripe pays the shop's bank.
+  await openSettings(page, "integrations");
+  await expect(page.locator('[data-integration="stripe"]').filter({ visible: true })).toHaveAttribute("data-state", "connected");
+  await page.locator('[data-integration="stripe"]').filter({ visible: true }).click();
+  await expect(page.getByTestId("payments-on")).toBeVisible();
+  await expect(page.getByTestId("stripe-cards")).toHaveText("On");
+  await expect(page.getByTestId("stripe-payouts")).toHaveText("On");
+  await expect(page.getByTestId("stripe-dashboard")).toHaveAttribute("href", "https://dashboard.stripe.com/");
 
   // Customers can pay by card now, on the shop's own account, with no Dan fee in the free orders.
   await expect(async () => {

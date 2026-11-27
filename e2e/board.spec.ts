@@ -8,7 +8,7 @@ test("the owner adds a column, tickets move through it, and removing it moves th
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
   await expect(page.locator("section[data-column]")).toHaveCount(4);
 
-  await page.goto("/shop/board");
+  await page.goto("/shop/settings/flow");
   await page.getByRole("button", { name: "Add a column" }).click();
   await page.getByLabel("English name 3").fill("Packing");
   await page.getByLabel("Chinese name 3").fill("包裝");
@@ -44,7 +44,7 @@ test("the owner adds a column, tickets move through it, and removing it moves th
   await expect(page.getByTestId("kitchen-ticket").filter({ hasText: number })).toHaveAttribute("aria-label", /Packing/);
 
   // Removing Packing with a ticket in it: the owner is told, then the ticket moves left.
-  await page.goto("/shop/board");
+  await page.goto("/shop/settings/flow");
   await page.getByRole("button", { name: "Remove column 3" }).click();
   await page.getByRole("button", { name: "Save board" }).click();
   await expect(page.getByTestId("board-moves")).toContainText("1 tickets: Packing → Preparing");
@@ -54,7 +54,7 @@ test("the owner adds a column, tickets move through it, and removing it moves th
   await expect(page.locator("section[data-column='preparing'] article", { hasText: number })).toBeVisible();
 
   // Reset asks for a second tap, then brings back the four columns.
-  await page.goto("/shop/board");
+  await page.goto("/shop/settings/flow");
   await page.getByTestId("board-reset").click();
   await expect(page.getByTestId("board-reset")).toHaveText("Tap again to confirm");
   await page.getByTestId("board-reset").click();

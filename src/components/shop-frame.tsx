@@ -9,6 +9,7 @@ import { useI18n, type CopyKey } from "@/lib/i18n";
 import { CREATE_ORDER_ROUTE } from "@/lib/focus";
 import { useIsOwner, useSessionRedirect, useShop } from "@/lib/shop-context";
 import { viewGloss, viewName, viewRoute } from "@/lib/views";
+import { SETTINGS_ROUTE } from "@/lib/settings";
 import { CloudNotice } from "./cloud-notice";
 import { ConnectionStatus } from "./connection-status";
 import { FocusDialog } from "./focus-dialog";
@@ -16,7 +17,6 @@ import { FocusFrame } from "./focus-frame";
 import { DanGlyph, DanMark } from "./mark";
 import { PrintStrip } from "./print-strip";
 import { ServerSwitchNotice } from "./server-switch-notice";
-import { ThemeButton, ThemeDialog } from "./theme-dialog";
 import { Button, Dialog, Splash } from "./ui";
 
 type NavLink = { href: string; label: CopyKey; gloss: CopyKey; ownerOnly?: boolean; cloudOnly?: boolean };
@@ -30,11 +30,9 @@ const LINKS: NavLink[] = [
   { href: "/shop/ticket", label: "navTicket", gloss: "navTicketZh" },
   ...(FEATURES.stamps ? [{ href: "/shop/loyalty", label: "navStamps" as CopyKey, gloss: "navStampsZh" as CopyKey }] : []),
   { href: "/shop/sales", label: "navSales", gloss: "navSalesZh", ownerOnly: true },
-  { href: "/shop/payments", label: "navPayments", gloss: "navPaymentsZh", ownerOnly: true, cloudOnly: true },
-  { href: "/shop/ordering", label: "navOrdering", gloss: "navOrderingZh" },
-  { href: "/shop/board", label: "navBoard", gloss: "navBoardZh" },
   // Last, at the bottom of the menu: setting-up tools.
-  { href: "/shop/tools", label: "navTools", gloss: "navToolsZh" },
+  // Every setting, one place (DAN-33). The counter PIN finds Tables & printers there.
+  { href: SETTINGS_ROUTE, label: "navSettings", gloss: "navSettingsZh" },
 ];
 
 export function ShopFrame({ children }: { children: React.ReactNode }) {
@@ -45,7 +43,6 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [more, setMore] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
-  const [themeOpen, setThemeOpen] = useState(false);
   const [focusOpen, setFocusOpen] = useState(false);
   const [now, setNow] = useState(() => new Date());
 
@@ -85,7 +82,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
   // On a phone, creating an order is one tap from anywhere: it sits in the bar where the till was.
   const newOrder: Shown[] = tillOn ? [{ href: CREATE_ORDER_ROUTE, name: t("navNewOrder"), gloss: t("navNewOrderZh") }] : [];
   const mobile = [...links.filter((link) => link.href === "/shop/orders"), ...newOrder, ...links.filter((link) => ["/shop/menu", "/shop/loyalty"].includes(link.href))];
-  const inMore = (href: string) => href.startsWith("/shop/view/") || ["/shop/ticket", "/shop/sales", "/shop/payments", "/shop/ordering", "/shop/board", "/shop/tools"].includes(href);
+  const inMore = (href: string) => href.startsWith("/shop/view/") || ["/shop/ticket", "/shop/sales", SETTINGS_ROUTE].includes(href);
 
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[13.75rem_minmax(0,1fr)]">
@@ -108,7 +105,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="flex flex-col px-2 pt-3" aria-label="Dan">
           {links.map((link) => {
-            const active = pathname === link.href || (link.href === "/shop/orders" && pathname.startsWith("/shop/orders/"));
+            const active = pathname === link.href || ((link.href === "/shop/orders" || link.href === SETTINGS_ROUTE) && pathname.startsWith(`${link.href}/`));
             return (
               <Link
                 key={link.href}
@@ -124,7 +121,6 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="mt-auto space-y-2 px-4 pt-8 pb-5">
           <FocusButton label={t("focusButton")} gloss={t("focusButtonZh")} onClick={() => setFocusOpen(true)} />
-          <ThemeButton label={t("theme")} gloss={t("themeZh")} onClick={() => setThemeOpen(true)} />
           <LanguageToggle locale={locale} setLocale={setLocale} labelEn={t("langEn")} labelZh={t("langZh")} />
           {session.mode === "demo" ? (
             <Button variant="ghost" className="w-full" onClick={() => setConfirmReset(true)}>
@@ -243,14 +239,6 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
                 setFocusOpen(true);
               }}
             />
-            <ThemeButton
-              label={t("theme")}
-              gloss={t("themeZh")}
-              onClick={() => {
-                setMore(false);
-                setThemeOpen(true);
-              }}
-            />
             <LanguageToggle locale={locale} setLocale={setLocale} labelEn={t("langEn")} labelZh={t("langZh")} />
           </div>
           {session.mode === "demo" ? (
@@ -297,7 +285,6 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
         </div>
       </Dialog>
 
-      <ThemeDialog open={themeOpen} onClose={() => setThemeOpen(false)} />
       <FocusDialog open={focusOpen} onClose={() => setFocusOpen(false)} />
     </div>
   );

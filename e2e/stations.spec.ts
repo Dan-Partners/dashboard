@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectPinCannotSee, openSettings } from "./settings";
 import { openTill } from "./create-order";
 import { cloudOn, cloudSkip, joinNewShop } from "./cloud-join";
 
@@ -24,7 +25,7 @@ async function openDemo(page: Page) {
 
 test("in the demo, the owner adds a station, moves a dish to it and renames another", async ({ page }) => {
   await openDemo(page);
-  await page.getByRole("link", { name: /^Order board/ }).click();
+  await openSettings(page, "flow");
   const section = page.getByTestId("stations-section");
   const rows = section.getByTestId("station-row");
   await expect(rows).toHaveCount(4);
@@ -82,7 +83,7 @@ test("in the demo, the owner adds a station, moves a dish to it and renames anot
   await expect(page.getByTestId("ticket-slip").first()).toContainText("BAR");
 
   // The bar now has a dish, so it cannot go; the list is kept after a reload.
-  await page.getByRole("link", { name: /^Order board/ }).click();
+  await openSettings(page, "flow");
   await expect(section.locator('[data-station="bar"]').getByTestId("station-dishes")).toHaveText("1 dish");
   await expect(section.locator('[data-station="bar"]').getByRole("button", { name: "Remove: Bar" })).toBeDisabled();
   await page.reload();
@@ -103,12 +104,9 @@ test("the counter PIN sees the stations but cannot change them", async ({ page }
   await page.getByLabel("PIN").fill(pin);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
-  await page.getByRole("link", { name: /^Order board/ }).click();
-  const section = page.getByTestId("stations-section");
-  await expect(section.getByTestId("stations-owner-only")).toBeVisible();
-  await expect(section.getByTestId("station-row").first().locator("input").first()).toBeDisabled();
-  await expect(section.getByRole("button", { name: "Save stations" })).toHaveCount(0);
-  await expect(section.getByRole("button", { name: "Add station" })).toHaveCount(0);
+  // Settings shows the counter PIN Tables & printers only (RK, 27 Nov 2026); the stations are the owner's.
+  await expectPinCannotSee(page, "flow");
+  await expect(page.getByTestId("stations-section")).toHaveCount(0);
 });
 
 test("a restaurant in the cloud can have no stations at all", async ({ page }) => {
@@ -117,7 +115,7 @@ test("a restaurant in the cloud can have no stations at all", async ({ page }) =
   await joinNewShop(page, "Restaurant", "stations");
 
   // Every station goes: there are no dishes on them yet.
-  await page.getByRole("link", { name: /^Order board/ }).click();
+  await openSettings(page, "flow");
   const section = page.getByTestId("stations-section");
   const rows = section.getByTestId("station-row");
   await expect(rows).toHaveCount(4);
@@ -157,7 +155,7 @@ test("a restaurant in the cloud can have no stations at all", async ({ page }) =
   await expect(ticket.getByTestId("station-strip").locator("span")).toHaveCount(0);
 
   // Stations can come back later.
-  await page.getByRole("link", { name: /^Order board/ }).click();
+  await openSettings(page, "flow");
   await section.getByRole("button", { name: "Add station" }).click();
   await rows.first().getByPlaceholder("Name", { exact: true }).fill("Oven");
   await section.getByRole("button", { name: "Save stations" }).click();

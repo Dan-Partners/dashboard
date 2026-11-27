@@ -13,6 +13,8 @@ export type PaymentsStatus = {
   cardPayments: boolean;
   /** The Stripe account can take charges. Missing from an older cloud. */
   accountReady?: boolean;
+  /** Stripe is paying the takings out to the shop's bank; false while it holds them. Missing from an older cloud. */
+  payoutsEnabled?: boolean;
   /** Dan's deal with the shop now. */
   deal?: Deal;
   /** Paid card orders so far. */

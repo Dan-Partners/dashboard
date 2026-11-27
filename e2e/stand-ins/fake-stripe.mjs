@@ -9,6 +9,8 @@
 //   GET  /__state            what was asked: intents, refunds
 //   POST /__refunds/fail     refunds from now on come back "failed"
 //   POST /__refunds/ok       refunds succeed again (the default)
+//   POST /__payouts/hold     the shop's account has payouts on hold
+//   POST /__payouts/ok       payouts are on again (the default)
 //
 // It takes no card and moves no money. A test that needs a payment to have
 // succeeded sends the cloud Stripe's own notice (payment_intent.succeeded),
@@ -16,7 +18,7 @@
 import http from "node:http";
 
 const port = Number(process.argv[2] ?? process.env.PORT ?? 9130);
-const state = { intents: [], refunds: [], refundsFail: false };
+const state = { intents: [], refunds: [], refundsFail: false, payoutsHeld: false };
 const send = (res, status, body) => {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(body));
@@ -30,13 +32,18 @@ http
       const form = Object.fromEntries(new URLSearchParams(raw));
       const path = new URL(req.url, "http://x").pathname;
       if (path === "/__state") return send(res, 200, state);
+      // Stripe holding the shop's payouts (it needs something from the owner), or paying out again.
+      if (path === "/__payouts/hold" || path === "/__payouts/ok") {
+        state.payoutsHeld = path.endsWith("hold");
+        return send(res, 200, { payoutsHeld: state.payoutsHeld });
+      }
       if (path === "/__refunds/fail" || path === "/__refunds/ok") {
         state.refundsFail = path.endsWith("fail");
         return send(res, 200, { refundsFail: state.refundsFail });
       }
       if (path === "/v1/accounts" && req.method === "POST") return send(res, 200, { id: "acct_e2e", charges_enabled: false, details_submitted: false });
       const account = path.match(/^\/v1\/accounts\/([^/]+)$/);
-      if (account) return send(res, 200, { id: account[1], charges_enabled: true, details_submitted: true });
+      if (account) return send(res, 200, { id: account[1], charges_enabled: true, details_submitted: true, payouts_enabled: !state.payoutsHeld });
       if (path === "/v1/account_links") return send(res, 200, { url: "https://connect.stripe.test/onboarding" });
       if (path === "/v1/payment_intents" && req.method === "POST") {
         // Each run gets its own ids, so a restart never reuses one an order already holds.

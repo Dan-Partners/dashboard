@@ -71,7 +71,7 @@ test("the owner adds a sound for a column kind; a board change that moves ticket
   await expect(owner.getByRole("heading", { name: "Orders" })).toBeVisible();
 
   // A chime in the kitchen when a ticket enters any in-progress column, and a Packing column.
-  await owner.goto("/shop/board");
+  await owner.goto("/shop/settings/flow");
   await owner.getByRole("button", { name: "Add a sound" }).click();
   await owner.getByLabel("When 2").selectOption("role:in_progress");
   await owner.getByLabel("Kitchen 2").check();
@@ -98,7 +98,7 @@ test("the owner adds a sound for a column kind; a board change that moves ticket
   await expect(async () => expect((await played(kitchen)).map((entry) => entry.sound)).toEqual(["chime"])).toPass({ timeout: 10_000 });
 
   // The owner removes Packing: the ticket moves back to Preparing (in progress), silently.
-  await owner.goto("/shop/board");
+  await owner.goto("/shop/settings/flow");
   await owner.getByRole("button", { name: "Remove column 3" }).click();
   await owner.getByRole("button", { name: "Save board" }).click();
   await owner.getByRole("button", { name: "Save and move them" }).click();

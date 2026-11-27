@@ -6,8 +6,10 @@ import { parsePoundsToPence } from "@/lib/format";
 import { messageForError, useI18n, type CopyKey } from "@/lib/i18n";
 import { bankIsEmpty, checkedBank, checkOrdering, DEFAULT_SETUP, sortCodeDisplay, type BankDetails, type OrderingSettings } from "@/lib/ordering";
 import { useIsOwner, useShop } from "@/lib/shop-context";
-import { Button, PageTitle, TextField } from "./ui";
-import { UberSection } from "./uber-section";
+import Link from "next/link";
+import { settingsRoute } from "@/lib/settings";
+import { Button, TextField } from "./ui";
+import { usePaymentsStatus } from "./payments-view";
 
 type Flag = Exclude<keyof OrderingSettings, "deliveryFeePence" | "deliveryMinimumPence">;
 
@@ -33,7 +35,7 @@ const pounds = (pence: number | null) => (pence === null ? "" : (pence / 100).to
  * sees the same screen, read-only, as with the theme.
  */
 export function OrderingView() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const shop = useShop();
   const isOwner = useIsOwner();
   const setup = shop.snapshot?.ordering ?? DEFAULT_SETUP;
@@ -66,14 +68,29 @@ export function OrderingView() {
     }
   };
 
+  // Card payments need Stripe connected (Integrations). Only the owner, signed in to the cloud, can ask.
+  const payments = usePaymentsStatus();
+  const stripeMissing = payments.status ? !payments.status.cardPayments : false;
+
   const rows = (list: typeof ORDER_ROWS) =>
     list.map((row) => {
       const locked = row.key === "uberDirect" && !setup.uberReady && !settings.uberDirect;
+      // Greyed with a way to connect while its service is not connected (RK, 27 Nov 2026).
+      const missing = row.key === "uberDirect" ? !setup.uberReady : row.key === "stripe" ? stripeMissing : false;
       return (
         <li key={row.key} className="flex items-center justify-between gap-4 py-3">
-          <div className="min-w-0">
+          <div className={`min-w-0 ${missing ? "opacity-70" : ""}`}>
             <p className="font-display text-lg">{t(row.label)}</p>
             <p className="text-sm text-ink-soft">{t(row.hint)}</p>
+            {missing ? (
+              <Link
+                href={`${settingsRoute("integrations")}/${row.key === "uberDirect" ? "uber" : "stripe"}`}
+                className="inline-flex min-h-11 items-center text-sm text-accent-ink underline"
+                data-testid={`connect-${row.key}`}
+              >
+                {t(row.key === "uberDirect" ? "orderingConnectUber" : "orderingConnectStripe")} ›
+              </Link>
+            ) : null}
           </div>
           <button
             type="button"
@@ -93,8 +110,7 @@ export function OrderingView() {
 
   return (
     <div className="max-w-3xl">
-      <PageTitle title={t("orderingTitle")} gloss={locale === "zh-Hant" ? "Ordering & payments" : "點餐及付款"} />
-      <p className="-mt-2 mb-6 text-ink-soft">{t("orderingLede")}</p>
+      <p className="mb-6 text-ink-soft">{t("orderingLede")}</p>
       {!isOwner ? (
         <p className="mb-6 border-l-2 border-accent pl-3" data-testid="ordering-owner-only">
           {t("orderingOwnerOnly")}
@@ -113,8 +129,6 @@ export function OrderingView() {
           </div>
         ) : null}
       </section>
-
-      <UberSection onChanged={() => void shop.retryRemote()} />
 
       <section aria-labelledby="ordering-payments" className="mt-8">
         <h2 id="ordering-payments" className="font-display text-2xl">

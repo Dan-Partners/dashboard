@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openSettings } from "./settings";
 
 /**
  * Delivery by Uber Direct, end to end: a shop server syncing to a Dan cloud
@@ -51,7 +52,7 @@ test("the owner connects Uber, a customer pays the quote, and staff follow the c
   const who = `Uma ${String(Date.now()).slice(-6)}`;
   await page.setViewportSize({ width: 1280, height: 900 });
   await signIn(page);
-  await page.getByRole("link", { name: /^Ordering & payments/ }).first().click();
+  await openSettings(page, "integrations", "uber");
   const uber = page.getByTestId("uber-section");
 
   // Not connected (or left connected by a run before): connect with the shop's own keys.
@@ -175,7 +176,7 @@ test("the owner connects Uber, a customer pays the quote, and staff follow the c
   await expect(customer.getByTestId("order-status")).toHaveAttribute("data-status", "completed", { timeout: 20_000 });
 
   // Put the shop back as it was.
-  await page.getByRole("link", { name: /^Ordering & payments/ }).first().click();
+  await openSettings(page, "ordering");
   await turn(page, "uberDirect", false);
   await turn(page, "bankTransfer", false);
   await page.getByRole("button", { name: "Save", exact: true }).click();

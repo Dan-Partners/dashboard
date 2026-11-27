@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import { openSettings } from "./settings";
 import fs from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { openTill } from "./create-order";
@@ -72,7 +73,7 @@ test("the owner adds a printer; tests, new orders and reprints print; a silent p
   execSync(startPrinter!, { stdio: "inherit" });
   await page.setViewportSize({ width: 1280, height: 900 });
   await signIn(page, "owner");
-  await page.getByRole("link", { name: /^Tools/ }).first().click();
+  await openSettings(page, "tables");
   const section = page.getByTestId("printers");
   // Start clean: printers left by an earlier run would print too.
   await expect(section.getByRole("button", { name: "Add a printer" })).toBeVisible();
@@ -146,14 +147,14 @@ test("the owner adds a printer; tests, new orders and reprints print; a silent p
 
   // The counter PIN can test, not change printers.
   await signIn(page, "pin");
-  await page.getByRole("link", { name: /^Tools/ }).first().click();
+  await openSettings(page, "tables");
   await expect(section.getByTestId("printer-row")).toHaveCount(1);
   await expect(section.getByRole("button", { name: "Add a printer" })).toHaveCount(0);
   await expect(section.getByRole("button", { name: "Edit" })).toHaveCount(0);
 
   // Tidy up: the owner removes it.
   await signIn(page, "owner");
-  await page.getByRole("link", { name: /^Tools/ }).first().click();
+  await openSettings(page, "tables");
   await section.getByTestId("printer-row").getByRole("button", { name: "Edit" }).click();
   page.once("dialog", (dialog) => void dialog.accept());
   await page.getByTestId("printer-form").getByRole("button", { name: "Remove" }).click();

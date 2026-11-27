@@ -6,7 +6,7 @@ import { checkBoard, columnName, DEFAULT_BOARD, shownColour, MAX_COLUMNS, newCol
 import { isDanError } from "@/lib/errors";
 import { messageForError, useI18n, type CopyKey } from "@/lib/i18n";
 import { useIsOwner, useShop } from "@/lib/shop-context";
-import { Button, PageTitle } from "./ui";
+import { Button } from "./ui";
 
 const ROLE_WORD: Record<ColumnRole, CopyKey> = {
   incoming: "roleIncoming",
@@ -119,8 +119,7 @@ export function BoardView({ children }: { children?: React.ReactNode }) {
 
   return (
     <div className="max-w-3xl">
-      <PageTitle title={t("boardTitle")} gloss={locale === "zh-Hant" ? "Order board" : "訂單看板"} />
-      <p className="-mt-2 mb-6 text-ink-soft">{t("boardLede")}</p>
+      <p className="mb-6 text-ink-soft">{t("boardLede")}</p>
       {!isOwner ? (
         <p className="mb-6 border-l-2 border-accent pl-3" data-testid="board-owner-only">
           {t("boardOwnerOnly")}

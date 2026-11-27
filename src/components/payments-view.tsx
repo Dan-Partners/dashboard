@@ -1,19 +1,25 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { isDanError } from "@/lib/errors";
 import { formatPence } from "@/lib/format";
 import { acceptTerms, connectPayments, getPayments, percentText, sameDeal, type Deal, type PaymentsStatus } from "@/lib/payments";
+import { settingsRoute } from "@/lib/settings";
 import { useIsOwner, useShop } from "@/lib/shop-context";
-import { Button, PageTitle } from "./ui";
+import { Button } from "./ui";
+
+/** Where Stripe sends the owner back after connecting. The cloud checks only its origin. */
+export const STRIPE_RETURN = `${settingsRoute("integrations")}/stripe`;
 
 /**
- * The owner connects the shop's Stripe account, so customers can pay by card
- * on the shop's ordering site. Money goes straight to the shop's account.
+ * The shop's card payments as the Dan cloud sees them (owner only, signed in
+ * to the cloud). `why` says why there is no status: no cloud, not signed in
+ * to it, or it could not be reached.
  */
-export function PaymentsView() {
-  const { t, locale } = useI18n();
+export function usePaymentsStatus() {
+  const { t } = useI18n();
   const shop = useShop();
   const isOwner = useIsOwner();
   const session = shop.persisted.session;
@@ -21,7 +27,6 @@ export function PaymentsView() {
   const cloudToken = session?.cloudToken ?? null;
   const [status, setStatus] = useState<PaymentsStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!isOwner || !cloudUrl || !cloudToken) return;
@@ -38,12 +43,27 @@ export function PaymentsView() {
     };
   }, [isOwner, cloudUrl, cloudToken, t]);
 
+  const why: CopyKey | null = !isOwner ? "paymentsOwnerOnly" : !cloudUrl ? "paymentsNeedCloud" : !cloudToken ? "paymentsSignInAgain" : null;
+  return { status, setStatus, error, setError, why, cloudUrl, cloudToken };
+}
+
+/**
+ * Integrations, Stripe: the owner connects the shop's own Stripe account, so
+ * customers can pay by card on the ordering site. Money goes straight to the
+ * shop's account; Stripe pays it out to the shop's bank. Dan's terms are
+ * accepted under Subscription.
+ */
+export function StripeIntegration() {
+  const { t } = useI18n();
+  const { status, error, setError, why, cloudUrl, cloudToken } = usePaymentsStatus();
+  const [busy, setBusy] = useState(false);
+
   async function connect() {
     if (!cloudUrl || !cloudToken) return;
     setBusy(true);
     setError(null);
     try {
-      const url = await connectPayments(cloudUrl, cloudToken, `${window.location.origin}/shop/payments`);
+      const url = await connectPayments(cloudUrl, cloudToken, `${window.location.origin}${STRIPE_RETURN}`);
       window.location.assign(url);
     } catch {
       setError(t("paymentsCloudDown"));
@@ -52,29 +72,48 @@ export function PaymentsView() {
   }
 
   let body: React.ReactNode;
-  if (!isOwner) {
-    body = <p className="text-ink-soft">{t("paymentsOwnerOnly")}</p>;
-  } else if (!cloudUrl) {
-    body = <p className="text-ink-soft">{t("paymentsNeedCloud")}</p>;
-  } else if (!cloudToken) {
-    body = <p className="text-ink-soft">{t("paymentsSignInAgain")}</p>;
+  if (why) {
+    body = <p className="text-ink-soft">{t(why)}</p>;
   } else if (!status) {
     body = error ? null : <p className="text-ink-soft">{t("paymentsChecking")}</p>;
   } else if (!status.available) {
     body = <p className="text-ink-soft">{t("paymentsNotAvailable")}</p>;
-  } else if (status.cardPayments || status.accountReady) {
+  } else if (status.accountReady || status.cardPayments) {
+    const held = status.payoutsEnabled === false;
     body = (
       <>
+        <dl className="divide-y divide-rule border-y border-rule" data-testid="stripe-state">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3">
+            <dt className="font-display text-lg">{t("stripeCardPayments")}</dt>
+            <dd data-testid="stripe-cards">
+              {status.cardPayments ? (
+                t("stripeOn")
+              ) : (
+                <Link href={settingsRoute("subscription")} className="text-accent-ink underline">
+                  {t("stripeAcceptTerms")}
+                </Link>
+              )}
+            </dd>
+          </div>
+          {status.payoutsEnabled !== undefined ? (
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3">
+              <dt className="font-display text-lg">{t("stripePayouts")}</dt>
+              <dd className={held ? "text-accent-ink" : undefined} data-testid="stripe-payouts">
+                {held ? t("stripePayoutsHeld") : t("stripeOn")}
+              </dd>
+            </div>
+          ) : null}
+        </dl>
         {status.cardPayments ? (
           <p className="border-l-[6px] border-accent bg-paper-raised px-4 py-3" data-testid="payments-on">
             {t("paymentsOn")}
           </p>
-        ) : (
-          <p className="border-l-[6px] border-accent bg-paper-raised px-4 py-3" data-testid="payments-waiting-terms">
-            {t("dealCardsWait")}
-          </p>
-        )}
-        <DealSection status={status} onAccepted={setStatus} cloudUrl={cloudUrl} cloudToken={cloudToken} />
+        ) : null}
+        <p className="max-w-xl">{t("stripeBankLine")}</p>
+        {/* The owner's own Stripe account: Dan has no say in it and no way into it. */}
+        <a href="https://dashboard.stripe.com/" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center font-display text-accent-ink underline" data-testid="stripe-dashboard">
+          {t("stripeOpen")} ↗
+        </a>
       </>
     );
   } else {
@@ -85,22 +124,54 @@ export function PaymentsView() {
           {status.connected ? t("paymentsFinishButton") : t("paymentsConnect")}
         </Button>
         <p className="max-w-xl text-sm text-ink-soft">{t("paymentsHow")}</p>
-        <DealSection status={status} onAccepted={setStatus} cloudUrl={cloudUrl} cloudToken={cloudToken} />
+        <p className="max-w-xl text-sm text-ink-soft">{t("stripeBankLine")}</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl">
-      <PageTitle title={t("paymentsTitle")} gloss={locale === "zh-Hant" ? "Payments" : "收款"} />
-      <div className="mt-6 space-y-4">
-        {body}
-        {error ? (
-          <p className="border-l-2 border-accent pl-3 text-sm" role="alert">
-            {error}
-          </p>
-        ) : null}
-      </div>
+    <div className="max-w-2xl space-y-4" data-testid="stripe-integration">
+      {body}
+      {error ? (
+        <p className="border-l-2 border-accent pl-3 text-sm" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Subscription: what the shop has agreed with Dan. Today that is the deal on
+ * card payments and Dan's terms; Dan charges nothing else (RK, 27 Nov 2026).
+ */
+export function SubscriptionView() {
+  const { t } = useI18n();
+  const { status, setStatus, error, why, cloudUrl, cloudToken } = usePaymentsStatus();
+  return (
+    <div className="max-w-2xl space-y-4" data-testid="subscription">
+      {why ? (
+        <p className="text-ink-soft">{t(why === "paymentsOwnerOnly" ? "settingsOwnerOnly" : why)}</p>
+      ) : !status ? (
+        error ? null : <p className="text-ink-soft">{t("paymentsChecking")}</p>
+      ) : (
+        <>
+          {status.accountReady && !status.cardPayments ? (
+            <p className="border-l-[6px] border-accent bg-paper-raised px-4 py-3" data-testid="payments-waiting-terms">
+              {t("dealCardsWait")}
+            </p>
+          ) : null}
+          {cloudUrl && cloudToken ? <DealSection status={status} onAccepted={setStatus} cloudUrl={cloudUrl} cloudToken={cloudToken} /> : null}
+        </>
+      )}
+      <p className="font-display text-lg" data-testid="nothing-else">
+        {t("subscriptionNothingElse")}
+      </p>
+      {error ? (
+        <p className="border-l-2 border-accent pl-3 text-sm" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -157,7 +228,7 @@ function DealSection({
   };
 
   return (
-    <section className="mt-8 space-y-4" aria-labelledby="deal-title" data-testid="deal">
+    <section className="space-y-4" aria-labelledby="deal-title" data-testid="deal">
       <h2 id="deal-title" className="font-display text-2xl">
         {t("dealTitle")}
       </h2>

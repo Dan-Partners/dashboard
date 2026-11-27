@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { expectPinCannotSee, openSettings } from "./settings";
 import { expect, test, type Page } from "@playwright/test";
 import { openTill } from "./create-order";
 
@@ -161,7 +162,7 @@ test("a business joins from the waiting list, builds its menu, takes an order an
   await expect(page.getByRole("button", { name: /Stale loaf/ })).toHaveCount(0);
 
   // The shop's details and the counter PIN.
-  await page.getByRole("link", { name: /^Tools/ }).click();
+  await openSettings(page, "shop");
   const details = page.getByTestId("shop-details");
   await expect(details.getByLabel("Shop name")).toHaveValue(shopName);
   await details.getByLabel("Phone").fill("020 7946 0000");
@@ -224,7 +225,7 @@ test("a business joins from the waiting list, builds its menu, takes an order an
   await page.getByRole("link", { name: /^Menu/ }).click();
   await expect(page.getByTestId("menu-counter-note")).toBeVisible();
   await expect(page.getByTestId("menu-tools")).toHaveCount(0);
-  await page.getByRole("link", { name: /^Tools/ }).click();
+  await expectPinCannotSee(page, "shop");
   await expect(page.getByTestId("shop-details")).toHaveCount(0);
   await expect(page.getByTestId("counter-pin")).toHaveCount(0);
 

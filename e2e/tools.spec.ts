@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openSettings } from "./settings";
 
 test("Tools makes a QR card per table, for the shop's ordering address", async ({ page }) => {
   await page.goto("/");
@@ -6,10 +7,10 @@ test("Tools makes a QR card per table, for the shop's ordering address", async (
   await page.goto("/shop/orders?demo=1");
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
 
-  // At the bottom of the menu, for everyone.
+  // Settings is at the bottom of the menu, for everyone; table cards are under Tables & printers.
   const links = page.getByRole("navigation", { name: "Dan" }).first().getByRole("link");
-  await expect(links.last()).toHaveText(/^Tools/);
-  await links.last().click();
+  await expect(links.last()).toHaveText(/^Settings/);
+  await openSettings(page, "tables");
   await expect(page.getByRole("heading", { name: "Table QR codes" })).toBeVisible();
 
   // The demo's address is filled in; a shop's own domain can replace it, and is kept.

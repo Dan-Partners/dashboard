@@ -1,3 +1,4 @@
+import { expectPinCannotSee, openSettings } from "./settings";
 import { expect, test, type Page } from "@playwright/test";
 import { openTill } from "./create-order";
 
@@ -79,12 +80,10 @@ test("the counter PIN runs service but cannot see sales or edit dishes", async (
   await page.goto("/shop/sales");
   await expect(page.getByTestId("sales-owner-only")).toBeVisible();
 
-  // The shop's theme is shown, not changeable, with the PIN.
+  // The shop's theme is the owner's: with the PIN, Settings has no Shop section (DAN-33).
   await page.goto("/shop/orders");
-  await page.getByTestId("theme-button").first().click();
-  await expect(page.getByTestId("theme-owner-only")).toBeVisible();
-  await expect(page.getByTestId("theme-jade")).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Customise" })).toHaveCount(0);
+  await expectPinCannotSee(page, "shop");
+  await expect(page.getByTestId("theme-button")).toHaveCount(0);
 });
 
 /** Asks the shop server for its theme directly, as another tablet would. */
@@ -104,7 +103,8 @@ test("the owner's theme is saved on the shop server for every tablet", async ({ 
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
 
-  await page.getByTestId("theme-button").first().click();
+  await openSettings(page, "shop");
+  await page.getByTestId("theme-button").filter({ visible: true }).click();
   await expect(page.getByText("Saved on the shop server")).toBeVisible();
   await page.getByTestId("theme-jade").click();
   await page.getByTestId("typeface-source").click();

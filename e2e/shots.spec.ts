@@ -1,6 +1,7 @@
 import { FEATURES } from "../src/lib/features";
 import { expect, test } from "@playwright/test";
 import { openTill } from "./create-order";
+import { openSettings } from "./settings";
 
 const out = "docs/screenshots";
 
@@ -82,8 +83,9 @@ test("capture the connect screen and the counter", async ({ page }) => {
 
   await page.getByRole("link", { name: /^Orders/ }).click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
-  await page.getByTestId("theme-button").first().click();
-  await expect(page.getByRole("heading", { name: "Theme" })).toBeVisible();
+  await openSettings(page, "shop");
+  await page.getByTestId("theme-button").filter({ visible: true }).click();
+  await expect(page.getByRole("dialog").getByRole("heading", { name: "Theme" })).toBeVisible();
   await page.screenshot({ path: `${out}/themes.png` });
   await page.getByRole("button", { name: "Customise" }).click();
   await expect(page.getByRole("heading", { name: "Customise theme" })).toBeVisible();
@@ -92,7 +94,8 @@ test("capture the connect screen and the counter", async ({ page }) => {
   await page.getByTestId("theme-seal").click();
   await page.getByRole("button", { name: "Done" }).click();
   await page.screenshot({ path: `${out}/orders-seal.png` });
-  await page.getByTestId("theme-button").first().click();
+  await openSettings(page, "shop");
+  await page.getByTestId("theme-button").filter({ visible: true }).click();
   await page.getByTestId("theme-ink").click();
   await page.getByRole("button", { name: "Done" }).click();
   await page.screenshot({ path: `${out}/orders-ink.png` });
