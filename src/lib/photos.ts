@@ -4,11 +4,21 @@ import type { Session } from "./types";
 export type PhotoSize = "thumb" | "large";
 
 /**
- * Where a dish photo is: the Dan cloud serves it at the shop's own address.
- * None without it, or without a photo.
+ * Where a dish photo is: on the Dan cloud's one address, under the shop
+ * (`/shops/<address name>/images/...`, DAN-45). A session from before DAN-43,
+ * whose cloud address ends in /staff, still has them at the shop's own
+ * address. None without a cloud, or without a photo.
  */
-export function photoSrc(session: Pick<Session, "cloudUrl" | "shopAddress"> | null | undefined, photo: string | null | undefined, size: PhotoSize): string | null {
+export function photoSrc(
+  session: Pick<Session, "cloudUrl" | "shopAddress" | "addressName"> | null | undefined,
+  photo: string | null | undefined,
+  size: PhotoSize,
+): string | null {
   if (!photo || !/^images\/[0-9a-f]{64}$/.test(photo)) return null;
+  const cloud = session?.cloudUrl?.replace(/\/+$/, "") ?? "";
+  if (cloud && !/\/staff$/.test(cloud)) {
+    return session?.addressName ? `${cloud}/shops/${encodeURIComponent(session.addressName)}/${photo}/${size}.jpg` : null;
+  }
   const origin = shopAddressOf(session);
   return origin ? `${origin}/${photo}/${size}.jpg` : null;
 }

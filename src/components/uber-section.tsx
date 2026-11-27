@@ -6,7 +6,6 @@ import { GraphQLDanClient } from "@/lib/graphql-client";
 import { formatPence, parsePoundsToPence } from "@/lib/format";
 import { messageForError, useI18n, type CopyKey } from "@/lib/i18n";
 import { useIsOwner, useShop } from "@/lib/shop-context";
-import { shopAddressOf } from "@/lib/tables";
 import { checkUberOptions, DEFAULT_UBER, webhookAddress, type UberBooking, type UberKeys, type UberOptions } from "@/lib/uber";
 import { Button, TextField } from "./ui";
 
@@ -86,7 +85,7 @@ export function UberSection({ onChanged }: { onChanged: () => void }) {
   const failed = (error: unknown) =>
     setMessage({ text: messageForError(isDanError(error) ? error.code : undefined, t, error instanceof Error ? error.message : undefined), failed: true });
 
-  const webhook = webhookAddress(shopAddressOf(session) || null);
+  const webhook = webhookAddress(session?.cloudUrl, session?.addressName);
 
   const connect = () => {
     if (!cloud) return;

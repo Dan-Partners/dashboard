@@ -51,12 +51,14 @@ export function checkUberOptions(input: UberOptionsInput) {
   }
 }
 
-/** Where the shop's Uber webhook goes: the shop's own address (served by the Dan cloud). */
-export function webhookAddress(shopAddress: string | null | undefined): string | null {
-  if (!shopAddress) return null;
+/** Where the shop's Uber webhook goes: the Dan cloud's one address, by the shop's address name (DAN-45). */
+export function webhookAddress(cloudUrl: string | null | undefined, addressName: string | null | undefined): string | null {
+  if (!cloudUrl || !addressName || !/^[a-z0-9-]{1,40}$/.test(addressName)) return null;
   try {
-    const url = new URL(shopAddress);
-    return `${url.origin}/uber/webhook`;
+    const url = new URL(cloudUrl);
+    // A session from before the one address (DAN-43) has the shop's own address with /staff.
+    if (/\/staff\/?$/.test(url.pathname)) return `${url.origin}/uber/webhook`;
+    return `${url.origin}/webhooks/uber/${addressName}`;
   } catch {
     return null;
   }

@@ -69,7 +69,8 @@ test("the owner adds a dish photo through the cloud; the menu, till and customer
   const thumb = picker.getByTestId("dish-photo");
   await expect(thumb).toBeVisible();
   const src = await thumb.getAttribute("src");
-  expect(src).toMatch(/^http:\/\/goldendragon\.localhost:2290\/images\/[0-9a-f]{64}\/thumb\.jpg$/);
+  // On the cloud's one address, under the shop (DAN-45).
+  expect(src).toMatch(/^http:\/\/(localhost|127\.0\.0\.1):2290\/shops\/goldendragon\/images\/[0-9a-f]{64}\/thumb\.jpg$/);
   expect(await thumb.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
   await page.getByRole("button", { name: "Cancel" }).click();
 

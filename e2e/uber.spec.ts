@@ -65,7 +65,8 @@ test("the owner connects Uber, a customer pays the quote, and staff follow the c
       await expect(sw(page, "uberDirect")).toHaveAttribute("aria-checked", "false", { timeout: 2000 });
     }).toPass({ timeout: 30_000 });
   }
-  await expect(page.getByTestId("uber-webhook")).toHaveText(new URL(cloud!).origin + "/uber/webhook");
+  // Uber's notices go to the cloud's one address, by the shop's address name (DAN-45).
+  await expect(page.getByTestId("uber-webhook")).toHaveText(`${new URL(process.env.DAN_E2E_CLOUD ?? "http://localhost:2290").origin}/webhooks/uber/goldendragon`);
   await uber.getByLabel("Customer ID").fill("12345678-abcd-ef01-2345-6789abcd4321");
   await uber.getByLabel("Client ID").fill("client_e2e");
   await uber.getByLabel("Client secret").fill("wrong");

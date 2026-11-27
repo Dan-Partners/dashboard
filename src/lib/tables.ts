@@ -47,9 +47,10 @@ export function orderingAddressFromCloud(cloudUrl: string | null | undefined): s
 }
 
 /**
- * The shop's own address (https://<shop>.dan.partners): its ordering site,
- * dish photos and Uber's notices. The cloud's sign-in says it (DAN-43); a
- * session from before has its cloud address with /staff, which gives it.
+ * The shop's ordering site (https://<shop>.dan.partners), for its table QR
+ * codes. The cloud's sign-in says it (DAN-43); a session from before has its
+ * cloud address with /staff, which gives it. Photos and Uber's notices are on
+ * the cloud's one address since DAN-45 (photos.ts, uber.ts).
  */
 export function shopAddressOf(session: Pick<Session, "shopAddress" | "cloudUrl"> | null | undefined): string {
   if (session?.shopAddress) return session.shopAddress.replace(/\/+$/, "");
