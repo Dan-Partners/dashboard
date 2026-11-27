@@ -258,7 +258,8 @@ test("a business joins from the waiting list, builds its menu, takes an order an
   await openSettings(page, "staff");
   await page.getByTestId("activity-link").filter({ visible: true }).click();
   const log = page.getByTestId("activity").filter({ visible: true });
-  await expect(log.locator('[data-testid="activity-entry"][data-action="signed_in"]').first()).toContainText("Kit Chan");
+  // The owner signed in since, so Kit's sign-in is not the newest.
+  await expect(log.locator('[data-testid="activity-entry"][data-action="signed_in"]').filter({ hasText: "Kit Chan" }).first()).toBeVisible();
   await expect(log.locator('[data-testid="activity-entry"][data-action="order_taken"]').first()).toBeVisible();
   await expect(log.locator('[data-testid="activity-entry"][data-action="addStaff"]').first()).toBeVisible();
 
