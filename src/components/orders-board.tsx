@@ -7,7 +7,7 @@ import { isDanError } from "@/lib/errors";
 import { FEATURES } from "@/lib/features";
 import { ago, formatPence, fulfilmentLabel, paymentLabel, orderLabel, phoneDigits, primaryName, secondaryName } from "@/lib/format";
 import { useI18n, type CopyKey } from "@/lib/i18n";
-import { useShop } from "@/lib/shop-context";
+import { useIsOwner, useShop } from "@/lib/shop-context";
 import { useTapGuard, type TapGuard } from "@/lib/tap-guard";
 import { useBoardColour } from "@/lib/use-board-colour";
 import { backStep, columnGloss, columnName, columnOf, DEFAULT_BOARD, nextStep, type Board, type NextStep } from "@/lib/board";
@@ -18,6 +18,7 @@ import { CourierPanel, RefundFailures } from "./courier-panel";
 import { ReprintButton } from "./print-strip";
 import { WhereStrip } from "./where-strip";
 import { OrdersList } from "./orders-list";
+import { PaidDifference } from "./paid-difference";
 import { CREATE_ORDER_ROUTE } from "@/lib/focus";
 import { writePersisted } from "@/lib/storage";
 
@@ -169,6 +170,7 @@ export function Docket({
   guard,
   onError,
   ticketLink = true,
+  editLink = true,
 }: {
   order: Order;
   board: Board;
@@ -182,7 +184,10 @@ export function Docket({
   onError: (message: string | null) => void;
   /** False for an order the ticket page does not have (older than the board's orders). */
   ticketLink?: boolean;
+  /** False on the order's own page. */
+  editLink?: boolean;
 }) {
+  const isOwner = useIsOwner();
   const { t, locale } = useI18n();
   const shop = useShop();
   const [busy, setBusy] = useState(false);
@@ -205,6 +210,12 @@ export function Docket({
         <div className="flex items-baseline justify-between gap-3">
           <h3 className="font-display text-2xl leading-none" data-testid="docket-number">
             {orderLabel(order.number, t("numberWaiting"))}
+            {/* The owner changed it after it was placed: everyone can see that it was. */}
+            {order.editCount ? (
+              <span className="ml-2 border border-ink px-1 py-0.5 align-middle font-display text-[0.7rem] tracking-[0.12em] uppercase" data-testid="docket-changed">
+                {t("changedMark")}
+              </span>
+            ) : null}
           </h3>
           <p className="text-sm text-ink-soft">{ago(order.createdAt, now, locale, t("justNow"))}</p>
         </div>
@@ -253,6 +264,7 @@ export function Docket({
             </span>
           ) : null}
         </p>
+        <PaidDifference order={order} className="mt-2" />
         <CourierPanel order={order} uberReady={shop.snapshot?.ordering.uberReady ?? false} guard={guard} onError={onError} />
         <div className="mt-3 flex flex-wrap gap-2">
           {next ? (
@@ -289,6 +301,11 @@ export function Docket({
             </Button>
           ) : null}
           <ReprintButton orderId={order.id} />
+          {isOwner && editLink && !locked && order.status !== "cancelled" ? (
+            <Link href={`/shop/orders/${order.id}`} className="inline-flex min-h-11 items-center px-2 font-display text-ink-soft" data-testid="docket-edit">
+              {t("editLink")}
+            </Link>
+          ) : null}
           {locked || !ticketLink ? null : (
             <Link href={`/shop/ticket?order=${order.id}`} className="inline-flex min-h-11 items-center px-2 font-display text-ink-soft">
               {t("viewTicket")}

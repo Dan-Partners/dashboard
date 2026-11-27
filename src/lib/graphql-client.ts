@@ -33,6 +33,7 @@ import { DEFAULT_BOARD, type Board, type BoardPreview } from "./board";
 import { DEFAULT_TRIGGERS, TRIGGER_FIELDS, type Triggers } from "./triggers";
 import { kitchenAndPass, VIEW_FIELDS, type View } from "./views";
 import { HISTORY_PAGE, historyPage, type OrderHistoryFilter, type OrderPage } from "./history";
+import { ORDER_EDIT_FIELDS, type OrderEdit, type OrderEditInput } from "./order-edit";
 import { DEFAULT_UBER, UBER_FIELDS, type UberKeys, type UberOptions, type UberOptionsInput } from "./uber";
 
 /**
@@ -59,11 +60,12 @@ const ORDER_FIELDS_BASE = `id number createdAt source fulfilment status customer
   lines { itemId number nameEn nameZh qty unitPricePence station kind components { number nameEn nameZh qty station } }`;
 const BOARD_COLUMN = "id nameEn nameZh role colour";
 const COURIER = "courier { deliveryId status trackingUrl feePence pickupEta dropoffEta courierName problem } refund";
-/** What the shop server knows: 3 with board columns (DAN-25), 2 with couriers (DAN-23), 1 with delivery fees, 0 before them. */
-let orderLevel = 3;
+/** What the shop server knows: 4 with the owner's changes (DAN-31), 3 with board columns (DAN-25), 2 with couriers (DAN-23), 1 with delivery fees, 0 before them. */
+let orderLevel = 4;
 /** The order fields the dashboard uses, for queries and the live channel alike. */
 export function orderFields(): string {
-  if (orderLevel >= 3) return `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy ${COURIER} column columnAt columnRemap`;
+  if (orderLevel >= 4) return `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy ${COURIER} column columnAt columnRemap editCount paidPence`;
+  if (orderLevel === 3) return `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy ${COURIER} column columnAt columnRemap`;
   if (orderLevel === 2) return `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy ${COURIER}`;
   return orderLevel === 1 ? `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy` : ORDER_FIELDS_BASE;
 }
@@ -386,6 +388,29 @@ export class GraphQLDanClient implements DanClient {
       }
       throw error;
     }
+  }
+
+  async getOrder(id: string): Promise<Order> {
+    const data = await this.run<{ order: Order }>(`query Order($id: ID!) { order(id: $id) { ${orderFields()} } }`, { id });
+    return data.order;
+  }
+
+  /** Owner only. */
+  async editOrder(id: string, input: OrderEditInput): Promise<Order> {
+    const data = await this.run<{ editOrder: Order }>(`mutation EditOrder($id: ID!, $input: OrderEditInput!) { editOrder(id: $id, input: $input) { ${orderFields()} } }`, { id, input });
+    return data.editOrder;
+  }
+
+  /** Owner only. */
+  async moveOrderTo(id: string, column: string): Promise<Order> {
+    const data = await this.run<{ moveOrderTo: Order }>(`mutation MoveOrderTo($id: ID!, $column: ID!) { moveOrderTo(id: $id, column: $column) { ${orderFields()} } }`, { id, column });
+    return data.moveOrderTo;
+  }
+
+  /** Owner only. */
+  async getOrderEdits(orderId: string): Promise<OrderEdit[]> {
+    const data = await this.run<{ orderEdits: OrderEdit[] }>(`query OrderEdits($id: ID!) { orderEdits(orderId: $id) { ${ORDER_EDIT_FIELDS} } }`, { id: orderId });
+    return data.orderEdits;
   }
 
   /**

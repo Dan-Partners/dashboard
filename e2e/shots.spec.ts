@@ -24,6 +24,30 @@ test("capture the connect screen and the counter", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
   await page.screenshot({ path: `${out}/orders.png` });
 
+  // The same orders as a list, then one order on its own page with a change waiting to be saved.
+  await page.getByTestId("orders-layout-list").click();
+  await expect(page.getByTestId("list-row").first()).toBeVisible();
+  await page.screenshot({ path: `${out}/orders-list.png` });
+  await page.getByTestId("orders-layout-board").click();
+  await page.locator("section[data-column='new'] article").first().getByTestId("docket-edit").click();
+  const editor = page.getByTestId("order-editor");
+  await editor.locator('[data-testid="edit-line"][data-number="42"]').getByRole("button", { name: "Remove" }).click();
+  await editor.getByTestId("edit-add-search").fill("81");
+  await editor.getByTestId("edit-add-dish").first().click();
+  await expect(editor.getByTestId("paid-difference")).toBeVisible();
+  await page.screenshot({ path: `${out}/order.png` });
+  await editor.getByRole("button", { name: "Undo" }).click();
+
+  // Create order: picked from the menu, then keyed on the till.
+  await page.getByRole("link", { name: /^Orders/ }).first().click();
+  await page.getByTestId("create-order").filter({ visible: true }).click();
+  const picker = page.getByTestId("menu-picker");
+  await picker.locator('[data-number="1"]').click();
+  await picker.locator('[data-number="3"]').click();
+  await picker.locator('[data-number="3"]').click();
+  await page.screenshot({ path: `${out}/create-order.png` });
+  await page.reload();
+
   await openTill(page);
   await page.getByRole("button", { name: "4", exact: true }).click();
   await page.getByRole("button", { name: "2", exact: true }).click();

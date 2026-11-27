@@ -66,6 +66,28 @@ describe("a shop server from before board columns", () => {
   });
 });
 
+describe("a shop server from before the owner could change an order", () => {
+  it("still gives the board: asked again without the count of changes and what was paid", async () => {
+    vi.resetModules();
+    const { GraphQLDanClient: Fresh } = await import("./graphql-client");
+    const asked: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        const { query } = JSON.parse(String(init.body)) as { query: string };
+        asked.push(query);
+        if (query.includes("editCount")) return reply({ data: null, errors: [{ message: 'Unknown field "editCount" on type "Order".' }] });
+        return reply({ data: { orders: [{ id: "o1", column: "ready" }] } });
+      }),
+    );
+    const { orders } = await new Fresh("http://shop.test", "token").getOrders();
+    expect(orders[0].column).toBe("ready");
+    expect(asked).toHaveLength(2);
+    expect(asked[1]).toContain("columnRemap");
+    expect(asked[1]).not.toContain("paidPence");
+  });
+});
+
 describe("a shop server from before Uber couriers", () => {
   it("still gives the board, with delivery fees, asked again without the courier", async () => {
     vi.resetModules();
@@ -82,10 +104,10 @@ describe("a shop server from before Uber couriers", () => {
     );
     const { orders } = await new GraphQLDanClient("http://shop.test", "token").getOrders();
     expect(orders[0].deliveryBy).toBe("shop");
-    // Asked with board columns, then with couriers, then with neither.
-    expect(asked).toHaveLength(3);
-    expect(asked[2]).toContain("deliveryBy");
-    expect(asked[2]).not.toContain("courier");
+    // Asked with the owner's changes, then with board columns, then with couriers, then with none of them.
+    expect(asked).toHaveLength(4);
+    expect(asked[3]).toContain("deliveryBy");
+    expect(asked[3]).not.toContain("courier");
   });
 
   it("says Uber is not connected rather than failing", async () => {

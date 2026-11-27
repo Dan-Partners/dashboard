@@ -1,5 +1,6 @@
 import type { View } from "./views";
 import type { OrderHistoryFilter, OrderPage } from "./history";
+import type { OrderEdit, OrderEditInput } from "./order-edit";
 import type { Triggers } from "./triggers";
 import type { Board } from "./board";
 import type { OrderingSetup } from "./ordering";
@@ -218,6 +219,10 @@ export type Order = {
   columnAt?: string | null;
   /** True when a change to the board moved it there, not staff (no sound). */
   columnRemap?: boolean | null;
+  /** How many times the owner has changed its details or dishes. Each change is recorded for good. */
+  editCount?: number | null;
+  /** What was taken when it was paid, once a change has made the bill differ from it. */
+  paidPence?: number | null;
 };
 
 export type Courier = {
@@ -331,6 +336,14 @@ export interface DanClient {
   /** The order list: newest first, a page at a time, back through every order. */
   getOrderHistory(filter?: OrderHistoryFilter, before?: string | null, limit?: number): Promise<OrderPage>;
   createOrder(input: CreateOrderInput): Promise<Order>;
+  /** One order, wherever it is: on the board, finished long ago, or cancelled. */
+  getOrder(id: string): Promise<Order>;
+  /** Owner only: changes an order's details or dishes. Recorded for good. */
+  editOrder(id: string, input: OrderEditInput): Promise<Order>;
+  /** Owner only: moves a ticket to any column, back included. Recorded for good. */
+  moveOrderTo(id: string, column: string): Promise<Order>;
+  /** Owner only: the record of the owner's changes to one order, oldest first. */
+  getOrderEdits(orderId: string): Promise<OrderEdit[]>;
   updateOrder(id: string, patch: { status: OrderStatus }): Promise<Order>;
   getCustomers(query?: { phone?: string }): Promise<{ customers: Customer[] }>;
   createCustomer(input: { phone: string; name: string }): Promise<Customer>;

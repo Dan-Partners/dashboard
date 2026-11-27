@@ -1,7 +1,8 @@
+import { applyEdit, courierBooked, type Applied, type OrderEdit, type OrderEditInput } from "./order-edit";
 import { historyPage, type OrderHistoryFilter, type OrderPage } from "./history";
 import { checkPlaces, checkTriggers, DEFAULT_TRIGGERS, normalizeTriggers, onlyOn, type Triggers } from "./triggers";
 import { checkViews, followBoard, kitchenAndPass, normalizeViews, type View } from "./views";
-import { checkBoard, columnOf, DEFAULT_BOARD, nextAfter, normalizeBoard, planMoves, roleOf, startFor, statusAfter, summarise, type Board, type BoardPreview, type PlannedMove } from "./board";
+import { checkBoard, columnOf, DEFAULT_BOARD, nextAfter, normalizeBoard, planMoves, roleOf, startFor, statusAfter, statusOf, summarise, type Board, type BoardPreview, type PlannedMove } from "./board";
 import { bankIsEmpty, checkedBank, checkOrdering, normalizeSetup, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
 import { DanError } from "./errors";
 import { phoneDigits } from "./format";
@@ -530,6 +531,65 @@ export class MockDanServer implements DanClient {
     const next = forward?.id === to ? forward : before?.id === to ? before : null;
     if (!next) return Promise.reject(new DanError("bad_status", "Move the order one step at a time; back only within the same stage."));
     Object.assign(order, { column: next.id, columnAt: this.now().toISOString(), columnRemap: false, status: statusAfter(order, next) });
+    return Promise.resolve(clone(order));
+  }
+
+  getOrder(id: string): Promise<Order> {
+    const order = this.state.orders.find((entry) => entry.id === id);
+    return order ? Promise.resolve(clone(order)) : Promise.reject(new DanError("not_found", "That order is not here."));
+  }
+
+  getOrderEdits(orderId: string): Promise<OrderEdit[]> {
+    return Promise.resolve(clone((this.state.orderEdits ?? []).filter((edit) => edit.orderId === orderId)));
+  }
+
+  /** The record is added to, never rewritten: the demo keeps it as the shop server does. */
+  private record(order: Order, kind: OrderEdit["kind"], applied: Pick<Applied, "changes" | "lines">, totalAfterPence: number) {
+    this.state.orderEdits = [
+      ...(this.state.orderEdits ?? []),
+      {
+        id: `edit-${this.now().getTime().toString(36)}-${(this.state.orderEdits ?? []).length}`,
+        orderId: order.id,
+        at: this.now().toISOString(),
+        byId: this.state.staff.id,
+        byName: this.state.staff.name,
+        kind,
+        changes: applied.changes,
+        lines: applied.lines,
+        totalBeforePence: order.totalPence,
+        totalAfterPence,
+      },
+    ];
+  }
+
+  /** The demo signs in as the owner. The same rules as the shop server's `editOrder`. */
+  editOrder(id: string, input: OrderEditInput): Promise<Order> {
+    const at = this.state.orders.findIndex((entry) => entry.id === id);
+    if (at < 0) return Promise.reject(new DanError("not_found", "That order is not here."));
+    try {
+      const order = this.state.orders[at];
+      const applied = applyEdit(order, input, this.state.items, courierBooked(order));
+      if (applied.changes.length === 0 && applied.lines.length === 0) return Promise.resolve(clone(order));
+      this.record(order, "edit", applied, applied.order.totalPence);
+      this.state.orders[at] = applied.order;
+      return Promise.resolve(clone(applied.order));
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
+  /** The owner's own move: to any column of the board, back included. */
+  moveOrderTo(id: string, to: string): Promise<Order> {
+    const order = this.state.orders.find((entry) => entry.id === id);
+    if (!order) return Promise.reject(new DanError("not_found", "That order is not here."));
+    if (order.status === "cancelled") return Promise.reject(new DanError("order_cancelled", "A cancelled order cannot be changed."));
+    const board = normalizeBoard(this.state.board);
+    const target = board.columns.find((column) => column.id === to);
+    if (!target) return Promise.reject(new DanError("not_found", "That column is not on the board."));
+    const here = columnOf(board, order);
+    if (here?.id === target.id) return Promise.resolve(clone(order));
+    this.record(order, "move", { changes: [{ field: "column", before: here?.nameEn ?? "", after: target.nameEn }], lines: [] }, order.totalPence);
+    Object.assign(order, { column: target.id, columnAt: this.now().toISOString(), columnRemap: false, status: statusOf(target.role) });
     return Promise.resolve(clone(order));
   }
 

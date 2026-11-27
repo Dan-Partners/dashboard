@@ -1,3 +1,4 @@
+import type { OrderEdit } from "./order-edit";
 import type { View } from "./views";
 import type { Triggers } from "./triggers";
 import type { Board } from "./board";
@@ -697,6 +698,8 @@ export type DemoState = {
   views?: View[];
   /** The demo shop's stations. Kept in this browser; wok, fryer, rice and counter when missing. */
   stations?: Station[];
+  /** The record of the owner's changes to orders. Kept in this browser. */
+  orderEdits?: OrderEdit[];
 };
 
 function buildItems(): MenuItem[] {

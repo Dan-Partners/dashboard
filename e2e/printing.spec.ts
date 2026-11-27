@@ -6,8 +6,9 @@ import { openTill } from "./create-order";
 /**
  * Printing on the shop's network printers, end to end: the owner adds a
  * printer in Tools, a test print and every new order come out of it, a
- * printer that stops answering is shown on the tablet until Retry now, and
- * Reprint prints again.
+ * printer that stops answering is shown on the tablet until Retry now,
+ * Reprint prints again, and a change to an order's dishes prints a ticket
+ * marked CHANGED.
  *
  * Opt in with a shop server (no other printers set up) and a fake receipt
  * printer that writes what it receives into a folder, with commands to stop
@@ -104,6 +105,23 @@ test("the owner adds a printer; tests, new orders and reprints print; a silent p
   await sell(page);
   await expect.poll(tickets, { timeout: 10_000 }).toBe(before + 2);
 
+  // The owner changes that order's dishes: the kitchen gets a ticket marked CHANGED, once.
+  const number = (await page.getByTestId("order-sent").textContent())!.match(/#(\d+)/)![1];
+  await page.getByRole("link", { name: "← Back to orders" }).click();
+  await page.locator("article").filter({ has: page.getByText(`#${number}`, { exact: true }) }).getByTestId("docket-edit").click();
+  const editor = page.getByTestId("order-editor").filter({ visible: true });
+  await editor.getByTestId("edit-add-search").fill("prawn toast");
+  await editor.getByTestId("edit-add-dish").first().click();
+  await editor.getByRole("button", { name: "Save changes" }).click();
+  await expect(editor.getByTestId("edit-status")).toHaveText("Saved. The change is in the record below.");
+  await expect.poll(tickets, { timeout: 10_000 }).toBe(before + 3);
+  // A change to the note alone is not news for the kitchen's printer.
+  await editor.locator('input[name="edit-notes"]').fill("No MSG");
+  await editor.getByRole("button", { name: "Save changes" }).click();
+  await expect(editor.getByTestId("edit-status")).toHaveText("Saved. The change is in the record below.");
+  await page.waitForTimeout(4_000);
+  expect(tickets()).toBe(before + 3);
+
   // The printer stops answering: the tablet says so, Retry now prints once it is back.
   execSync(stopPrinter!, { stdio: "inherit" });
   await sell(page);
@@ -111,14 +129,14 @@ test("the owner adds a printer; tests, new orders and reprints print; a silent p
   await expect(strip).toContainText("Kitchen · printer is not answering · 1 ticket waiting to print", { timeout: 25_000 });
   execSync(startPrinter!, { stdio: "inherit" });
   await strip.getByRole("button", { name: "Retry now" }).click();
-  await expect.poll(tickets, { timeout: 10_000 }).toBe(before + 3);
+  await expect.poll(tickets, { timeout: 10_000 }).toBe(before + 4);
   await expect(strip).toHaveCount(0, { timeout: 15_000 });
 
   // Reprint from the kitchen screen.
   await page.getByRole("link", { name: /^Kitchen/ }).first().click();
   await page.getByTestId("kitchen-ticket").first().getByTestId("reprint").click();
   await expect(page.getByTestId("kitchen-ticket").first().getByTestId("reprint")).toHaveText("Sent to the printer again.");
-  await expect.poll(tickets, { timeout: 10_000 }).toBe(before + 4);
+  await expect.poll(tickets, { timeout: 10_000 }).toBe(before + 5);
 
   // The counter PIN can test, not change printers.
   await signIn(page, "pin");

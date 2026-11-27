@@ -240,7 +240,9 @@ function Row({
         <span className={`font-display text-xl leading-none ${order.status === "cancelled" ? "line-through" : ""}`} data-testid="list-number">
           {number}
         </span>
-        <span className="order-4 col-span-3 text-sm text-ink-soft md:order-none md:col-span-1 md:text-base md:text-ink">{time}</span>
+        <span className="order-4 col-span-3 text-sm text-ink-soft md:order-none md:col-span-1 md:text-base md:text-ink" data-testid="list-time">
+          {time}
+        </span>
         <span className="order-5 col-span-3 min-w-0 truncate text-sm md:order-none md:col-span-1 md:text-base" data-testid="list-customer">
           {customer || <span className="text-ink-soft">{t("listNoCustomer")}</span>}
         </span>

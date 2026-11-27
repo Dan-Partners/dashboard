@@ -10,7 +10,13 @@ The client signs in to a shop in the **Dan cloud**, connects to a shop's own ser
 
 ![Orders on the counter](docs/screenshots/orders.png)
 
-![Till, keyed by dish number](docs/screenshots/till.png)
+![Orders as a list](docs/screenshots/orders-list.png)
+
+![Create order, picked from the menu](docs/screenshots/create-order.png)
+
+![Create order in till mode, keyed by dish number](docs/screenshots/till.png)
+
+![One order: the owner's change, the bill before and after, and what was paid](docs/screenshots/order.png)
 
 ![Kitchen ticket, split by station](docs/screenshots/ticket.png)
 
@@ -109,6 +115,8 @@ With the stop and start commands set, the tests run one at a time, so nothing el
 
 `e2e/orders.spec.ts` uses the order list in the demo (search, day, status, a row's docket), creates orders from the menu and on the keypad, and follows the old Till address. With a real shop server the counter PIN takes an order from the menu and finds it in the shop's own order history, a page at a time.
 
+The same file changes an order as the owner in the demo (details, dishes, what was paid, the record, a move back, a cancelled order). With the owner's sign-in and the shop's staff API in the cloud (`DAN_E2E_OWNER_EMAIL`, `DAN_E2E_OWNER_PASSWORD`, `DAN_E2E_CLOUD_URL`) it runs three browsers at once: the owner changes an order on the shop server, the counter PIN sees it marked and can change nothing, the change and its record arrive in the cloud, and a move back made in the cloud reaches the shop's tablets with no reload. `e2e/printing.spec.ts` checks the CHANGED ticket comes out of the printer.
+
 `e2e/views.spec.ts` adds a view in the demo, locks a tablet to it, gives it a sound, changes the board under it and removes it. With a real shop server the counter PIN sees views read-only; with a Dan cloud (as `e2e/accounts.spec.ts` needs) an online shop starts with none and a restaurant with Kitchen and Pass.
 
 `e2e/focus.spec.ts` locks the demo to the kitchen. With `DAN_E2E_PUBLIC_URL` (the shop's customer API on the cloud) it also places a table's order and follows it on a kitchen tablet and a pass tablet. The customer API limits orders from one address, so a rerun a minute later may be refused; the test says so.
@@ -120,6 +128,8 @@ With the stop and start commands set, the tests run one at a time, so nothing el
 | Orders | New, preparing, ready, completed. Collection, delivery, and eat in (from a table's link on the customer site: the docket and ticket show "Eat in · Table 3"). Accept, mark ready, then collected, delivered or served. Stamp a phone number from the docket. |
 | Orders, as a list | **Board** or **List**, kept per device. The list is every order the shop has, newest first, 50 at a time: number, time, customer, type, where it is on the board, payment, total. Search by order number, part of a name, or digits of a phone; narrow to a day and to open, completed or cancelled orders. A row opens the order's docket, with the same buttons as the board. A new order appears at the top by itself. Asked from the server (`orderHistory`); a shop server from before the list gets one made from the latest 200 orders. |
 | Create order | On the Orders page (**Create order**; on a phone, **New order** in the bottom bar), for the owner and the counter PIN. Two ways to add dishes, kept per device. **Menu**: tap dishes by category, or search by name or number; each tap adds one. **Till**: key a dish number: `2`, `×`, `81`, Add is two egg fried rice; the number keys work too. Counter or phone, collection or delivery, the customer's details and a note. The form empties after each order. The button says **Send to kitchen** where the shop has a "make" view, and **Place order** where it has none. The old `/shop/till` address opens it in till mode. With the till switched off under Ordering & payments, Create order goes. |
+| One order | `/shop/orders/<id>`: the order's docket, for anyone signed in. **The owner** (never the counter PIN) also gets **Change this order** (name, phone, address, an eat-in order's table, the note, and the dishes: quantities, remove, add by name or number), **Move the ticket** (to any column, back included; a completed order is reopened by moving it back) and the **Record of changes**. The bill is shown as it will be before saving; dishes already on the order keep their price, added ones cost what the menu says now. Collection or delivery is not changed here. The address is locked while a courier is booked. A cancelled order cannot be changed. The owner opens it with **Edit** on a docket. |
+| Changed orders | A docket the owner has changed says **Changed**, for everyone. When the bill of an order already paid has moved, the docket says what was taken, the bill now, and the difference to collect or refund ("Paid by card: £16.20. Bill is now £12.00. £4.20 to refund."). Dan charges and refunds nothing by itself: the owner takes the extra at the counter, or refunds in Stripe. |
 | Bank transfers | With bank transfer on, the orders board lists transfers waiting for payment (held in the Dan cloud, so the dashboard must be connected to it): reference, amount, customer, when it lapses. **Paid** sends the order to the board, "Paid by bank transfer"; **Not received** tells the customer. Unmarked, it lapses after 30 minutes. Dockets also show "Delivery · Shop delivery" or "Uber Direct", the delivery fee, and cash on delivery. |
 | Printing | When a printer is not answering, or tickets were given up after 30 minutes, every tablet shows a red strip (which printer, how many tickets) with **Retry now** and, after 30 minutes, **Dismiss**. **Reprint** on the kitchen screen, the orders board and the ticket page prints an order again (shown when the shop has printers). |
 | Views | The owner's screens for one part of the order flow, each in the menu after Till. A restaurant starts with **Kitchen** and **Pass**; an online shop with none. See [Views](#views). |
@@ -130,6 +140,15 @@ With the stop and start commands set, the tests run one at a time, so nothing el
 | Ordering & payments | Which order methods (Till, Table QR codes, Collection, Delivery by the shop, Delivery by Uber Direct) and payment methods (In person, Card online, Bank transfer) are on, the shop's delivery fee and minimum order, and the bank details for transfers. The owner saves; the counter PIN sees it read-only. Saved on the shop server and checked there (at least one of each stays on; delivery needs its fee and minimum; bank transfer its details; Uber Direct its account, DAN-23). With the till off, the Till and its focus mode go. The demo keeps its own copy in this browser. |
 | Order board | The owner's set-up for how orders flow: the board's **columns** (name, kind, colour, order), **views**, **sounds** (when a ticket enters a column, play a sound on any view or on the orders board) and **stations**. The counter PIN sees all of it read-only. Reset puts each back to what the shop's template started with. |
 | Tools | At the bottom of the menu, for everyone. **Table QR codes:** the ordering address comes from the Dan cloud address (`https://<shop>.dan.partners`), or the demo's `https://order.dan.partners`, and can be changed to the shop's own domain (kept on this device). Tables as `1-12, 20, A1` (letters and digits; a hyphen is a range; up to 200). Each card links to `<address>/?table=<n>`. Print gives A4, 6 cards a page, black on white with lines to cut along; each card also downloads as a PNG for a print shop. QR codes come from [`qrcode`](https://www.npmjs.com/package/qrcode) (MIT), drawn as SVG squares. **Printers:** the shop's receipt printers, which the shop's machine prints every new order on by itself (see the server README). The owner adds and edits them (name, address on the shop's network, port, 58/80 mm, the whole order or stations, copies, on/off); anyone can send a test print. Each shows Ready, Off or Not answering. Set up on the shop's machine only: through the cloud, Tools says so. |
+
+### The record of changes
+
+Every change the owner makes to an order is recorded on the server: who, when, each detail before and after, each dish's quantity before and after, and the bill before and after. A move of the ticket by the owner is recorded too. The record is shown, newest first, on the order's page, to the owner only.
+
+- Nothing in the dashboard removes or edits a record, and the server has no call for it. This is deliberate: a till that could quietly rewrite its sales would be a tool for hiding them.
+- When the dishes change on an order that is not finished, the shop's machine prints a ticket marked CHANGED (see the server README).
+- The same rules run in the browser ([`src/lib/order-edit.ts`](src/lib/order-edit.ts)) to show the bill before saving, and for the demo, which keeps its own record in this browser. The server decides.
+- A shop server from before this is asked for orders without the new fields; the Edit page then says what the server answers.
 
 ### Views
 

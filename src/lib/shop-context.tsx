@@ -8,6 +8,7 @@ import { formatPence, fulfilmentLabel, orderLabel } from "./format";
 import { english } from "./i18n";
 import { summarizeSales } from "./sales";
 import { historyPage, type OrderHistoryFilter, type OrderPage } from "./history";
+import type { OrderEdit, OrderEditInput } from "./order-edit";
 import { GraphQLDanClient, orderFields, pingServer, uploadMenuPhoto, type CourierAction } from "./graphql-client";
 import { shrinkPhoto } from "./photos";
 import { expectMine, noteBoard, seeOrder } from "./arrivals";
@@ -95,6 +96,14 @@ type ShopContextValue = {
   onServer: <T>(work: (client: GraphQLDanClient) => Promise<T>) => Promise<T>;
   removeItemPhoto: (id: string) => Promise<void>;
   placeOrder: (input: CreateOrderInput) => Promise<Order>;
+  /** One order, wherever it is (the board has only the latest). */
+  loadOrder: (id: string) => Promise<Order>;
+  /** Owner only: changes an order's details or dishes. Recorded for good. */
+  editOrder: (id: string, input: OrderEditInput) => Promise<Order>;
+  /** Owner only: moves a ticket to any column, back included. Recorded for good. */
+  moveOrderTo: (order: Order, column: string) => Promise<Order>;
+  /** Owner only: the record of the owner's changes to one order, oldest first. */
+  loadOrderEdits: (orderId: string) => Promise<OrderEdit[]>;
   /** The order list: a page of the shop's orders, newest first. */
   loadOrderHistory: (filter: OrderHistoryFilter, before?: string | null) => Promise<OrderPage>;
   setOrderStatus: (id: string, status: OrderStatus) => Promise<void>;
@@ -378,6 +387,16 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
             .getTriggers()
             .then((triggers) => setRemote((current) => (current ? { ...current, triggers } : current)))
             .catch(() => undefined);
+          // Stations and views are settings too: every tablet follows the owner's change at once.
+          void client
+            .getStations()
+            .then((stations) => setRemote((current) => (current ? { ...current, stations } : current)))
+            .catch(() => undefined);
+          void client
+            .getBoard()
+            .then((board) => client.getViews(board))
+            .then((views) => setRemote((current) => (current ? { ...current, views } : current)))
+            .catch(() => undefined);
         } else {
           void refreshRemote().catch(() => undefined);
         }
@@ -628,6 +647,42 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         writePersisted({ activeOrderId: order.id });
         await refreshRemote();
         return order;
+      },
+      async loadOrder(id) {
+        const current = getSnapshot().session;
+        if (current?.mode === "demo") {
+          const found = getSnapshot().demoState?.orders.find((entry) => entry.id === id);
+          if (!found) throw new DanError("not_found", "That order is not here.");
+          return found;
+        }
+        const end = endpointFor(current);
+        if (!end) throw new Error("Sign in first.");
+        return new GraphQLDanClient(end.url, end.token).getOrder(id);
+      },
+      async editOrder(id, input) {
+        if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.editOrder(id, input));
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        const edited = await new GraphQLDanClient(end.url, end.token).editOrder(id, input);
+        await refreshRemote();
+        return edited;
+      },
+      async moveOrderTo(order, column) {
+        // This tablet's own move is not news to it.
+        expectMine(order.id, column);
+        if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.moveOrderTo(order.id, column));
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        const moved = await new GraphQLDanClient(end.url, end.token).moveOrderTo(order.id, column);
+        await refreshRemote();
+        return moved;
+      },
+      async loadOrderEdits(orderId) {
+        const current = getSnapshot().session;
+        if (current?.mode === "demo") return (getSnapshot().demoState?.orderEdits ?? []).filter((edit) => edit.orderId === orderId);
+        const end = endpointFor(current);
+        if (!end) throw new Error("Sign in first.");
+        return new GraphQLDanClient(end.url, end.token).getOrderEdits(orderId);
       },
       async loadOrderHistory(filter, before) {
         const current = getSnapshot().session;

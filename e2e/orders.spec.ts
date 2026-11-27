@@ -5,9 +5,37 @@ import { expect, test, type Page } from "@playwright/test";
  * the menu, or with the till's keypad). In the demo first; then, with a real
  * shop server (DAN_E2E_SERVER_URL, DAN_E2E_PIN), the counter PIN takes an
  * order from the menu and finds it in the shop's own order history.
+ *
+ * Then the owner's changes to an order: in the demo, and (with the owner's
+ * sign-in, DAN_E2E_OWNER_EMAIL and DAN_E2E_OWNER_PASSWORD, and the shop's
+ * staff API in the cloud, DAN_E2E_CLOUD_URL) on a real shop server and a real
+ * cloud at once, each following the other.
  */
 const server = process.env.DAN_E2E_SERVER_URL;
+const cloud = process.env.DAN_E2E_CLOUD_URL;
 const pin = process.env.DAN_E2E_PIN ?? "";
+const ownerEmail = process.env.DAN_E2E_OWNER_EMAIL ?? "";
+const ownerPassword = process.env.DAN_E2E_OWNER_PASSWORD ?? "";
+
+/** Signs in to a Dan server by its address: the shop's own, or its staff API in the cloud. */
+async function signIn(page: Page, address: string, who: "owner" | "pin") {
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.goto("/connect");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");
+  await page.getByLabel("Shop server").fill(address);
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
+  if (who === "owner") {
+    await page.getByLabel("Email").fill(ownerEmail);
+    await page.getByLabel("Password").fill(ownerPassword);
+  } else {
+    await page.getByRole("button", { name: "PIN", exact: true }).click();
+    await page.getByLabel("PIN").fill(pin);
+  }
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
+}
 
 async function openDemo(page: Page) {
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -59,16 +87,21 @@ test("orders as a list: searched, narrowed, opened and moved on; the choice is k
   await which.selectOption("open");
   await expect(rows.first()).not.toHaveAttribute("data-status", "completed");
   for (const row of await rows.all()) await expect(row).toHaveAttribute("data-status", /^(new|preparing|ready)$/);
-  const open = await rows.count();
   await which.selectOption("all");
 
-  // Today only, then every day again.
+  // Today only (each row then says a time and no date; just after midnight there may be none), then every day again.
   await page.getByRole("button", { name: "Today", exact: true }).click();
   await expect(page.getByTestId("list-day")).not.toHaveValue("");
-  await expect(async () => expect(await rows.count()).toBeLessThan(all)).toPass();
-  expect(await rows.count()).toBeGreaterThanOrEqual(open);
+  await expect(async () => {
+    const times = await rows.getByTestId("list-time").allTextContents();
+    expect(times.length).toBeLessThanOrEqual(all);
+    for (const time of times) expect(time.trim()).toMatch(/^\d{2}:\d{2}$/);
+    if (times.length === 0) await expect(page.getByTestId("list-none")).toBeVisible();
+  }).toPass();
   await page.getByRole("button", { name: "All days" }).click();
   await expect(rows).toHaveCount(all);
+  // Some of the demo's orders are from earlier days: those rows say the date too.
+  expect((await rows.getByTestId("list-time").allTextContents()).some((time) => time.includes(","))).toBe(true);
 
   // A row opens its docket; the order moves on from there, and the row follows.
   const row = page.locator('[data-testid="list-row"]', { has: page.getByText("#1854", { exact: true }) });
@@ -237,4 +270,199 @@ test("the counter PIN takes an order from the menu and finds it in the shop's or
   await rows.getByRole("button").first().click();
   await rows.getByTestId("list-docket").getByRole("button", { name: "Ready", exact: true }).click();
   await expect(rows.getByTestId("list-where")).toHaveText("Ready");
+});
+
+test("the owner changes an order: details and dishes, what was paid, the record, and a move back", async ({ page }) => {
+  await openDemo(page);
+  // An online order, paid by card, waiting in New.
+  const fresh = page.locator("section[data-column='new'] article").first();
+  await expect(fresh.getByTestId("docket-payment")).toHaveText("Paid by card");
+  await expect(fresh.getByTestId("docket-changed")).toHaveCount(0);
+  const number = (await fresh.getByTestId("docket-number").textContent())!.trim();
+  await fresh.getByTestId("docket-edit").click();
+  await expect(page).toHaveURL(/\/shop\/orders\/[^/]+$/);
+  await expect(page.getByRole("heading", { name: `Order ${number}` })).toBeVisible();
+  // (Pages visited before can stay in the document, hidden: everything here is looked for on the page in view.)
+  const screen = page.getByTestId("order-screen").filter({ visible: true });
+  await expect(screen.getByTestId("order-record").getByTestId("record-none")).toBeVisible();
+
+  const editor = screen.getByTestId("order-editor");
+  const save = editor.getByRole("button", { name: "Save changes" });
+  const lines = editor.getByTestId("edit-line");
+  await expect(save).toBeDisabled();
+  await expect(lines).toHaveCount(3);
+  const billBefore = (await editor.getByTestId("edit-total").textContent())!.trim();
+
+  // Every dish off: an order needs one. Undo puts the form back.
+  for (let left = 3; left > 0; left -= 1) await lines.first().getByRole("button", { name: "Remove" }).click();
+  await save.click();
+  await expect(editor.getByTestId("edit-status")).toHaveText("An order needs at least one dish.");
+  await editor.getByRole("button", { name: "Undo" }).click();
+  await expect(lines).toHaveCount(3);
+  await expect(save).toBeDisabled();
+
+  // The name, one dish off, another egg fried rice on.
+  await editor.locator('input[name="edit-name"]').fill("Tom B.");
+  await editor.locator('[data-testid="edit-line"][data-number="42"]').getByRole("button", { name: "Remove" }).click();
+  await editor.getByTestId("edit-add-search").fill("81");
+  await editor.getByTestId("edit-add-dish").first().click();
+  await expect(editor.locator('[data-testid="edit-line"][data-number="81"]').getByTestId("edit-qty")).toHaveText("2");
+  // The bill as it will be, and what that means for a card already charged.
+  await expect(editor.getByTestId("edit-total")).toHaveText(`${billBefore}£12.00`);
+  await expect(editor.getByTestId("paid-difference")).toHaveText(`Paid by card: ${billBefore}. Bill is now £12.00. £4.20 to refund.`);
+  await save.click();
+  await expect(editor.getByTestId("edit-status")).toHaveText("Saved. The change is in the record below.");
+  await expect(save).toBeDisabled();
+
+  // The docket says it was changed, and what was taken; the record says who, when and what.
+  const docket = screen.locator("article").first();
+  await expect(docket.getByTestId("docket-changed")).toHaveText("Changed");
+  await expect(docket.getByTestId("paid-difference")).toContainText("£4.20 to refund");
+  await expect(docket).toContainText("Tom B.");
+  const record = screen.getByTestId("order-record").getByTestId("record-entry");
+  await expect(record).toHaveCount(1);
+  await expect(record.first()).toContainText("Mei");
+  await expect(record.first()).toContainText("Name: Tom Bradley → Tom B.");
+  await expect(record.first()).toContainText("−1 × 42 Crispy chilli beef (none now)");
+  await expect(record.first()).toContainText("+1 × 81 Egg fried rice (now 2)");
+  await expect(record.first()).toContainText(`Bill: ${billBefore} → £12.00`);
+
+  // Back to what was paid: nothing to collect or refund.
+  await editor.getByTestId("edit-add-search").fill("spring");
+  await editor.getByTestId("edit-add-dish").first().click();
+  await expect(editor.getByTestId("edit-total")).toContainText(billBefore);
+  await expect(editor.getByTestId("paid-difference")).toHaveCount(0);
+  await editor.getByRole("button", { name: "Undo" }).click();
+
+  // The owner finishes it from here, then takes it back to Ready.
+  const move = screen.getByTestId("order-move");
+  await expect(move.getByRole("button", { name: "Move", exact: true })).toBeDisabled();
+  await move.getByTestId("move-column").selectOption("completed");
+  await move.getByRole("button", { name: "Move", exact: true }).click();
+  await expect(move.getByTestId("move-status")).toHaveText("Moved. It is in the record below.");
+  await expect(record).toHaveCount(2);
+  await expect(record.first()).toHaveText(/Moved: New → Completed/);
+  await move.getByTestId("move-column").selectOption("ready");
+  await move.getByRole("button", { name: "Move", exact: true }).click();
+  await expect(record).toHaveCount(3);
+  await expect(record.first()).toHaveText(/Moved: Completed → Ready/);
+  await expect(docket.getByRole("button", { name: "Collected", exact: true })).toBeVisible();
+
+  // On the board it is in Ready, marked, with the difference; the record is still there after a reload.
+  await screen.getByRole("link", { name: "← Back to orders" }).click();
+  const onBoard = page.locator("section[data-column='ready'] article").filter({ visible: true }).filter({ has: page.getByTestId("docket-changed") });
+  await expect(onBoard).toHaveCount(1);
+  await expect(onBoard.getByTestId("docket-number")).toContainText(number);
+  await expect(onBoard.getByTestId("paid-difference")).toBeVisible();
+  await onBoard.getByTestId("docket-edit").click();
+  await expect(page).toHaveURL(/\/shop\/orders\/[^/]+$/);
+  await page.reload();
+  await expect(record).toHaveCount(3);
+
+  // A cancelled order is final: its page shows it, and offers no change.
+  // (Staff cancel an order when a delivery goes wrong; here one is cancelled in the demo's own data.)
+  await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem("dan.v1")!);
+    state.demoState.orders.find((order: { number: number }) => order.number === 1854).status = "cancelled";
+    localStorage.setItem("dan.v1", JSON.stringify(state));
+  });
+  await page.goto("/shop/orders");
+  await page.getByTestId("orders-layout-list").filter({ visible: true }).click();
+  await page.getByTestId("list-which").selectOption("cancelled");
+  const cancelled = page.getByTestId("list-row");
+  await expect(cancelled).toHaveCount(1);
+  const id = await cancelled.getAttribute("data-order");
+  await cancelled.getByRole("button").first().click();
+  await expect(cancelled.getByTestId("docket-edit")).toHaveCount(0);
+  await page.goto(`/shop/orders/${id}`);
+  await expect(screen.getByTestId("order-cancelled-note")).toHaveText("A cancelled order cannot be changed.");
+  await expect(screen.getByTestId("order-editor")).toHaveCount(0);
+  await expect(screen.getByTestId("order-move")).toHaveCount(0);
+  // An address that is no order says so.
+  await page.goto("/shop/orders/no-such-order");
+  await expect(page.getByTestId("order-missing")).toHaveText("That order is not here.");
+});
+
+test("the owner's change on the shop server reaches the cloud with its record, a move back in the cloud reaches the shop, and the PIN changes nothing", async ({ browser }) => {
+  test.skip(!server || !cloud || !pin || !ownerEmail, "Set the shop server, the cloud's staff API, the PIN and the owner's sign-in to run this.");
+  test.setTimeout(120_000);
+  const atShop = await (await browser.newContext()).newPage();
+  const inCloud = await (await browser.newContext()).newPage();
+  const counter = await (await browser.newContext()).newPage();
+  await signIn(atShop, server!, "owner");
+
+  // A phone order, taken on the shop's own server.
+  const name = `Edit ${Date.now().toString(36)}`;
+  await atShop.getByTestId("create-order").click();
+  await atShop.getByTestId("menu-picker-search").fill("81");
+  await atShop.getByTestId("menu-picker-dish").first().click();
+  const slip = atShop.getByTestId("order-slip");
+  await slip.getByRole("button", { name: "Phone", exact: true }).click();
+  await slip.getByLabel("Name").fill(name);
+  await slip.getByRole("button", { name: "Send to kitchen" }).click();
+  await expect(atShop.getByTestId("order-sent")).toContainText("Sent to the kitchen #");
+  const number = (await atShop.getByTestId("order-sent").textContent())!.match(/#(\d+)/)![1];
+
+  // The owner adds a dish and a note.
+  await atShop.getByRole("link", { name: "← Back to orders" }).click();
+  const docket = atShop.locator("article").filter({ hasText: name });
+  await docket.getByTestId("docket-edit").click();
+  const editor = atShop.getByTestId("order-editor");
+  await editor.locator('input[name="edit-notes"]').fill("No onions");
+  await editor.getByTestId("edit-add-search").fill("prawn toast");
+  await editor.getByTestId("edit-add-dish").first().click();
+  await editor.getByRole("button", { name: "Save changes" }).click();
+  await expect(editor.getByTestId("edit-status")).toHaveText("Saved. The change is in the record below.");
+  const shopRecord = atShop.getByTestId("order-record").getByTestId("record-entry");
+  await expect(shopRecord).toHaveCount(1);
+  await expect(shopRecord).toContainText("+1 × 3 Prawn toast (now 1)");
+  const orderUrl = new URL(atShop.url()).pathname;
+
+  // The counter PIN sees that it was changed, and can change nothing.
+  await signIn(counter, server!, "pin");
+  const theirs = counter.locator("article").filter({ hasText: name });
+  await expect(theirs.getByTestId("docket-changed")).toHaveText("Changed");
+  await expect(theirs.getByTestId("docket-edit")).toHaveCount(0);
+  await counter.goto(orderUrl);
+  await expect(counter.getByTestId("order-owner-only")).toHaveText("Only the owner can change an order.");
+  await expect(counter.getByTestId("order-editor")).toHaveCount(0);
+  await expect(counter.getByTestId("order-move")).toHaveCount(0);
+  await expect(counter.getByTestId("order-record")).toHaveCount(0);
+
+  // In the cloud, a moment later: the order as changed, and its record.
+  await signIn(inCloud, cloud!, "owner");
+  await inCloud.getByTestId("orders-layout-list").click();
+  await inCloud.getByTestId("list-search").fill(name);
+  const row = inCloud.getByTestId("list-row");
+  await expect(row).toHaveCount(1, { timeout: 15_000 });
+  await expect(row.getByTestId("list-number")).toHaveText(`#${number}`);
+  await row.getByRole("button").first().click();
+  await expect(row.getByTestId("docket-changed")).toBeVisible({ timeout: 15_000 });
+  await row.getByTestId("docket-edit").click();
+  const cloudRecord = inCloud.getByTestId("order-record").getByTestId("record-entry");
+  await expect(cloudRecord).toHaveCount(1, { timeout: 15_000 });
+  await expect(cloudRecord).toContainText("Note: (empty) → No onions");
+
+  // The shop finishes the order; the owner, in the cloud, takes it back to New.
+  await atShop.getByRole("link", { name: "← Back to orders" }).click();
+  const moving = atShop.locator("article").filter({ hasText: name });
+  await moving.getByRole("button", { name: "Ready", exact: true }).click();
+  await atShop.waitForTimeout(1500);
+  await moving.getByRole("button", { name: "Collected", exact: true }).click();
+  await expect(atShop.locator("section[data-column='completed'] article").filter({ hasText: name })).toBeVisible();
+  const move = inCloud.getByTestId("order-move");
+  await expect(move.getByTestId("move-column")).toHaveValue("completed", { timeout: 15_000 });
+  await move.getByTestId("move-column").selectOption("new");
+  await move.getByRole("button", { name: "Move", exact: true }).click();
+  await expect(move.getByTestId("move-status")).toHaveText("Moved. It is in the record below.");
+  await expect(cloudRecord).toHaveCount(2);
+
+  // The shop's tablets follow, with no reload; the record is on the shop server too.
+  await expect(atShop.locator("section[data-column='new'] article").filter({ hasText: name })).toBeVisible({ timeout: 20_000 });
+  await atShop.goto(orderUrl);
+  await expect(shopRecord).toHaveCount(2, { timeout: 15_000 });
+  await expect(shopRecord.first()).toHaveText(/Moved: Completed → New/);
+  // And it carries on from there as ever.
+  await atShop.getByTestId("order-screen").locator("article").first().getByRole("button", { name: "Accept", exact: true }).click();
+  await expect(inCloud.getByTestId("order-move").getByTestId("move-column")).toHaveValue("preparing", { timeout: 20_000 });
 });
