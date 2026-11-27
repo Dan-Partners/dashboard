@@ -2,18 +2,24 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useReducer, useState } from "react";
+import { amountLabel, signedPence } from "@/lib/addons";
 import { isDanError } from "@/lib/errors";
 import { formatPence, orderLabel, primaryName, secondaryName } from "@/lib/format";
 import { messageForError, useI18n } from "@/lib/i18n";
-import { dishesFor, hasKitchen } from "@/lib/create-order";
+import { dishesFor, draftKey, hasKitchen, mergeDraft, priceSlip, type Draft } from "@/lib/create-order";
+import { lineTotal, offered } from "@/lib/pricing";
 import { useShop } from "@/lib/shop-context";
 import { writePersisted } from "@/lib/storage";
+import { lineDetails } from "@/lib/ticket";
 import type { MenuItem } from "@/lib/types";
+import { defaultChoice, DishChooser, type DishChoice } from "./dish-chooser";
 import { DishPhoto } from "./dish-photo";
+import { LineDetails } from "./line-details";
 import { Button, PageTitle } from "./ui";
 
 type Entry = { phase: "dish" | "qty"; qty: number; digits: string };
-type Draft = { number: number; nameEn: string; nameZh: string; qty: number; unitPricePence: number };
+/** The dish being chosen: a new line, or (`editing`) one already on the slip. */
+type Choosing = { item: MenuItem; editing: string | null; start?: DishChoice };
 
 function entryReducer(state: Entry, action: "digit" | "back" | "clear" | "times" | string): Entry {
   if (action === "clear") return { phase: "dish", qty: 1, digits: "" };
@@ -43,6 +49,13 @@ export function CreateOrder() {
   const items = useMemo(() => shop.snapshot?.items ?? [], [shop.snapshot?.items]);
   const [entry, dispatch] = useReducer(entryReducer, { phase: "dish", qty: 1, digits: "" });
   const [lines, setLines] = useState<Draft[]>([]);
+  // The bill add-ons ticked. Null: nobody has touched them, so the ones ticked by default.
+  const [billTicked, setBillTicked] = useState<string[] | null>(null);
+  const [choosing, setChoosing] = useState<Choosing | null>(null);
+  const allAddons = useMemo(() => shop.snapshot?.addons ?? [], [shop.snapshot?.addons]);
+  // What staff are offered: the add-ons for orders created here, not the online-only ones.
+  const dishAddons = useMemo(() => offered(allAddons, "dish", "local"), [allAddons]);
+  const billAddons = useMemo(() => offered(allAddons, "bill", "local"), [allAddons]);
   const [fulfilment, setFulfilment] = useState<"collection" | "delivery">("collection");
   const [source, setSource] = useState<"counter" | "phone">("counter");
   const [phone, setPhone] = useState("");
@@ -59,20 +72,35 @@ export function CreateOrder() {
 
   const exact = items.find((item) => String(item.number) === entry.digits);
 
-  function add(item: MenuItem, qty: number) {
+  /** Adds a dish as chosen; with nothing chosen, as it comes: the first of each "choose one", and the add-ons ticked by default. */
+  function add(item: MenuItem, qty: number, choice?: Omit<DishChoice, "qty">) {
     setError(null);
     if (item.soldOut) {
       setError(`${item.number} ${primaryName(item.nameEn, item.nameZh, locale)} · ${t("tillSoldOut")}`);
       return;
     }
-    setLines((current) => {
-      const existing = current.find((line) => line.number === item.number);
-      if (existing) {
-        return current.map((line) => (line.number === item.number ? { ...line, qty: Math.min(99, line.qty + qty) } : line));
-      }
-      return [...current, { number: item.number, nameEn: item.nameEn, nameZh: item.nameZh, qty, unitPricePence: item.pricePence }];
-    });
+    const taken = choice ?? defaultChoice(item, dishAddons);
+    setLines((current) => mergeDraft(current, { number: item.number, qty, options: taken.options, addons: taken.addons }));
     setSent(null);
+  }
+
+  /** A dish with options is chosen first; any other goes straight on the slip. */
+  function pick(item: MenuItem, qty: number) {
+    if (!item.soldOut && (item.options?.length ?? 0) > 0) {
+      setError(null);
+      setChoosing({ item, editing: null, start: { ...defaultChoice(item, dishAddons), qty } });
+      return;
+    }
+    add(item, qty);
+  }
+
+  function chosen(choice: DishChoice) {
+    if (!choosing) return;
+    const { item, editing } = choosing;
+    setChoosing(null);
+    if (editing === null) return add(item, choice.qty, choice);
+    // A line changed on the slip: taken off as it was, put back as it is now.
+    setLines((current) => mergeDraft(current.filter((line) => draftKey(line) !== editing), { number: item.number, qty: choice.qty, options: choice.options, addons: choice.addons }));
   }
 
   function addKeyed() {
@@ -83,13 +111,13 @@ export function CreateOrder() {
       setError(t("tillUnknown"));
       return;
     }
-    add(item, entry.phase === "qty" ? entry.qty : 1);
+    pick(item, entry.phase === "qty" ? entry.qty : 1);
     if (!item.soldOut) dispatch("clear");
   }
 
   useEffect(() => {
     // The keys are the keypad's: only in till mode.
-    if (mode !== "till") return;
+    if (mode !== "till" || choosing) return;
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const tag = target?.tagName;
@@ -115,7 +143,9 @@ export function CreateOrder() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  const total = lines.reduce((sum, line) => sum + line.qty * line.unitPricePence, 0);
+  // The slip priced by the server's own rule, so staff see the bill before it is sent. The server still decides.
+  const slip = useMemo(() => priceSlip(lines, billTicked, items, allAddons), [lines, billTicked, items, allAddons]);
+  const total = slip.totalPence;
   const display = entry.phase === "qty" ? `${entry.qty} × ${entry.digits || "—"}` : entry.digits || "—";
 
   async function send() {
@@ -133,10 +163,11 @@ export function CreateOrder() {
         customerName: name,
         address: fulfilment === "delivery" ? address : "",
         notes,
-        lines: lines.map((line) => ({ number: line.number, qty: line.qty })),
+        ...slip.input,
       });
       // A new order is a new customer: nothing of this one is left in the form.
       setLines([]);
+      setBillTicked(null);
       setNotes("");
       setPhone("");
       setName("");
@@ -240,32 +271,75 @@ export function CreateOrder() {
             </div>
             <ul className="mt-5 divide-y divide-rule border-y border-rule">
               {lines.length === 0 ? <li className="py-4 text-ink-soft">{t("tillEmpty")}</li> : null}
-              {lines.map((line) => (
-                <li key={line.number} className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 py-3" data-testid="slip-line">
-                  <DishPhoto photo={items.find((item) => item.number === line.number)?.photo} size="thumb" className="size-11 shrink-0" />
-                  <span className="w-10 font-display text-xl text-accent-ink">{line.number}</span>
+              {slip.rows.map(({ key, draft, item, line, problem }) => (
+                <li key={key} className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 py-3" data-testid="slip-line" data-number={draft.number}>
+                  <DishPhoto photo={item?.photo} size="thumb" className="size-11 shrink-0" />
+                  <span className="w-10 font-display text-xl text-accent-ink">{draft.number}</span>
                   <span className="min-w-[7rem] flex-1">
-                    <span className="block">{primaryName(line.nameEn, line.nameZh, locale)}</span>
-                    <span className="font-zh text-sm text-ink-soft">{secondaryName(line.nameEn, line.nameZh, locale)}</span>
+                    <span className="block">{item ? primaryName(item.nameEn, item.nameZh, locale) : t("tillUnknown")}</span>
+                    {item ? <span className="font-zh text-sm text-ink-soft">{secondaryName(item.nameEn, item.nameZh, locale)}</span> : null}
+                    {line ? <LineDetails details={lineDetails(line)} /> : null}
+                    {problem ? (
+                      <span className="block text-sm text-accent-ink" role="alert">
+                        {messageForError(problem.code, t, problem.message)}
+                      </span>
+                    ) : null}
                   </span>
                   <span className="flex items-center gap-1">
-                    <IconButton label="−" onClick={() => changeQty(line.number, -1)} />
+                    <IconButton label="−" onClick={() => changeQty(key, -1)} />
                     <span className="w-6 text-center font-display" data-testid="slip-qty">
-                      {line.qty}
+                      {draft.qty}
                     </span>
-                    <IconButton label="+" onClick={() => changeQty(line.number, 1)} />
+                    <IconButton label="+" onClick={() => changeQty(key, 1)} />
                   </span>
-                  <span className="w-16 text-right font-display">{formatPence(line.qty * line.unitPricePence)}</span>
-                  <button
-                    type="button"
-                    className="min-h-11 min-w-11 cursor-pointer px-1 text-sm text-ink-soft active:text-ink"
-                    onClick={() => setLines((current) => current.filter((entryLine) => entryLine.number !== line.number))}
-                  >
+                  <span className="w-16 text-right font-display" data-testid="slip-line-total">
+                    {line ? formatPence(lineTotal(line)) : "—"}
+                  </span>
+                  {/* How the dish is taken can be changed where it has options, or where the shop has add-ons for a dish. */}
+                  {item && !problem && ((item.options?.length ?? 0) > 0 || dishAddons.length > 0) ? (
+                    <button
+                      type="button"
+                      className="min-h-11 min-w-11 cursor-pointer px-1 text-sm text-ink-soft underline active:text-ink"
+                      onClick={() => setChoosing({ item, editing: key, start: { options: draft.options, addons: draft.addons, qty: draft.qty } })}
+                      data-testid="slip-change"
+                    >
+                      {t("slipChange")}
+                    </button>
+                  ) : null}
+                  <button type="button" className="min-h-11 min-w-11 cursor-pointer px-1 text-sm text-ink-soft active:text-ink" onClick={() => setLines((current) => current.filter((entryLine) => draftKey(entryLine) !== key))}>
                     {t("tillRemove")}
                   </button>
                 </li>
               ))}
             </ul>
+            {billAddons.length > 0 ? (
+              <fieldset className="mt-3" data-testid="slip-addons">
+                <legend className="font-display text-[0.72rem] tracking-[0.16em] text-ink-soft uppercase">{t("slipBillAddons")}</legend>
+                {billAddons.map((addon) => {
+                  const applied = slip.addons.find((entryAddon) => entryAddon.id === addon.id);
+                  return (
+                    <label key={addon.id} className={`flex min-h-11 items-center gap-3 ${addon.required ? "" : "cursor-pointer"}`}>
+                      <input
+                        type="checkbox"
+                        checked={slip.billIds.includes(addon.id)}
+                        disabled={addon.required}
+                        onChange={() => setBillTicked(slip.billIds.includes(addon.id) ? slip.billIds.filter((id) => id !== addon.id) : [...slip.billIds, addon.id])}
+                        data-testid="slip-addon"
+                        data-addon={addon.id}
+                      />
+                      <span className="min-w-0 flex-1">
+                        {primaryName(addon.nameEn, addon.nameZh, locale)}
+                        <span className="ml-2 text-sm text-ink-soft">{amountLabel(addon)}</span>
+                        {addon.required ? <span className="ml-2 text-sm text-ink-soft">· {t("chooseRequired")}</span> : null}
+                      </span>
+                      <span className="w-20 text-right font-display" data-testid="slip-addon-amount">
+                        {applied && lines.length > 0 ? signedPence(applied.amountPence) : ""}
+                      </span>
+                    </label>
+                  );
+                })}
+              </fieldset>
+            ) : null}
             <div className="mt-4 flex items-baseline justify-between">
               <span className="font-display text-[0.72rem] tracking-[0.18em] uppercase text-ink-soft">{t("tillTotal")}</span>
               <span className="font-display text-4xl" data-testid="slip-total">
@@ -315,16 +389,29 @@ export function CreateOrder() {
             {sendButton}
           </section>
         ) : (
-          <MenuPicker items={items} lines={lines} total={total} onPick={(item) => add(item, 1)} />
+          <MenuPicker items={items} lines={lines} total={total} onPick={(item) => pick(item, 1)} />
         )}
       </div>
+      {choosing ? (
+        <DishChooser
+          key={`${choosing.item.id}:${choosing.editing ?? "new"}`}
+          item={choosing.item}
+          menu={items}
+          dishAddons={dishAddons}
+          lockRequired
+          start={choosing.start}
+          confirmLabel={t(choosing.editing === null ? "chooseAdd" : "chooseUpdate")}
+          onConfirm={chosen}
+          onClose={() => setChoosing(null)}
+        />
+      ) : null}
     </div>
   );
 
-  function changeQty(number: number, delta: number) {
+  function changeQty(key: string, delta: number) {
     setLines((current) =>
       current.flatMap((line) => {
-        if (line.number !== number) return [line];
+        if (draftKey(line) !== key) return [line];
         const qty = line.qty + delta;
         if (qty <= 0) return [];
         return [{ ...line, qty: Math.min(99, qty) }];
@@ -376,7 +463,7 @@ function MenuPicker({ items, lines, total, onPick }: { items: MenuItem[]; lines:
       {items.length === 0 ? <p className="mt-4 text-ink-soft">{t("menuEmptyCounter")}</p> : shown.length === 0 ? <p className="mt-4 text-ink-soft">{t("createNoDishes")}</p> : null}
       <ul className="mt-3 divide-y divide-rule border-y border-rule lg:max-h-[calc(100dvh-19rem)] lg:overflow-y-auto">
         {shown.map((item) => {
-          const inSlip = lines.find((line) => line.number === item.number)?.qty ?? 0;
+          const inSlip = lines.filter((line) => line.number === item.number).reduce((sum, line) => sum + line.qty, 0);
           return (
             <li key={item.id}>
               <button

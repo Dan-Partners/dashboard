@@ -1,6 +1,7 @@
 import { asDanError, DanError } from "./errors";
 import { normalizeServerUrl } from "./url";
 import type {
+  Addon,
   AwaitingPayment,
   Category,
   CategoryNames,
@@ -33,7 +34,7 @@ import { DEFAULT_BOARD, type Board, type BoardPreview } from "./board";
 import { DEFAULT_TRIGGERS, TRIGGER_FIELDS, type Triggers } from "./triggers";
 import { kitchenAndPass, VIEW_FIELDS, type View } from "./views";
 import { HISTORY_PAGE, historyPage, type OrderHistoryFilter, type OrderPage } from "./history";
-import { ORDER_EDIT_FIELDS, type OrderEdit, type OrderEditInput } from "./order-edit";
+import { orderEditFields, type OrderEdit, type OrderEditInput } from "./order-edit";
 import { DEFAULT_UBER, UBER_FIELDS, type UberKeys, type UberOptions, type UberOptionsInput } from "./uber";
 
 /**
@@ -51,20 +52,32 @@ const CATEGORY = "id nameEn nameZh sort";
 const STATION = "id nameEn nameZh";
 const MENU_ITEM_BASE =
   "id number categoryId nameEn nameZh descriptionEn pricePence station allergens soldOut kind includes { number qty }";
-const MENU_ITEM = `${MENU_ITEM_BASE} photo`;
+const MENU_ITEM_PHOTO = `${MENU_ITEM_BASE} photo`;
+/** With a dish's options (DAN-32). */
+const MENU_ITEM = `${MENU_ITEM_PHOTO} options { id nameEn nameZh kind choices { id nameEn nameZh pricePence allergens } }`;
+/** What a shop server may know of a dish, newest first: asked in turn until one is read. */
+const MENU_ITEM_LEVELS = [MENU_ITEM, MENU_ITEM_PHOTO, MENU_ITEM_BASE];
+const ADDON = "id nameEn nameZh scope kind value auto required channels";
+const APPLIED_ADDON = "id nameEn nameZh kind value amountPence";
 const PRINTER = "id name host port paper stations copies enabled";
 const ORDERING =
   "settings { till table collection delivery uberDirect payInPerson stripe bankTransfer deliveryFeePence deliveryMinimumPence } bank { accountName sortCode accountNumber referencePrefix } uberReady";
 /** The order fields a shop server from before delivery and bank transfer knows. */
-const ORDER_FIELDS_BASE = `id number createdAt source fulfilment status customerName phone address notes table totalPence payment { method status }
-  lines { itemId number nameEn nameZh qty unitPricePence station kind components { number nameEn nameZh qty station } }`;
+const ORDER_HEAD = "id number createdAt source fulfilment status customerName phone address notes table totalPence payment { method status }";
+const LINE_FIELDS = "itemId number nameEn nameZh qty unitPricePence station kind components { number nameEn nameZh qty station }";
+const ORDER_FIELDS_BASE = `${ORDER_HEAD}
+  lines { ${LINE_FIELDS} }`;
+/** With the options chosen for each dish, and the add-ons on dishes and on the bill (DAN-32). */
+const ORDER_FIELDS_PRICED = `${ORDER_HEAD}
+  lines { ${LINE_FIELDS} options { groupId choiceId groupEn groupZh nameEn nameZh pricePence } addons { ${APPLIED_ADDON} } } addons { ${APPLIED_ADDON} }`;
 const BOARD_COLUMN = "id nameEn nameZh role colour";
 const COURIER = "courier { deliveryId status trackingUrl feePence pickupEta dropoffEta courierName problem } refund";
-/** What the shop server knows: 4 with the owner's changes (DAN-31), 3 with board columns (DAN-25), 2 with couriers (DAN-23), 1 with delivery fees, 0 before them. */
-let orderLevel = 4;
+/** What the shop server knows: 5 with options and add-ons (DAN-32), 4 with the owner's changes (DAN-31), 3 with board columns (DAN-25), 2 with couriers (DAN-23), 1 with delivery fees, 0 before them. */
+let orderLevel = 5;
 /** The order fields the dashboard uses, for queries and the live channel alike. */
 export function orderFields(): string {
-  if (orderLevel >= 4) return `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy ${COURIER} column columnAt columnRemap editCount paidPence`;
+  if (orderLevel >= 5) return `${ORDER_FIELDS_PRICED} deliveryFeePence deliveryBy ${COURIER} column columnAt columnRemap editCount paidPence`;
+  if (orderLevel === 4) return `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy ${COURIER} column columnAt columnRemap editCount paidPence`;
   if (orderLevel === 3) return `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy ${COURIER} column columnAt columnRemap`;
   if (orderLevel === 2) return `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy ${COURIER}`;
   return orderLevel === 1 ? `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy` : ORDER_FIELDS_BASE;
@@ -197,12 +210,14 @@ export class GraphQLDanClient implements DanClient {
    * read), so the query is asked once more without it.
    */
   private async withPhotos<T>(query: (fields: string) => string, variables: Record<string, unknown> = {}): Promise<T> {
-    try {
-      return await this.run<T>(query(MENU_ITEM), variables);
-    } catch (error) {
-      if (error instanceof DanError && error.code === "bad_response") return this.run<T>(query(MENU_ITEM_BASE), variables);
-      throw error;
+    for (const fields of MENU_ITEM_LEVELS.slice(0, -1)) {
+      try {
+        return await this.run<T>(query(fields), variables);
+      } catch (error) {
+        if (!(error instanceof DanError && error.code === "bad_response")) throw error;
+      }
     }
+    return this.run<T>(query(MENU_ITEM_BASE), variables);
   }
 
   async getMenu(): Promise<MenuPayload> {
@@ -364,6 +379,25 @@ export class GraphQLDanClient implements DanClient {
     return data.updateStations;
   }
 
+  /** The shop's add-ons. A server from before add-ons has none. */
+  async getAddons(): Promise<Addon[]> {
+    try {
+      const data = await this.run<{ addons: Addon[] }>(`query Addons { addons { ${ADDON} } }`);
+      return data.addons;
+    } catch (error) {
+      if (error instanceof DanError && error.code === "bad_response") return [];
+      throw error;
+    }
+  }
+
+  /** Owner only. */
+  async updateAddons(addons: Addon[]): Promise<Addon[]> {
+    const data = await this.run<{ updateAddons: Addon[] }>(`mutation UpdateAddons($addons: [AddonInput!]!) { updateAddons(addons: $addons) { ${ADDON} } }`, {
+      addons: addons.map(({ id, nameEn, nameZh, scope, kind, value, auto, required, channels }) => ({ id, nameEn, nameZh, scope, kind, value, auto, required, channels })),
+    });
+    return data.updateAddons;
+  }
+
   async setCounterPin(pin: string): Promise<void> {
     await this.run<{ setCounterPin: boolean }>(`mutation SetCounterPin($pin: String!) { setCounterPin(pin: $pin) }`, { pin });
   }
@@ -414,8 +448,14 @@ export class GraphQLDanClient implements DanClient {
 
   /** Owner only. */
   async getOrderEdits(orderId: string): Promise<OrderEdit[]> {
-    const data = await this.run<{ orderEdits: OrderEdit[] }>(`query OrderEdits($id: ID!) { orderEdits(orderId: $id) { ${ORDER_EDIT_FIELDS} } }`, { id: orderId });
-    return data.orderEdits;
+    const ask = (detail: boolean) => this.run<{ orderEdits: OrderEdit[] }>(`query OrderEdits($id: ID!) { orderEdits(orderId: $id) { ${orderEditFields(detail)} } }`, { id: orderId });
+    try {
+      return (await ask(true)).orderEdits;
+    } catch (error) {
+      // A shop server from before dish options keeps the record without each line's detail.
+      if (error instanceof DanError && error.code === "bad_response") return (await ask(false)).orderEdits;
+      throw error;
+    }
   }
 
   /**

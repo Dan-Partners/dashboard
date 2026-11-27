@@ -7,7 +7,10 @@ import { messageForError, useI18n, type CopyKey } from "@/lib/i18n";
 import { useIsOwner, useShop } from "@/lib/shop-context";
 import { defaultStation, stationGloss, stationName } from "@/lib/stations";
 import { ALLERGENS, type Allergen, type Category, type DanClient, type MenuItem } from "@/lib/types";
+import { checkOptions } from "@/lib/addons";
+import { AddonsSection } from "./addons-section";
 import { DishPhoto } from "./dish-photo";
+import { fromOptionRows, OptionsEditor, toOptionRows, type GroupRow } from "./options-editor";
 import { Button, Dialog, PageTitle } from "./ui";
 
 const ALLERGEN_KEY: Record<Allergen, CopyKey> = {
@@ -118,6 +121,11 @@ export function MenuBoard() {
                         {item.allergens.map((allergen) => t(ALLERGEN_KEY[allergen])).join(" · ")}
                       </span>
                     ) : null}
+                    {(item.options?.length ?? 0) > 0 ? (
+                      <span className="mt-1 block pl-[3.25rem] text-sm text-ink-soft" data-testid="dish-options">
+                        {t("optionsTitle")}: {item.options!.map((group) => primaryName(group.nameEn, group.nameZh, locale)).join(" · ")}
+                      </span>
+                    ) : null}
                   </button>
                   <DishPhoto photo={item.photo} size="thumb" className="mt-1 size-11 shrink-0 border border-rule" />
                   <button
@@ -167,6 +175,7 @@ export function MenuBoard() {
         />
       ) : null}
       {arranging ? <CategoriesDialog onClose={() => setArranging(false)} /> : null}
+      <AddonsSection />
     </div>
   );
 }
@@ -210,6 +219,7 @@ function DishForm({
   const [descriptionEn, setDescriptionEn] = useState(item?.descriptionEn ?? "");
   const [allergens, setAllergens] = useState<Allergen[]>(item?.allergens ?? []);
   const [soldOut, setSoldOut] = useState(item?.soldOut ?? false);
+  const [optionRows, setOptionRows] = useState<GroupRow[]>(() => toOptionRows(item?.options ?? []));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -228,15 +238,31 @@ function DishForm({
       setError(t("menuInvalid"));
       return;
     }
+    // The options are checked here as the server will check them, so the owner is told at once what is wrong.
+    const typed = fromOptionRows(optionRows);
+    if (!typed) {
+      setError(t("optionsInvalid"));
+      return;
+    }
+    let options;
+    try {
+      options = checkOptions({ kind: item?.kind ?? "item", pricePence }, typed);
+    } catch {
+      const named = typed.every((group) => (group.nameEn.trim() || group.nameZh.trim()) && group.choices.length > 0 && group.choices.every((choice) => choice.nameEn.trim() || choice.nameZh.trim()));
+      setError(t(named ? "errBadOptions" : "optionsInvalid"));
+      return;
+    }
+    // A dish that has no options, and had none, says nothing of them: every shop server understands that.
+    const withOptions = options.length > 0 || (item?.options?.length ?? 0) > 0 ? { options } : {};
     setBusy(true);
     setError(null);
     try {
       if (item) {
-        await shop.updateItem(item.id, { number: parsedNumber, nameEn, nameZh, pricePence, categoryId, station, descriptionEn, allergens, soldOut });
+        await shop.updateItem(item.id, { number: parsedNumber, nameEn, nameZh, pricePence, categoryId, station, descriptionEn, allergens, soldOut, ...withOptions });
         onDone(t("menuSaved"));
       } else {
         await shop.editMenu((client) =>
-          client.createMenuItem({ number: parsedNumber, nameEn, nameZh, pricePence, categoryId, station, descriptionEn, allergens }),
+          client.createMenuItem({ number: parsedNumber, nameEn, nameZh, pricePence, categoryId, station, descriptionEn, allergens, ...withOptions }),
         );
         onDone(t("menuAdded"), categoryId);
       }
@@ -334,6 +360,8 @@ function DishForm({
             ))}
           </div>
         </fieldset>
+        {/* A set meal has no options: its dishes are fixed. */}
+        {item?.kind === "set" ? null : <OptionsEditor rows={optionRows} onChange={setOptionRows} allergenKey={ALLERGEN_KEY} />}
         {item ? (
           <label className="flex min-h-11 items-center gap-2">
             <input type="checkbox" checked={soldOut} onChange={(event) => setSoldOut(event.target.checked)} />

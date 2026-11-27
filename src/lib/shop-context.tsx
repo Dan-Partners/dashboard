@@ -31,6 +31,7 @@ import {
   type Persisted,
 } from "./storage";
 import type {
+  Addon,
   CreateOrderInput,
   Customer,
   DanClient,
@@ -49,6 +50,7 @@ import type {
 } from "./types";
 import { DEFAULT_STATIONS } from "./types";
 import { normalizeStations } from "./stations";
+import { normalizeAddons } from "./addons";
 import { normalizeViews, type View } from "./views";
 import type { CloudSession } from "./cloud";
 
@@ -84,6 +86,8 @@ type ShopContextValue = {
   resetViews: () => Promise<View[]>;
   /** Owner only: the shop's stations, the whole list in order. */
   saveStations: (stations: Station[]) => Promise<Station[]>;
+  /** Owner only: the shop's add-ons, the whole list in order. */
+  saveAddons: (addons: Addon[]) => Promise<Addon[]>;
   enterDemo: () => void;
   logout: () => void;
   resetDemo: () => void;
@@ -152,6 +156,7 @@ function snapshotFromPersisted(persisted: Persisted): ShopSnapshot | null {
     ordering: normalizeSetup(state.ordering),
     board: normalizeBoard(state.board),
     stations: normalizeStations(state.stations, DEFAULT_STATIONS),
+    addons: normalizeAddons(state.addons),
     views: normalizeViews(state.views, normalizeBoard(state.board)),
     // Sounds only where they can still play, as the server returns them.
     triggers: onlyOn(normalizeTriggers(state.triggers), normalizeViews(state.views, normalizeBoard(state.board)).map((view) => view.id)),
@@ -160,7 +165,7 @@ function snapshotFromPersisted(persisted: Persisted): ShopSnapshot | null {
 
 async function pullRemote(baseUrl: string, token: string): Promise<Omit<ShopSnapshot, "shop"> & { theme: ThemeChoice }> {
   const client = new GraphQLDanClient(baseUrl, token);
-  const [menu, orders, customers, theme, ordering, board, triggers, stations] = await Promise.all([
+  const [menu, orders, customers, theme, ordering, board, triggers, stations, addons] = await Promise.all([
     client.getMenu(),
     client.getOrders(),
     client.getCustomers(),
@@ -169,6 +174,7 @@ async function pullRemote(baseUrl: string, token: string): Promise<Omit<ShopSnap
     client.getBoard(),
     client.getTriggers(),
     client.getStations(),
+    client.getAddons(),
   ]);
   // After the board: a server from before views has the kitchen and the pass on it.
   const views = await client.getViews(board);
@@ -181,6 +187,7 @@ async function pullRemote(baseUrl: string, token: string): Promise<Omit<ShopSnap
     board,
     triggers,
     stations,
+    addons,
     views,
     theme,
   };
@@ -258,7 +265,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     writePersisted({ session: next });
     adoptShopTheme(theme);
     const authed = new GraphQLDanClient(next.serverUrl, next.token);
-    const [menu, orders, customers, ordering, board, triggers, stations] = await Promise.all([
+    const [menu, orders, customers, ordering, board, triggers, stations, addons] = await Promise.all([
       authed.getMenu(),
       authed.getOrders(),
       authed.getCustomers(),
@@ -266,6 +273,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       authed.getBoard(),
       authed.getTriggers(),
       authed.getStations(),
+      authed.getAddons(),
     ]);
     const views = await authed.getViews(board);
     boardNow = board;
@@ -280,6 +288,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       board,
       triggers,
       stations,
+      addons,
       views,
     });
     setRemoteError(null);
@@ -366,6 +375,11 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
           seen.add(order.id);
         } else if (event.kind === "menu") {
           void client.getMenu().then((menu) => setRemote((current) => (current ? { ...current, ...menu } : current))).catch(() => undefined);
+          // Add-ons are told with the menu: every tablet follows the owner's change at once.
+          void client
+            .getAddons()
+            .then((addons) => setRemote((current) => (current ? { ...current, addons } : current)))
+            .catch(() => undefined);
         } else if (event.kind === "customers") {
           void client
             .getCustomers()
@@ -552,6 +566,14 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         if (!end) throw new Error("Sign in first.");
         const saved = await new GraphQLDanClient(end.url, end.token).updateStations(stations);
         setRemote((current) => (current ? { ...current, stations: saved } : current));
+        return saved;
+      },
+      async saveAddons(addons) {
+        if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.updateAddons(addons));
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        const saved = await new GraphQLDanClient(end.url, end.token).updateAddons(addons);
+        setRemote((current) => (current ? { ...current, addons: saved } : current));
         return saved;
       },
       async saveShop(patch) {

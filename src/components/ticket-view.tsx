@@ -5,7 +5,7 @@ import { useState } from "react";
 import { formatClock, formatPence, fulfilmentLabel, orderLabel, primaryName } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
-import { ticketSections, type TicketSection } from "@/lib/ticket";
+import { billLines, ticketLineKey, ticketSections, type TicketSection } from "@/lib/ticket";
 import { stationGloss, stationName } from "@/lib/stations";
 import type { Order, Shop, Station } from "@/lib/types";
 import { ReprintButton } from "./print-strip";
@@ -94,17 +94,35 @@ function Slip({ order, shopInfo, stations, sections }: { order: Order; shopInfo:
             ) : null}
             <ul className="mt-1">
               {section.lines.map((line) => (
-                <li key={`${section.station}-${line.number}`} className="mt-1">
+                <li key={ticketLineKey(line)} className="mt-1">
                   <p>
                     {line.qty} × {line.number} {line.nameEn}
                   </p>
                   {line.nameZh && line.nameZh !== line.nameEn ? <p className="pl-8 font-zh">{line.nameZh}</p> : null}
+                  {/* What was chosen for the dish, as the printed ticket has it: one to a line, an add-on with a plus. */}
+                  {line.details.map((detail) => (
+                    <p key={`${detail.addon}-${detail.nameEn}`} className="pl-8 text-sm" data-testid="ticket-detail">
+                      - {detail.addon ? "+ " : ""}
+                      {detail.nameEn}
+                      {detail.nameZh && detail.nameZh !== detail.nameEn ? <span className="font-zh"> {detail.nameZh}</span> : null}
+                    </p>
+                  ))}
                 </li>
               ))}
             </ul>
           </section>
         ))}
         <Rule />
+        {/* The bill's add-ons, above the total. The slip is the whole order's, so they are always here. */}
+        {billLines(order).map((line) => (
+          <p key={line.id} className="flex justify-between gap-3" data-testid="ticket-addon">
+            <span>
+              {line.nameEn}
+              {line.rate ? ` ${line.rate}` : ""}
+            </span>
+            <span>{line.amount}</span>
+          </p>
+        ))}
         <p className="flex justify-between font-display text-base">
           <span>{t("tillTotal").toUpperCase()}</span>
           <span>{formatPence(order.totalPence)}</span>

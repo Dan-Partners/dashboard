@@ -112,6 +112,77 @@ export type MenuInclude = {
   qty: number;
 };
 
+/** How many choices are made in a group of a dish's options: exactly one (a size), or any number (extras). */
+export type OptionKind = "one" | "any";
+
+/** One choice in a group of a dish's options. */
+export type OptionChoice = {
+  /** Its own within the dish: a-z, 0-9, - and _. Orders name choices by it. */
+  id: string;
+  nameEn: string;
+  nameZh: string;
+  /** What it adds to the dish's price, in pence. A minus takes off; 0 changes nothing. */
+  pricePence: number;
+  /** Allergens this choice brings that the dish itself may not have. */
+  allergens: Allergen[];
+};
+
+/** A group of a dish's options: "Size", "Extras". */
+export type OptionGroup = {
+  id: string;
+  nameEn: string;
+  nameZh: string;
+  kind: OptionKind;
+  choices: OptionChoice[];
+};
+
+/** An option chosen for a dish on an order, as it was when the order was taken. */
+export type ChosenOption = {
+  groupId: string;
+  choiceId: string;
+  groupEn: string;
+  groupZh: string;
+  nameEn: string;
+  nameZh: string;
+  pricePence: number;
+};
+
+export type AmountKind = "fixed" | "percent";
+
+/**
+ * One of the shop's add-ons: a named amount for the whole bill or for one
+ * dish, plus or minus (a service charge, a carrier bag, a promotion).
+ */
+export type Addon = {
+  /** Stable: a-z, 0-9, - and _. Orders name add-ons by it. */
+  id: string;
+  nameEn: string;
+  nameZh: string;
+  /** `bill`: one line on the bill. `dish`: attached to a dish, and offered on every dish. */
+  scope: "bill" | "dish";
+  kind: AmountKind;
+  /** Pence for a fixed amount; hundredths of a percent for a percentage (1000 is 10%). A minus takes off. Never 0. */
+  value: number;
+  /** Ticked by default. */
+  auto: boolean;
+  /** Always applied: whoever creates the order cannot take it off. */
+  required: boolean;
+  /** Orders customers place online, orders staff create, or both. */
+  channels: "online" | "local" | "both";
+};
+
+/** An add-on as it was applied to an order or to one of its lines. */
+export type AppliedAddon = {
+  id: string;
+  nameEn: string;
+  nameZh: string;
+  kind: AmountKind;
+  /** The add-on's own amount when it was applied. */
+  value: number;
+  /** What it came to on this bill or line, in pence. A minus takes off. */
+  amountPence: number;
+};
+
 export type MenuItem = {
   id: string;
   number: number;
@@ -128,6 +199,8 @@ export type MenuItem = {
   includes: MenuInclude[];
   /** The dish's photo, `images/<hash>`, served by the Dan cloud at the shop's address. */
   photo?: string | null;
+  /** The dish's options, in the order they are asked. Missing or empty for most dishes. */
+  options?: OptionGroup[];
 };
 
 /** A new dish. A name given in one language only is used for both. */
@@ -140,6 +213,7 @@ export type NewMenuItem = {
   pricePence: number;
   station?: string;
   allergens?: Allergen[];
+  options?: OptionGroup[];
 };
 
 /** A category's names. A name given in one language only is used for both. */
@@ -160,6 +234,7 @@ export type MenuItemPatch = Partial<
     | "station"
     | "allergens"
     | "soldOut"
+    | "options"
   >
 >;
 
@@ -186,6 +261,10 @@ export type OrderLine = {
   station: string;
   kind: "item" | "set";
   components: TicketComponent[];
+  /** The options chosen for this dish. Their prices are already in `unitPricePence`. */
+  options?: ChosenOption[];
+  /** Add-ons on this dish, with what each came to for the whole line. */
+  addons?: AppliedAddon[];
 };
 
 export type Order = {
@@ -203,6 +282,8 @@ export type Order = {
   table?: string | null;
   lines: OrderLine[];
   totalPence: number;
+  /** Add-ons on the whole bill, with what each came to. Already in `totalPence`. */
+  addons?: AppliedAddon[];
   /** Orders from the customer site say how they are paid. Counter and phone orders have none. */
   payment?: OrderPayment | null;
   /** A delivery's fee, already in the total. */
@@ -247,6 +328,10 @@ export type OrderPayment = {
 export type CreateOrderLine = {
   number: number;
   qty: number;
+  /** The ids of the option choices taken. A "choose one" group with none named takes its first choice. */
+  options?: string[];
+  /** The ids of the dish add-ons ticked. Left out: the ones ticked by default. Required ones apply either way. */
+  addons?: string[];
 };
 
 export type CreateOrderInput = {
@@ -258,6 +343,8 @@ export type CreateOrderInput = {
   notes?: string;
   table?: string | null;
   lines: CreateOrderLine[];
+  /** The ids of the bill add-ons ticked. Left out: the ones ticked by default. Required ones apply either way. */
+  addons?: string[];
 };
 
 export type Customer = {
@@ -332,6 +419,10 @@ export interface DanClient {
   getStations(): Promise<Station[]>;
   /** Owner only: the whole list. Refused (`station_in_use`) while a station that would go is still on dishes. */
   updateStations(stations: Station[]): Promise<Station[]>;
+  /** The shop's add-ons, in the owner's order. */
+  getAddons(): Promise<Addon[]>;
+  /** Owner only: the whole list. Orders already taken keep the add-ons they were placed with. */
+  updateAddons(addons: Addon[]): Promise<Addon[]>;
   getOrders(): Promise<{ orders: Order[] }>;
   /** The order list: newest first, a page at a time, back through every order. */
   getOrderHistory(filter?: OrderHistoryFilter, before?: string | null, limit?: number): Promise<OrderPage>;
@@ -392,6 +483,8 @@ export type ShopSnapshot = {
   stations: Station[];
   /** The owner's views of the order flow (a kitchen, a pass). May be empty. */
   views: View[];
+  /** The shop's add-ons, in the owner's order. May be empty. */
+  addons: Addon[];
   categories: Category[];
   items: MenuItem[];
   orders: Order[];

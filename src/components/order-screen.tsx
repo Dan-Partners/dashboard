@@ -3,22 +3,28 @@
 import Link from "next/link";
 import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import { columnName, columnOf, DEFAULT_BOARD } from "@/lib/board";
-import { dishesFor } from "@/lib/create-order";
+import { amountLabel, signedPence } from "@/lib/addons";
+import { dishesFor, draftKey } from "@/lib/create-order";
 import { isDanError } from "@/lib/errors";
 import { formatPence, orderLabel, primaryName, secondaryName } from "@/lib/format";
 import { listTime } from "@/lib/history";
 import { messageForError, useI18n, type CopyKey } from "@/lib/i18n";
-import { applyEdit, cancelPlan, courierBooked, paidDifference, type OrderEdit, type OrderEditInput } from "@/lib/order-edit";
+import { applyEdit, cancelPlan, courierBooked, newLines, paidDifference, type OrderEdit, type OrderEditInput } from "@/lib/order-edit";
+import { chosen, lineSignature, lineTotal, optionsFor } from "@/lib/pricing";
+import { lineDetails } from "@/lib/ticket";
 import { useIsOwner, useShop } from "@/lib/shop-context";
 import { useTapGuard } from "@/lib/tap-guard";
 import { useBoardColour } from "@/lib/use-board-colour";
-import type { MenuItem, Order } from "@/lib/types";
+import type { Addon, MenuItem, Order } from "@/lib/types";
+import { DishChooser, type DishChoice } from "./dish-chooser";
+import { LineDetails } from "./line-details";
 import { Docket } from "./orders-board";
 import { PaidDifference } from "./paid-difference";
 import { Button, PageTitle } from "./ui";
 
-type DraftLine = { number: number; qty: number; nameEn: string; nameZh: string; unitPricePence: number };
-type Draft = { customerName: string; phone: string; address: string; table: string; notes: string; lines: DraftLine[] };
+/** A line in the owner's draft: the dish, how many, and how it is taken (the ids of its choices and its add-ons). */
+type DraftLine = { key: string; number: number; qty: number; options: string[]; addons: string[] };
+type Draft = { customerName: string; phone: string; address: string; table: string; notes: string; lines: DraftLine[]; addons: string[] };
 
 const draftOf = (order: Order): Draft => ({
   customerName: order.customerName,
@@ -26,22 +32,38 @@ const draftOf = (order: Order): Draft => ({
   address: order.address,
   table: order.table ?? "",
   notes: order.notes,
-  lines: order.lines.map((line) => ({ number: line.number, qty: line.qty, nameEn: line.nameEn, nameZh: line.nameZh, unitPricePence: line.unitPricePence })),
+  lines: order.lines.map((line) => ({
+    key: lineSignature(line),
+    number: line.number,
+    qty: line.qty,
+    options: (line.options ?? []).map((option) => option.choiceId),
+    addons: (line.addons ?? []).map((addon) => addon.id),
+  })),
+  addons: (order.addons ?? []).map((addon) => addon.id),
 });
 
-/** What the owner's draft asks for: only what an order of that kind has. */
-function inputOf(order: Order, draft: Draft): OrderEditInput {
+/**
+ * What the owner's draft asks for: only what an order of that kind has.
+ * `explicit`: the shop has options or add-ons, or the order carries some, so
+ * each line says exactly how it is taken. Otherwise a line is a dish and how
+ * many, as every shop server understands.
+ */
+function inputOf(order: Order, draft: Draft, explicit: boolean): OrderEditInput {
+  const sold = (order.addons ?? []).map((addon) => addon.id);
+  const sameAddons = sold.length === draft.addons.length && sold.every((id) => draft.addons.includes(id));
   return {
     customerName: draft.customerName,
     phone: draft.phone,
     notes: draft.notes,
     address: draft.address,
     ...(order.fulfilment === "eat_in" ? { table: draft.table } : {}),
-    lines: draft.lines.map((line) => ({ number: line.number, qty: line.qty })),
+    lines: draft.lines.map((line) => (explicit ? { number: line.number, qty: line.qty, options: line.options, addons: line.addons } : { number: line.number, qty: line.qty })),
+    // The bill's add-ons are named only when the owner has changed them.
+    ...(sameAddons ? {} : { addons: draft.addons }),
   };
 }
 
-const FIELD_LABEL: Record<string, CopyKey> = { customerName: "editName", phone: "editPhone", address: "editAddress", notes: "editNote", table: "table", column: "moveColumn" };
+const FIELD_LABEL: Record<string, CopyKey> = { customerName: "editName", phone: "editPhone", address: "editAddress", notes: "editNote", table: "table", column: "moveColumn", addons: "editAddons" };
 
 /**
  * One order on its own page. Anyone signed in sees it. The owner can change
@@ -193,21 +215,42 @@ function OrderEditor({ order, justSaved, onSaved }: { order: Order; justSaved: b
     setTouched(true);
     setDraft((current) => ({ ...current, ...change }));
   };
-  const setQty = (number: number, delta: number) =>
-    edit({ lines: draft.lines.flatMap((line) => (line.number !== number ? [line] : line.qty + delta <= 0 ? [] : [{ ...line, qty: Math.min(99, line.qty + delta) }])) });
+  const allAddons = useMemo(() => shop.snapshot?.addons ?? [], [shop.snapshot?.addons]);
+  // The owner may put any add-on on, whatever kind of order it is offered for.
+  const dishAddons = useMemo(() => allAddons.filter((addon) => addon.scope === "dish"), [allAddons]);
+  const [choosing, setChoosing] = useState<MenuItem | null>(null);
+  const explicit =
+    allAddons.length > 0 ||
+    items.some((item) => (item.options?.length ?? 0) > 0) ||
+    (order.addons?.length ?? 0) > 0 ||
+    order.lines.some((line) => (line.options?.length ?? 0) > 0 || (line.addons?.length ?? 0) > 0);
+  const input = useMemo(() => inputOf(order, draft, explicit), [order, draft, explicit]);
+
+  const setQty = (key: string, delta: number) =>
+    edit({ lines: draft.lines.flatMap((line) => (line.key !== key ? [line] : line.qty + delta <= 0 ? [] : [{ ...line, qty: Math.min(99, line.qty + delta) }])) });
+  /** Puts a dish on the draft as chosen: more of a line taken the same way, or a new line. */
+  const addLine = (item: MenuItem, choice: DishChoice) => {
+    const key = draftKey({ number: item.number, options: choice.options, addons: choice.addons });
+    if (draft.lines.some((line) => line.key === key)) return setQty(key, choice.qty);
+    edit({ lines: [...draft.lines, { key, number: item.number, qty: choice.qty, options: choice.options, addons: choice.addons }] });
+  };
   const addDish = (item: MenuItem) => {
     setSearch("");
-    const there = draft.lines.find((line) => line.number === item.number);
-    if (there) return setQty(item.number, 1);
-    // A dish that was on the order comes back at the price it was sold at.
-    const sold = order.lines.find((line) => line.number === item.number);
-    edit({ lines: [...draft.lines, { number: item.number, qty: 1, nameEn: sold?.nameEn ?? item.nameEn, nameZh: sold?.nameZh ?? item.nameZh, unitPricePence: sold?.unitPricePence ?? item.pricePence }] });
+    // A dish with options, or a shop with add-ons for a dish: the owner says how it is taken.
+    if ((item.options?.length ?? 0) > 0 || dishAddons.length > 0) return setChoosing(item);
+    addLine(item, { options: [], addons: [], qty: 1 });
   };
+  /** What a new line starts with: the first of each "choose one", and the add-ons ticked by default for this kind of order. */
+  const startFor = (item: MenuItem): DishChoice => ({
+    options: optionsFor(item, []).map((option) => option.choiceId),
+    addons: chosen(allAddons, "dish", order.source === "online" ? "online" : "local").map((addon) => addon.id),
+    qty: 1,
+  });
 
   // What saving would do, worked out by the server's own rules; or why it would be refused.
   const preview = useMemo(() => {
     try {
-      return { applied: applyEdit(order, inputOf(order, draft), items, locked), problem: null };
+      return { applied: applyEdit(order, input, items, allAddons, locked), problem: null };
     } catch (error) {
       const text =
         draft.lines.length === 0
@@ -217,18 +260,33 @@ function OrderEditor({ order, justSaved, onSaved }: { order: Order; justSaved: b
             : messageForError(isDanError(error) ? error.code : undefined, t, error instanceof Error ? error.message : undefined);
       return { applied: null, problem: text };
     }
-  }, [order, draft, items, locked, t]);
+  }, [order, input, draft, items, allAddons, locked, t]);
+  // The draft's lines priced: one already on the order as it was sold, a new one from the menu now.
+  const shown = useMemo(() => {
+    try {
+      return draft.lines.length > 0 ? newLines(order, input.lines ?? [], items, allAddons) : [];
+    } catch {
+      return null;
+    }
+  }, [order, input, draft.lines.length, items, allAddons]);
   const dirty = Boolean(preview.problem) || Boolean(preview.applied && (preview.applied.changes.length > 0 || preview.applied.lines.length > 0));
   const total = preview.applied?.order.totalPence ?? order.totalPence;
   const difference = preview.applied ? paidDifference(preview.applied.order) : null;
   const matches = search.trim() ? dishesFor(items, categories, null, search).slice(0, 6) : [];
+  // The add-ons the bill can carry: the ones on it (as they were sold), then the shop's others.
+  const onBill = order.addons ?? [];
+  const billChoices: { id: string; nameEn: string; nameZh: string; kind: Addon["kind"]; value: number; sold: boolean }[] = [
+    ...onBill.map((addon) => ({ ...addon, sold: true })),
+    ...allAddons.filter((addon) => addon.scope === "bill" && !onBill.some((sold) => sold.id === addon.id)).map((addon) => ({ ...addon, sold: false })),
+  ];
+  const billNow = preview.applied?.order.addons ?? onBill;
 
   const save = () => {
     if (preview.problem) return setMessage({ text: preview.problem, failed: true });
     setBusy(true);
     setMessage(null);
     shop
-      .editOrder(order.id, inputOf(order, draft))
+      .editOrder(order.id, input)
       // The editor starts again from the saved order, and says it was saved.
       .then(onSaved)
       .catch((error: unknown) => setMessage({ text: messageForError(isDanError(error) ? error.code : undefined, t, error instanceof Error ? error.message : undefined), failed: true }))
@@ -279,26 +337,34 @@ function OrderEditor({ order, justSaved, onSaved }: { order: Order; justSaved: b
       <h3 className="mt-6 font-display text-lg">{t("editDishes")}</h3>
       <ul className="mt-2 divide-y divide-rule border-y border-rule">
         {draft.lines.length === 0 ? <li className="py-4 text-ink-soft">{t("tillEmpty")}</li> : null}
-        {draft.lines.map((line) => (
-          <li key={line.number} className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 py-2" data-testid="edit-line" data-number={line.number}>
-            <span className="w-10 font-display text-xl text-accent-ink">{line.number}</span>
-            <span className="min-w-[7rem] flex-1">
-              <span className="block leading-tight">{primaryName(line.nameEn, line.nameZh, locale)}</span>
-              <span className="font-zh text-sm text-ink-soft">{secondaryName(line.nameEn, line.nameZh, locale)}</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <QtyButton label="−" name={`${t("editDishes")} ${line.number} −`} onClick={() => setQty(line.number, -1)} />
-              <span className="w-6 text-center font-display" data-testid="edit-qty">
-                {line.qty}
+        {draft.lines.map((line, at) => {
+          const priced = shown?.[at];
+          const item = items.find((entry) => entry.number === line.number);
+          const named = priced ?? order.lines.find((sold) => lineSignature(sold) === line.key) ?? item;
+          return (
+            <li key={line.key} className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 py-2" data-testid="edit-line" data-number={line.number}>
+              <span className="w-10 font-display text-xl text-accent-ink">{line.number}</span>
+              <span className="min-w-[7rem] flex-1">
+                <span className="block leading-tight">{named ? primaryName(named.nameEn, named.nameZh, locale) : ""}</span>
+                <span className="font-zh text-sm text-ink-soft">{named ? secondaryName(named.nameEn, named.nameZh, locale) : ""}</span>
+                {priced ? <LineDetails details={lineDetails(priced)} /> : null}
               </span>
-              <QtyButton label="+" name={`${t("editDishes")} ${line.number} +`} onClick={() => setQty(line.number, 1)} />
-            </span>
-            <span className="w-16 text-right font-display">{formatPence(line.qty * line.unitPricePence)}</span>
-            <button type="button" className="min-h-11 min-w-11 cursor-pointer px-1 text-sm text-ink-soft active:text-ink" onClick={() => edit({ lines: draft.lines.filter((entry) => entry.number !== line.number) })}>
-              {t("tillRemove")}
-            </button>
-          </li>
-        ))}
+              <span className="flex items-center gap-1">
+                <QtyButton label="−" name={`${t("editDishes")} ${line.number} −`} onClick={() => setQty(line.key, -1)} />
+                <span className="w-6 text-center font-display" data-testid="edit-qty">
+                  {line.qty}
+                </span>
+                <QtyButton label="+" name={`${t("editDishes")} ${line.number} +`} onClick={() => setQty(line.key, 1)} />
+              </span>
+              <span className="w-16 text-right font-display" data-testid="edit-line-total">
+                {priced ? formatPence(lineTotal(priced)) : "—"}
+              </span>
+              <button type="button" className="min-h-11 min-w-11 cursor-pointer px-1 text-sm text-ink-soft active:text-ink" onClick={() => edit({ lines: draft.lines.filter((entry) => entry.key !== line.key) })}>
+                {t("tillRemove")}
+              </button>
+            </li>
+          );
+        })}
       </ul>
       <label className="mt-3 block">
         <span className={label}>{t("editAddDish")}</span>
@@ -326,6 +392,40 @@ function OrderEditor({ order, justSaved, onSaved }: { order: Order; justSaved: b
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {billChoices.length > 0 ? (
+        <fieldset className="mt-6" data-testid="edit-addons">
+          <legend className="font-display text-lg">{t("editAddons")}</legend>
+          <p className="text-sm text-ink-soft">{t("editAddonsNote")}</p>
+          <div className="mt-2 divide-y divide-rule border-y border-rule">
+            {billChoices.map((addon) => {
+              const ticked = draft.addons.includes(addon.id);
+              const applied = billNow.find((entry) => entry.id === addon.id);
+              return (
+                <label key={addon.id} className="flex min-h-11 cursor-pointer items-center gap-3 py-1">
+                  <input
+                    type="checkbox"
+                    checked={ticked}
+                    onChange={() => edit({ addons: ticked ? draft.addons.filter((id) => id !== addon.id) : [...draft.addons, addon.id] })}
+                    data-testid="edit-addon"
+                    data-addon={addon.id}
+                  />
+                  <span className="min-w-0 flex-1">
+                    {primaryName(addon.nameEn, addon.nameZh, locale)}
+                    <span className="ml-2 text-sm text-ink-soft">
+                      {amountLabel(addon)}
+                      {addon.sold ? ` · ${t("editAsSold")}` : ""}
+                    </span>
+                  </span>
+                  <span className="w-20 text-right font-display" data-testid="edit-addon-amount">
+                    {ticked && applied ? signedPence(applied.amountPence) : ""}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
       ) : null}
 
       <div className="mt-5 flex items-baseline justify-between border-t-[3px] border-ink pt-3">
@@ -358,6 +458,22 @@ function OrderEditor({ order, justSaved, onSaved }: { order: Order; justSaved: b
         ) : null}
       </div>
       <p className="mt-2 text-sm text-ink-soft">{t("editRecorded")}</p>
+      {choosing ? (
+        <DishChooser
+          key={choosing.id}
+          item={choosing}
+          menu={items}
+          dishAddons={dishAddons}
+          lockRequired={false}
+          start={startFor(choosing)}
+          confirmLabel={t("chooseAdd")}
+          onConfirm={(choice) => {
+            addLine(choosing, choice);
+            setChoosing(null);
+          }}
+          onClose={() => setChoosing(null)}
+        />
+      ) : null}
     </section>
   );
 }
@@ -575,12 +691,14 @@ function Record({ orderId, recordKey, now }: { orderId: string; recordKey: strin
                 {edit.lines.map((line) => {
                   const delta = line.afterQty - line.beforeQty;
                   return (
-                    <li key={line.number}>
+                    <li key={`${line.number}:${line.detail ?? ""}`}>
                       <span className="font-display">
                         {delta > 0 ? "+" : "−"}
                         {Math.abs(delta)} ×
                       </span>{" "}
-                      <span className="font-display text-accent-ink">{line.number}</span> {primaryName(line.nameEn, line.nameZh, locale)}{" "}
+                      <span className="font-display text-accent-ink">{line.number}</span> {primaryName(line.nameEn, line.nameZh, locale)}
+                      {/* Which line of the dish: the one taken this way. */}
+                      {line.detail ? <span data-testid="record-detail"> ({line.detail})</span> : null}{" "}
                       <span className="text-sm text-ink-soft">({line.afterQty === 0 ? t("recordRemoved") : `${t("recordNow")} ${line.afterQty}`})</span>
                     </li>
                   );

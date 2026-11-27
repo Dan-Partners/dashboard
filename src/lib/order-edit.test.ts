@@ -41,7 +41,7 @@ const code = (run: () => unknown) => {
 describe("the owner's change to an order, by the server's rules", () => {
   it("notes each detail before and after, and leaves the bill alone", () => {
     const order = placed([[81, 1]]);
-    const applied = applyEdit(order, { customerName: "  Mr Wong ", phone: "07700 900123", notes: "No onions" }, menu, false);
+    const applied = applyEdit(order, { customerName: "  Mr Wong ", phone: "07700 900123", notes: "No onions" }, menu, [], false);
     expect(applied.changes).toEqual([
       { field: "customerName", before: "Mrs Wong", after: "Mr Wong" },
       { field: "notes", before: "", after: "No onions" },
@@ -53,7 +53,7 @@ describe("the owner's change to an order, by the server's rules", () => {
 
   it("changes nothing when nothing differs, whatever order the dishes are listed in", () => {
     const order = placed([[81, 2], [1, 1]]);
-    const same = applyEdit(order, { customerName: "Mrs Wong", lines: [{ number: 1, qty: 1 }, { number: 81, qty: 2 }] }, menu, false);
+    const same = applyEdit(order, { customerName: "Mrs Wong", lines: [{ number: 1, qty: 1 }, { number: 81, qty: 2 }] }, menu, [], false);
     expect(same.changes).toEqual([]);
     expect(same.lines).toEqual([]);
     expect(same.order).toEqual(order);
@@ -62,7 +62,7 @@ describe("the owner's change to an order, by the server's rules", () => {
   it("keeps the price a dish was sold at, and prices an added dish from the menu now", () => {
     const order = placed([[81, 2], [1, 1]]);
     const dearer = menu.map((item) => (item.number === 81 ? { ...item, pricePence: item.pricePence + 100 } : item));
-    const applied = applyEdit(order, { lines: [{ number: 81, qty: 3 }, { number: 3, qty: 2 }] }, dearer, false);
+    const applied = applyEdit(order, { lines: [{ number: 81, qty: 3 }, { number: 3, qty: 2 }] }, dearer, [], false);
     expect(applied.order.lines.map((line) => [line.number, line.qty, line.unitPricePence])).toEqual([
       [81, 3, price(81)],
       [3, 2, price(3)],
@@ -77,7 +77,7 @@ describe("the owner's change to an order, by the server's rules", () => {
 
   it("checks the list of dishes", () => {
     const order = placed([[81, 1]]);
-    const edit = (lines: { number: number; qty: number }[], from = menu) => code(() => applyEdit(order, { lines }, from, false));
+    const edit = (lines: { number: number; qty: number }[], from = menu) => code(() => applyEdit(order, { lines }, from, [], false));
     expect(edit([])).toBe("invalid");
     expect(edit([{ number: 81, qty: 0 }])).toBe("invalid");
     expect(edit([{ number: 81, qty: 100 }])).toBe("invalid");
@@ -91,31 +91,31 @@ describe("the owner's change to an order, by the server's rules", () => {
 
   it("keeps what was taken beside the new bill of a paid order, and never touches payment", () => {
     const order = placed([[81, 2]], { payment: { method: "card", status: "paid" } });
-    const more = applyEdit(order, { lines: [{ number: 81, qty: 3 }] }, menu, false).order;
+    const more = applyEdit(order, { lines: [{ number: 81, qty: 3 }] }, menu, [], false).order;
     expect(more.paidPence).toBe(order.totalPence);
     expect(more.payment).toEqual(order.payment);
     expect(paidDifference(more)).toEqual({ paidPence: order.totalPence, differencePence: price(81) });
-    const less = applyEdit(more, { lines: [{ number: 81, qty: 1 }] }, menu, false).order;
+    const less = applyEdit(more, { lines: [{ number: 81, qty: 1 }] }, menu, [], false).order;
     expect(less.paidPence).toBe(order.totalPence);
     expect(paidDifference(less)).toEqual({ paidPence: order.totalPence, differencePence: -price(81) });
     // Back to what was paid: nothing to collect or refund.
-    const back = applyEdit(less, { lines: [{ number: 81, qty: 2 }] }, menu, false).order;
+    const back = applyEdit(less, { lines: [{ number: 81, qty: 2 }] }, menu, [], false).order;
     expect(paidDifference(back)).toBeNull();
     // Details alone, or an order not paid yet: nothing taken to keep.
-    expect(applyEdit(order, { notes: "x" }, menu, false).order.paidPence).toBeUndefined();
+    expect(applyEdit(order, { notes: "x" }, menu, [], false).order.paidPence).toBeUndefined();
     const due = placed([[81, 2]], { payment: { method: "at_shop", status: "due" } });
-    expect(applyEdit(due, { lines: [{ number: 81, qty: 3 }] }, menu, false).order.paidPence).toBeUndefined();
+    expect(applyEdit(due, { lines: [{ number: 81, qty: 3 }] }, menu, [], false).order.paidPence).toBeUndefined();
     expect(paidDifference(placed([[81, 1]]))).toBeNull();
   });
 
   it("keeps a delivery fee in the bill, locks the address while a courier is booked, and keeps a delivery's address", () => {
     const base = placed([[81, 2]], { fulfilment: "delivery", address: "1 High St", deliveryFeePence: 250 });
     const order = { ...base, totalPence: base.totalPence + 250 };
-    expect(applyEdit(order, { lines: [{ number: 81, qty: 1 }] }, menu, false).order.totalPence).toBe(price(81) + 250);
-    expect(code(() => applyEdit(order, { address: "2 Low Rd" }, menu, true))).toBe("address_locked");
-    expect(code(() => applyEdit(order, { address: "1 High St", notes: "Ring", lines: [{ number: 81, qty: 3 }] }, menu, true))).toBe("ok");
-    expect(applyEdit(order, { address: "2 Low Rd" }, menu, false).order.address).toBe("2 Low Rd");
-    expect(code(() => applyEdit(order, { address: " " }, menu, false))).toBe("invalid");
+    expect(applyEdit(order, { lines: [{ number: 81, qty: 1 }] }, menu, [], false).order.totalPence).toBe(price(81) + 250);
+    expect(code(() => applyEdit(order, { address: "2 Low Rd" }, menu, [], true))).toBe("address_locked");
+    expect(code(() => applyEdit(order, { address: "1 High St", notes: "Ring", lines: [{ number: 81, qty: 3 }] }, menu, [], true))).toBe("ok");
+    expect(applyEdit(order, { address: "2 Low Rd" }, menu, [], false).order.address).toBe("2 Low Rd");
+    expect(code(() => applyEdit(order, { address: " " }, menu, [], false))).toBe("invalid");
     expect(courierBooked({ courier: null })).toBe(false);
     const courier = { deliveryId: "del_1", status: "pickup", trackingUrl: "", feePence: 0, pickupEta: "", dropoffEta: "", courierName: "", problem: "" };
     expect(courierBooked({ courier })).toBe(true);
@@ -125,15 +125,15 @@ describe("the owner's change to an order, by the server's rules", () => {
 
   it("gives only an eat-in order a table, and keeps one", () => {
     const eatIn = placed([[81, 1]], { fulfilment: "eat_in", table: "7" });
-    expect(applyEdit(eatIn, { table: " Patio  2 " }, menu, false).order.table).toBe("Patio 2");
-    expect(code(() => applyEdit(eatIn, { table: "" }, menu, false))).toBe("bad_table");
-    expect(code(() => applyEdit(eatIn, { table: "<script>" }, menu, false))).toBe("bad_table");
-    expect(code(() => applyEdit(placed([[81, 1]]), { table: "3" }, menu, false))).toBe("invalid");
+    expect(applyEdit(eatIn, { table: " Patio  2 " }, menu, [], false).order.table).toBe("Patio 2");
+    expect(code(() => applyEdit(eatIn, { table: "" }, menu, [], false))).toBe("bad_table");
+    expect(code(() => applyEdit(eatIn, { table: "<script>" }, menu, [], false))).toBe("bad_table");
+    expect(code(() => applyEdit(placed([[81, 1]]), { table: "3" }, menu, [], false))).toBe("invalid");
   });
 
   it("leaves a cancelled order alone, and lets a completed one be corrected", () => {
-    expect(code(() => applyEdit(placed([[81, 1]], { status: "cancelled" }), { notes: "x" }, menu, false))).toBe("order_cancelled");
-    expect(code(() => applyEdit(placed([[81, 1]], { status: "completed" }), { notes: "x" }, menu, false))).toBe("ok");
+    expect(code(() => applyEdit(placed([[81, 1]], { status: "cancelled" }), { notes: "x" }, menu, [], false))).toBe("order_cancelled");
+    expect(code(() => applyEdit(placed([[81, 1]], { status: "completed" }), { notes: "x" }, menu, [], false))).toBe("ok");
   });
 });
 
@@ -168,7 +168,7 @@ describe("cancelling an order, and money already paid online", () => {
     const card = placed([[81, 2]], { payment: { method: "card", status: "paid" } });
     expect(cancelPlan(card)).toEqual({ kind: "card", pence: card.totalPence });
     // The bill was changed after it was paid: the card gets back what was taken.
-    const changed = applyEdit(card, { lines: [{ number: 81, qty: 3 }] }, menu, false).order;
+    const changed = applyEdit(card, { lines: [{ number: 81, qty: 3 }] }, menu, [], false).order;
     expect(cancelPlan(changed)).toEqual({ kind: "card", pence: card.totalPence });
     expect(cancelPlan(placed([[81, 1]], { payment: { method: "bank_transfer", status: "paid" } }))).toEqual({ kind: "bank", pence: price(81) });
     expect(cancelPlan(placed([[81, 1]], { payment: { method: "at_shop", status: "due" } }))).toEqual({ kind: "none" });

@@ -1,4 +1,5 @@
 import { inLondonRange } from "./format";
+import { lineTotal } from "./pricing";
 import type { Order, SalesRange, SalesSummary, SalesTopItem } from "./types";
 
 export function summarizeSales(orders: Order[], range: SalesRange, now: Date): SalesSummary {
@@ -16,7 +17,8 @@ export function summarizeSales(orders: Order[], range: SalesRange, now: Date): S
         totalPence: 0,
       };
       current.qty += line.qty;
-      current.totalPence += line.qty * line.unitPricePence;
+      // What the customer paid for it: the options chosen and the add-ons on the dish included.
+      current.totalPence += lineTotal(line);
       top.set(line.number, current);
     }
   }

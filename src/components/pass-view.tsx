@@ -12,6 +12,9 @@ import { columnOf, DEFAULT_BOARD, nextStep } from "@/lib/board";
 import { useBoardColour } from "@/lib/use-board-colour";
 import { viewGloss, viewName, type View } from "@/lib/views";
 import type { Order } from "@/lib/types";
+import { lineDetails } from "@/lib/ticket";
+import { lineSignature } from "@/lib/pricing";
+import { LineDetails } from "./line-details";
 import { stepLabel } from "./orders-board";
 import { WhereStrip } from "./where-strip";
 import { Button, PageTitle } from "./ui";
@@ -91,8 +94,10 @@ function PassCard({ order, now, guard, onError }: { order: Order; now: number; g
       ) : null}
       <ul className="mt-3 space-y-0.5 text-lg">
         {order.lines.map((line) => (
-          <li key={`${line.number}-${line.nameEn}`}>
+          <li key={lineSignature(line)}>
             {line.qty}× {primaryName(line.nameEn, line.nameZh, locale)}
+            {/* Whoever hands it over checks it is the right one: the large, with the sauce. */}
+            <LineDetails details={lineDetails(line)} className="pl-6 text-base text-ink-soft" />
           </li>
         ))}
       </ul>

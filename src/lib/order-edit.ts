@@ -1,5 +1,6 @@
 import { DanError } from "./errors";
-import type { CreateOrderLine, MenuItem, Order, OrderLine } from "./types";
+import { asApplied, bill, chosen, lineDetail, lineFromMenu, lineSignature, lineTotal, MAX_LINES, MAX_QTY, withAddons } from "./pricing";
+import type { Addon, AppliedAddon, CreateOrderLine, MenuItem, Order, OrderLine } from "./types";
 
 /**
  * The owner changing an order after it was placed, and the record of it.
@@ -17,13 +18,27 @@ export type OrderEditInput = {
   notes?: string;
   /** Eat-in orders only. */
   table?: string;
-  /** The whole list of dishes as it should be now: at least one. */
+  /**
+   * The whole list of dishes as it should be now: at least one. A line that
+   * names no options or add-ons means the dish as it was sold.
+   */
   lines?: CreateOrderLine[];
+  /**
+   * The ids of the add-ons on the bill as they should be now. The owner may
+   * take off a required one, or put on one not offered for this kind of
+   * order. Left out: as they are.
+   */
+  addons?: string[];
 };
 
 export type FieldChange = { field: string; before: string; after: string };
-/** A dish whose quantity changed: 0 before means added, 0 after means removed. */
-export type LineChange = { number: number; nameEn: string; nameZh: string; beforeQty: number; afterQty: number };
+/**
+ * A line whose quantity changed: 0 before means added, 0 after means removed.
+ * `detail`: the options and add-ons that tell it from another line of the
+ * same dish ("Large, Extra chilli"); empty for a plain dish, and missing from
+ * records made before options.
+ */
+export type LineChange = { number: number; nameEn: string; nameZh: string; detail?: string; beforeQty: number; afterQty: number };
 
 /** One change the owner made to an order. Written once, kept for good. */
 export type OrderEdit = {
@@ -40,7 +55,10 @@ export type OrderEdit = {
   totalAfterPence: number;
 };
 
-export const ORDER_EDIT_FIELDS = "id orderId at byId byName kind changes { field before after } lines { number nameEn nameZh beforeQty afterQty } totalBeforePence totalAfterPence";
+/** The record's fields. `detail` is asked for only of a server that has dish options (see graphql-client). */
+export const orderEditFields = (detail: boolean) =>
+  `id orderId at byId byName kind changes { field before after } lines { number nameEn nameZh ${detail ? "detail " : ""}beforeQty afterQty } totalBeforePence totalAfterPence`;
+export const ORDER_EDIT_FIELDS = orderEditFields(true);
 
 export type Applied = { order: Order; changes: FieldChange[]; lines: LineChange[] };
 
@@ -59,60 +77,106 @@ function tableName(value: string): string {
   return tidy;
 }
 
-const linesTotal = (lines: OrderLine[]) => lines.reduce((sum, line) => sum + line.qty * line.unitPricePence, 0);
+const sorted = (ids: string[]) => [...new Set(ids)].sort().join(",");
 
-/** A line of an order as the menu has the dish now. */
-function lineFromMenu(number: number, qty: number, menu: MenuItem[]): OrderLine {
-  const item = menu.find((entry) => entry.number === number);
-  if (!item) throw new DanError("unknown_item", `No dish with number ${number}.`);
-  if (item.soldOut) throw new DanError("sold_out", `${item.number} ${item.nameEn} is sold out.`);
-  return {
-    itemId: item.id,
-    number: item.number,
-    nameEn: item.nameEn,
-    nameZh: item.nameZh,
-    qty,
-    unitPricePence: item.pricePence,
-    station: item.station,
-    kind: item.kind,
-    components:
-      item.kind === "set"
-        ? item.includes.map((include) => {
-            const part = menu.find((entry) => entry.number === include.number);
-            if (!part) throw new DanError("bad_item", `Set ${item.number} refers to a missing dish.`);
-            return { number: part.number, nameEn: part.nameEn, nameZh: part.nameZh, qty: include.qty * qty, station: part.station };
-          })
-        : [],
-  };
+/**
+ * Whether a line already on the order is the one a wanted line means: the
+ * same dish, and the same options and add-ons where the wanted line names them.
+ */
+function isTheLine(sold: OrderLine, wanted: CreateOrderLine): boolean {
+  return (
+    sold.number === wanted.number &&
+    (wanted.options === undefined || sorted(wanted.options) === sorted((sold.options ?? []).map((option) => option.choiceId))) &&
+    (wanted.addons === undefined || sorted(wanted.addons) === sorted((sold.addons ?? []).map((addon) => addon.id)))
+  );
 }
 
-/** The dishes as the owner wants them: lines already on the order keep their price; new ones come from the menu now. */
-function newLines(order: Order, wanted: CreateOrderLine[], menu: MenuItem[]): OrderLine[] {
+/** A line as it was sold, at another quantity: its set-meal dishes follow, and its add-ons are worked out again. */
+function scaled(sold: OrderLine, qty: number): OrderLine {
+  const next = { ...sold, qty, components: sold.components.map((part) => ({ ...part, qty: sold.qty > 0 ? (part.qty / sold.qty) * qty : part.qty })) };
+  return withAddons(next, sold.addons ?? []);
+}
+
+const noSuchAddon = (id: string) => new DanError("bad_addon", `There is no add-on ${id} for that.`);
+
+/**
+ * The dishes as the owner wants them. A line already on the order keeps what
+ * it was sold at (price, options, add-ons); a new one comes from the menu as
+ * it is now. On a new line the owner may put any dish add-on, required or
+ * not; when none are named, the ones ticked by default apply.
+ */
+export function newLines(order: Order, wanted: CreateOrderLine[], menu: MenuItem[], all: Addon[]): OrderLine[] {
   if (wanted.length === 0) throw new DanError("invalid", "An order needs at least one dish. To call it off, cancel it.");
-  if (wanted.length > 200) throw new DanError("invalid", "That order has too many lines.");
-  const seen = new Set<number>();
+  if (wanted.length > MAX_LINES) throw new DanError("invalid", "That order has too many lines.");
+  const channel = order.source === "online" ? "online" : "local";
+  const used = order.lines.map(() => false);
+  const seen = new Set<string>();
   return wanted.map((line) => {
-    if (seen.has(line.number)) throw new DanError("invalid", `Dish ${line.number} is on the list twice. Give it one line.`);
-    seen.add(line.number);
-    if (!Number.isInteger(line.qty) || line.qty < 1 || line.qty > 99) throw new DanError("invalid", "Quantity must be between 1 and 99.");
-    const sold = order.lines.find((entry) => entry.number === line.number);
-    if (!sold) return lineFromMenu(line.number, line.qty, menu);
-    return { ...sold, qty: line.qty, components: sold.components.map((part) => ({ ...part, qty: sold.qty > 0 ? (part.qty / sold.qty) * line.qty : part.qty })) };
+    if (!Number.isInteger(line.qty) || line.qty < 1 || line.qty > MAX_QTY) throw new DanError("invalid", "Quantity must be between 1 and 99.");
+    const at = order.lines.findIndex((sold, index) => !used[index] && isTheLine(sold, line));
+    let next: OrderLine;
+    if (at >= 0) {
+      used[at] = true;
+      next = scaled(order.lines[at], line.qty);
+    } else {
+      const fresh = lineFromMenu(line.number, line.qty, line.options ?? [], menu);
+      const onDish = line.addons
+        ? line.addons.map((id) => {
+            const addon = all.find((entry) => entry.id === id && entry.scope === "dish");
+            if (!addon) throw noSuchAddon(id);
+            return asApplied(addon);
+          })
+        : chosen(all, "dish", channel).map(asApplied);
+      next = withAddons(fresh, onDish);
+    }
+    const signature = lineSignature(next);
+    if (seen.has(signature)) throw new DanError("invalid", `Dish ${next.number} is on the list twice the same way. Give it one line.`);
+    seen.add(signature);
+    return next;
   });
 }
 
-/** What changed between two lists of dishes, by dish number. */
-export function lineChanges(before: OrderLine[], after: OrderLine[]): LineChange[] {
-  const byNumber = new Map<number, { was: number; now: number; line: OrderLine }>();
-  for (const line of before) byNumber.set(line.number, { was: (byNumber.get(line.number)?.was ?? 0) + line.qty, now: 0, line });
-  for (const line of after) {
-    const entry = byNumber.get(line.number) ?? { was: 0, now: 0, line };
-    byNumber.set(line.number, { ...entry, now: entry.now + line.qty });
+/**
+ * The add-ons on the bill as the owner wants them: one already on the order
+ * stays as it was applied; a new one comes from the shop's add-ons as they
+ * are now. The owner may put on, or take off, any bill add-on.
+ */
+function newBillAddons(order: Order, wanted: string[], all: Addon[]): AppliedAddon[] {
+  const ids = [...new Set(wanted)];
+  const sold = order.addons ?? [];
+  for (const id of ids) {
+    if (sold.some((addon) => addon.id === id)) continue;
+    if (!all.some((addon) => addon.id === id && addon.scope === "bill")) throw noSuchAddon(id);
   }
-  return [...byNumber.entries()]
-    .sort(([a], [b]) => a - b)
+  // Those already on the bill first, in their order; then the new ones, in the shop's order.
+  return [
+    ...sold.filter((addon) => ids.includes(addon.id)),
+    ...all.filter((addon) => addon.scope === "bill" && ids.includes(addon.id) && !sold.some((entry) => entry.id === addon.id)).map(asApplied),
+  ];
+}
+
+/** What the lines and the bill's add-ons come to, without any delivery fee. */
+const billTotal = (lines: OrderLine[], addons: AppliedAddon[]) => lines.reduce((sum, line) => sum + lineTotal(line), 0) + addons.reduce((sum, addon) => sum + addon.amountPence, 0);
+
+/**
+ * What changed between two lists of dishes. The same dish with other options
+ * or add-ons is another line, so each is told apart by all three.
+ */
+export function lineChanges(before: OrderLine[], after: OrderLine[]): LineChange[] {
+  const byLine = new Map<string, { was: number; now: number; line: OrderLine }>();
+  for (const line of before) {
+    const key = lineSignature(line);
+    byLine.set(key, { was: (byLine.get(key)?.was ?? 0) + line.qty, now: 0, line: byLine.get(key)?.line ?? line });
+  }
+  for (const line of after) {
+    const key = lineSignature(line);
+    const entry = byLine.get(key) ?? { was: 0, now: 0, line };
+    byLine.set(key, { ...entry, now: entry.now + line.qty });
+  }
+  return [...byLine.entries()]
+    .sort(([a, x], [b, y]) => x.line.number - y.line.number || (a < b ? -1 : a > b ? 1 : 0))
     .filter(([, entry]) => entry.was !== entry.now)
-    .map(([number, entry]) => ({ number, nameEn: entry.line.nameEn, nameZh: entry.line.nameZh, beforeQty: entry.was, afterQty: entry.now }));
+    .map(([, entry]) => ({ number: entry.line.number, nameEn: entry.line.nameEn, nameZh: entry.line.nameZh, detail: lineDetail(entry.line), beforeQty: entry.was, afterQty: entry.now }));
 }
 
 /**
@@ -120,7 +184,7 @@ export function lineChanges(before: OrderLine[], after: OrderLine[]): LineChange
  * here. `courierBooked`: a courier is booked or on its way, so the address
  * is locked.
  */
-export function applyEdit(order: Order, input: OrderEditInput, menu: MenuItem[], courierBooked: boolean): Applied {
+export function applyEdit(order: Order, input: OrderEditInput, menu: MenuItem[], all: Addon[], courierBooked: boolean): Applied {
   if (order.status === "cancelled") throw new DanError("order_cancelled", "A cancelled order cannot be changed.");
   const next: Order = { ...order };
   const changes: FieldChange[] = [];
@@ -171,14 +235,21 @@ export function applyEdit(order: Order, input: OrderEditInput, menu: MenuItem[],
   }
 
   let lines: LineChange[] = [];
-  if (input.lines) {
-    const after = newLines(order, input.lines, menu);
+  if (input.lines || input.addons) {
+    const sold = order.addons ?? [];
+    const after = input.lines ? newLines(order, input.lines, menu, all) : order.lines;
     const record = lineChanges(order.lines, after);
-    // The same dishes in another order is not a change.
-    if (record.length > 0) {
+    const onBill = input.addons ? newBillAddons(order, input.addons, all) : sold;
+    const addonsChanged = onBill.map((addon) => addon.id).join(",") !== sold.map((addon) => addon.id).join(",");
+    // The same dishes in another order, with the same add-ons, is not a change.
+    if (record.length > 0 || addonsChanged) {
+      // The bill's add-ons are worked out again on the dishes as they are now.
+      const priced = bill(after, onBill);
       // Whatever else is in the bill (a delivery fee) stays in it.
-      next.totalPence = order.totalPence - linesTotal(order.lines) + linesTotal(after);
-      next.lines = after;
+      next.totalPence = order.totalPence - billTotal(order.lines, sold) + priced.totalPence;
+      if (addonsChanged) note("addons", sold.map((addon) => addon.nameEn).join(", "), priced.addons.map((addon) => addon.nameEn).join(", "));
+      next.lines = priced.lines;
+      next.addons = priced.addons;
       lines = record;
     }
   }

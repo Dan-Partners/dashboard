@@ -4,8 +4,10 @@ import { checkPlaces, checkTriggers, DEFAULT_TRIGGERS, normalizeTriggers, onlyOn
 import { checkViews, followBoard, kitchenAndPass, normalizeViews, type View } from "./views";
 import { checkBoard, columnOf, DEFAULT_BOARD, nextAfter, normalizeBoard, planMoves, roleOf, startFor, statusAfter, statusOf, summarise, type Board, type BoardPreview, type PlannedMove } from "./board";
 import { bankIsEmpty, checkedBank, checkOrdering, normalizeSetup, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
+import { checkAddons, checkOptions, normalizeAddons } from "./addons";
 import { DanError } from "./errors";
 import { phoneDigits } from "./format";
+import { price } from "./pricing";
 import { summarizeSales } from "./sales";
 import {
   API_VERSION,
@@ -17,6 +19,7 @@ import {
   STAMP_GOAL,
 } from "./seed";
 import type {
+  Addon,
   Category,
   CategoryNames,
   CreateOrderInput,
@@ -28,14 +31,12 @@ import type {
   MenuItemPatch,
   NewMenuItem,
   Order,
-  OrderLine,
   OrderStatus,
   SalesRange,
   ServerPing,
   Shop,
   ShopPatch,
   Station,
-  TicketComponent,
 } from "./types";
 import { ALLERGENS, DEFAULT_STATIONS, FULFILMENTS, ORDER_SOURCES, ORDER_STATUSES } from "./types";
 import { checkRemovals, checkStations, normalizeStations } from "./stations";
@@ -51,39 +52,6 @@ const NEXT_STATUS: Record<OrderStatus, OrderStatus | null> = {
 
 function clone<T>(value: T): T {
   return structuredClone(value);
-}
-
-function componentsFor(item: MenuItem, menu: MenuItem[], qty: number): TicketComponent[] {
-  return item.includes.map((include) => {
-    const part = menu.find((entry) => entry.number === include.number);
-    if (!part) {
-      throw new DanError("bad_item", `Set ${item.number} refers to a missing dish.`);
-    }
-    if (part.soldOut) {
-      throw new DanError("sold_out", `${part.number} ${part.nameEn} is sold out.`);
-    }
-    return {
-      number: part.number,
-      nameEn: part.nameEn,
-      nameZh: part.nameZh,
-      qty: include.qty * qty,
-      station: part.station,
-    };
-  });
-}
-
-function toLine(item: MenuItem, menu: MenuItem[], qty: number): OrderLine {
-  return {
-    itemId: item.id,
-    number: item.number,
-    nameEn: item.nameEn,
-    nameZh: item.nameZh,
-    qty,
-    unitPricePence: item.pricePence,
-    station: item.station,
-    kind: item.kind,
-    components: item.kind === "set" ? componentsFor(item, menu, qty) : [],
-  };
 }
 
 /** One name for both languages when only one was given. */
@@ -185,6 +153,12 @@ export class MockDanServer implements DanClient {
     }
 
     next.descriptionEn = next.descriptionEn.trim();
+    try {
+      // Checked against the price as it will be: no way of choosing may take the dish below nothing.
+      next.options = checkOptions(next, next.options ?? []);
+    } catch (error) {
+      return Promise.reject(error);
+    }
     this.state.items[index] = next;
     return Promise.resolve(clone(next));
   }
@@ -220,6 +194,11 @@ export class MockDanServer implements DanClient {
     }
     if (!this.state.categories.some((category) => category.id === item.categoryId)) {
       return Promise.reject(new DanError("invalid", "Choose a category."));
+    }
+    try {
+      item.options = checkOptions(item, input.options ?? []);
+    } catch (error) {
+      return Promise.reject(error);
     }
     this.state.items.push(item);
     return Promise.resolve(clone(item));
@@ -314,6 +293,25 @@ export class MockDanServer implements DanClient {
     }
   }
 
+  private addons(): Addon[] {
+    return normalizeAddons(this.state.addons);
+  }
+
+  getAddons(): Promise<Addon[]> {
+    return Promise.resolve(clone(this.addons()));
+  }
+
+  /** The whole list, in order. Orders already taken keep the add-ons they were placed with. */
+  updateAddons(addons: Addon[]): Promise<Addon[]> {
+    try {
+      const next = checkAddons(addons);
+      this.state.addons = next;
+      return Promise.resolve(clone(next));
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
   /** The demo's PIN is fixed: there is nothing to sign in to. */
   setCounterPin(pin: string): Promise<void> {
     if (!/^\d{4,6}$/.test(pin)) return Promise.reject(new DanError("invalid", "A PIN is 4 to 6 digits."));
@@ -367,27 +365,12 @@ export class MockDanServer implements DanClient {
     if (table && ([...table].length > 10 || !/^[\p{L}\p{N} -]+$/u.test(table))) {
       return Promise.reject(new DanError("bad_table", "A table name is up to 10 letters, numbers, spaces or hyphens."));
     }
-    if (!input.lines.length) {
-      return Promise.reject(new DanError("invalid", "Add a dish before sending."));
-    }
-
-    const lines: OrderLine[] = [];
-    for (const requested of input.lines) {
-      if (!Number.isInteger(requested.qty) || requested.qty < 1 || requested.qty > 99) {
-        return Promise.reject(new DanError("invalid", "Quantity must be between 1 and 99."));
-      }
-      const item = this.state.items.find((entry) => entry.number === requested.number);
-      if (!item) {
-        return Promise.reject(new DanError("unknown_item", `No dish with number ${requested.number}.`));
-      }
-      if (item.soldOut) {
-        return Promise.reject(new DanError("sold_out", `${item.number} ${item.nameEn} is sold out.`));
-      }
-      try {
-        lines.push(toLine(item, this.state.items, requested.qty));
-      } catch (error) {
-        return Promise.reject(error);
-      }
+    // Priced by the one rule, as the shop server does: options, then add-ons on dishes, then on the bill.
+    let priced;
+    try {
+      priced = price(input.lines, input.addons, this.state.items, this.addons(), input.source === "online" ? "online" : "local");
+    } catch (error) {
+      return Promise.reject(error);
     }
 
     const number = this.state.nextOrderNumber;
@@ -404,8 +387,9 @@ export class MockDanServer implements DanClient {
       address: input.address?.trim() ?? "",
       notes: input.notes?.trim() ?? "",
       table,
-      lines,
-      totalPence: lines.reduce((sum, line) => sum + line.qty * line.unitPricePence, 0),
+      lines: priced.lines,
+      totalPence: priced.totalPence,
+      addons: priced.addons,
       // Online orders in the demo alternate between the ways the shop takes payment.
       payment: input.source === "online" ? demoPayment(rules, number) : null,
       column: startFor(normalizeBoard(this.state.board), input.source).id,
@@ -568,7 +552,7 @@ export class MockDanServer implements DanClient {
     if (at < 0) return Promise.reject(new DanError("not_found", "That order is not here."));
     try {
       const order = this.state.orders[at];
-      const applied = applyEdit(order, input, this.state.items, courierBooked(order));
+      const applied = applyEdit(order, input, this.state.items, this.addons(), courierBooked(order));
       if (applied.changes.length === 0 && applied.lines.length === 0) return Promise.resolve(clone(order));
       this.record(order, "edit", applied, applied.order.totalPence);
       this.state.orders[at] = applied.order;

@@ -12,6 +12,9 @@ import { useTapGuard, type TapGuard } from "@/lib/tap-guard";
 import { useBoardColour } from "@/lib/use-board-colour";
 import { backStep, columnGloss, columnName, columnOf, DEFAULT_BOARD, nextStep, type Board, type NextStep } from "@/lib/board";
 import type { Order } from "@/lib/types";
+import { lineDetails } from "@/lib/ticket";
+import { lineSignature } from "@/lib/pricing";
+import { LineDetails } from "./line-details";
 import { Button, PageTitle } from "./ui";
 import { AwaitingTransfers } from "./awaiting-transfers";
 import { CourierPanel, RefundFailures } from "./courier-panel";
@@ -202,6 +205,7 @@ export function Docket({
       <article
         className={`torn border border-b-0 border-t-[3px] border-rule bg-paper-raised px-3 py-3 ${problem ? "border-t-accent" : ""}`}
         style={problem ? undefined : { borderTopColor: colour }}
+        data-order-id={order.id}
       >
         {locked ? (
           <div className="mb-2">
@@ -243,11 +247,12 @@ export function Docket({
         ) : null}
         <ul className="mt-3 space-y-1">
           {order.lines.map((line) => (
-            <li key={`${line.number}-${line.nameEn}`} className="flex gap-2 text-sm">
+            <li key={lineSignature(line)} className="flex gap-2 text-sm">
               <span className="font-display text-accent-ink">{line.number}</span>
               <span className="min-w-0 flex-1">
                 {primaryName(line.nameEn, line.nameZh, locale)}
                 <span className="ml-2 font-zh text-ink-soft">{secondaryName(line.nameEn, line.nameZh, locale)}</span>
+                <LineDetails details={lineDetails(line)} className="text-ink-soft" />
               </span>
               <span>×{line.qty}</span>
             </li>

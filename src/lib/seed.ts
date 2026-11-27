@@ -5,6 +5,7 @@ import type { Board } from "./board";
 import type { OrderingSetup } from "./ordering";
 import type { ThemeChoice } from "./theme";
 import type {
+  Addon,
   Allergen,
   Category,
   Customer,
@@ -700,6 +701,8 @@ export type DemoState = {
   stations?: Station[];
   /** The record of the owner's changes to orders. Kept in this browser. */
   orderEdits?: OrderEdit[];
+  /** The demo shop's add-ons. Kept in this browser; none when missing. */
+  addons?: Addon[];
 };
 
 function buildItems(): MenuItem[] {

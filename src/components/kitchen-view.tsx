@@ -15,6 +15,8 @@ import { useBoardColour } from "@/lib/use-board-colour";
 import { viewGloss, viewName, type View } from "@/lib/views";
 import type { OrderStatus, Station } from "@/lib/types";
 import { stepLabel } from "./orders-board";
+import { ticketLineKey } from "@/lib/ticket";
+import { LineDetails } from "./line-details";
 import { ReprintButton } from "./print-strip";
 import { StationPicker } from "./station-picker";
 import { Button, PageTitle } from "./ui";
@@ -180,12 +182,14 @@ function KitchenCard({
               ) : null}
               <ul>
                 {section.lines.map((line) => (
-                  <li key={line.number} className={`flex gap-2 ${picked ? "text-2xl leading-snug" : "text-sm"}`}>
+                  <li key={ticketLineKey(line)} className={`flex gap-2 ${picked ? "text-2xl leading-snug" : "text-sm"}`}>
                     <span className="font-display tabular-nums">{line.qty}×</span>
                     <span className="font-display text-accent-ink">{line.number}</span>
                     <span className="min-w-0 flex-1">
                       {primaryName(line.nameEn, line.nameZh, locale)}
                       <span className={`ml-2 font-zh text-ink-soft ${picked ? "text-lg" : ""}`}>{secondaryName(line.nameEn, line.nameZh, locale)}</span>
+                      {/* What the cook must not miss: as large as the dish it belongs to. */}
+                      <LineDetails details={line.details} className={picked ? "text-xl text-ink" : "text-ink-soft"} />
                     </span>
                   </li>
                 ))}
