@@ -5,9 +5,10 @@ import { useEffect, useState } from "react";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { isDanError } from "@/lib/errors";
 import { formatPence } from "@/lib/format";
-import { acceptTerms, connectPayments, getPayments, percentText, sameDeal, type Deal, type PaymentsStatus } from "@/lib/payments";
+import { acceptTerms, connectPayments, getPayments, percentText, sameDeal, type Deal, type PaymentsStatus, type ShopServerStatus } from "@/lib/payments";
 import { settingsRoute } from "@/lib/settings";
 import { useIsOwner, useShop } from "@/lib/shop-context";
+import { ShopServerSection } from "./shop-server-section";
 import { Button } from "./ui";
 
 /** Where Stripe sends the owner back after connecting. The cloud checks only its origin. */
@@ -148,6 +149,9 @@ export function StripeIntegration() {
 export function SubscriptionView() {
   const { t } = useI18n();
   const { status, setStatus, error, why, cloudUrl, cloudToken } = usePaymentsStatus();
+  // The shop server, when the shop has it, is something Dan charges for (DAN-35).
+  const [server, setServer] = useState<ShopServerStatus | null>(null);
+  const paysForServer = Boolean(server && !server.withoutPayment && (server.state === "paid" || server.state === "payment_failed" || server.state === "cancelling"));
   return (
     <div className="max-w-2xl space-y-4" data-testid="subscription">
       {why ? (
@@ -164,9 +168,14 @@ export function SubscriptionView() {
           {cloudUrl && cloudToken ? <DealSection status={status} onAccepted={setStatus} cloudUrl={cloudUrl} cloudToken={cloudToken} /> : null}
         </>
       )}
-      <p className="font-display text-lg" data-testid="nothing-else">
-        {t("subscriptionNothingElse")}
-      </p>
+      {paysForServer ? null : (
+        <p className="font-display text-lg" data-testid="nothing-else">
+          {t("subscriptionNothingElse")}
+        </p>
+      )}
+      {!why && cloudUrl && cloudToken ? (
+        <ShopServerSection cloudUrl={cloudUrl} cloudToken={cloudToken} refreshKey={status?.agreement?.acceptedAt ?? null} onStatus={setServer} />
+      ) : null}
       {error ? (
         <p className="border-l-2 border-accent pl-3 text-sm" role="alert">
           {error}

@@ -12,13 +12,18 @@
 //   POST /__payouts/hold     the shop's account has payouts on hold
 //   POST /__payouts/ok       payouts are on again (the default)
 //
+// For the shop server (DAN-35), on Dan's own account: the two prices by lookup
+// key, customers, Checkout sessions and billing-page sessions. A test that
+// needs a purchase to be paid sends the cloud Stripe's own notice
+// (checkout.session.completed), signed with the billing webhook secret.
+//
 // It takes no card and moves no money. A test that needs a payment to have
 // succeeded sends the cloud Stripe's own notice (payment_intent.succeeded),
 // signed with the webhook secret the test cloud was given.
 import http from "node:http";
 
 const port = Number(process.argv[2] ?? process.env.PORT ?? 9130);
-const state = { intents: [], refunds: [], refundsFail: false, payoutsHeld: false };
+const state = { intents: [], refunds: [], refundsFail: false, payoutsHeld: false, customers: [], checkouts: [], portals: [] };
 const send = (res, status, body) => {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(body));
@@ -40,6 +45,27 @@ http
       if (path === "/__refunds/fail" || path === "/__refunds/ok") {
         state.refundsFail = path.endsWith("fail");
         return send(res, 200, { refundsFail: state.refundsFail });
+      }
+      // The shop server's prices on Dan's own account, as configured in the real one.
+      if (path === "/v1/prices" && req.method === "GET") {
+        return send(res, 200, { data: [
+          { id: "price_e2e_setup", lookup_key: "dan_duo_setup", unit_amount: 9900, currency: "gbp", recurring: null, metadata: { compare_at_amount: "22000" }, product: { metadata: {} } },
+          { id: "price_e2e_monthly", lookup_key: "dan_duo_maintenance_monthly", unit_amount: 500, currency: "gbp", recurring: { interval: "month" }, metadata: {}, product: { metadata: {} } },
+        ] });
+      }
+      if (path === "/v1/customers" && req.method === "POST") {
+        const id = `cus_e2e${Date.now().toString(36)}${state.customers.length + 1}`;
+        state.customers.push({ id, email: form.email ?? null, shop: form["metadata[shop]"] ?? null });
+        return send(res, 200, { id });
+      }
+      if (path === "/v1/checkout/sessions" && req.method === "POST") {
+        const id = `cs_e2e${state.checkouts.length + 1}`;
+        state.checkouts.push({ id, customer: form.customer, shop: form["metadata[shop]"] ?? null, success: form.success_url, cancel: form.cancel_url, prices: [form["line_items[0][price]"], form["line_items[1][price]"]] });
+        return send(res, 200, { id, url: `https://checkout.stripe.test/${id}` });
+      }
+      if (path === "/v1/billing_portal/sessions" && req.method === "POST") {
+        state.portals.push({ customer: form.customer, back: form.return_url });
+        return send(res, 200, { id: `bps_e2e${state.portals.length}`, url: `https://billing.stripe.test/bps_e2e${state.portals.length}` });
       }
       if (path === "/v1/accounts" && req.method === "POST") return send(res, 200, { id: "acct_e2e", charges_enabled: false, details_submitted: false });
       const account = path.match(/^\/v1\/accounts\/([^/]+)$/);

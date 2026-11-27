@@ -74,3 +74,46 @@ export async function connectPayments(cloudUrl: string, token: string, returnTo:
   if (!/^https:\/\//.test(body.url)) throw new DanError("unreachable", "Stripe's link was not as expected.");
   return body.url;
 }
+
+/**
+ * The shop server, bought by the owner (RK, 27 Nov 2026, DAN-35): the setup
+ * once and a monthly fee, at Stripe's prices, on Dan's own Stripe account.
+ * Paying does not switch it on: Dan does, once the machine is set up.
+ */
+export type ShopServerStatus = {
+  /** The owner can buy it here (Dan's billing is set up and the shop lives in the cloud). */
+  available: boolean;
+  prices: { setupPence: number; setupWasPence: number | null; monthlyPence: number } | null;
+  state: "none" | "paid" | "payment_failed" | "cancelling" | "ended";
+  /** Switched on by Dan. */
+  on: boolean;
+  /** Switched on by Dan without the owner buying it. */
+  withoutPayment: boolean;
+  /** Set up on its own machine before DAN-34: nothing to buy. */
+  ownMachine: boolean;
+  periodEnd: string | null;
+  endsAt: string | null;
+  endedAt: string | null;
+  /** The owner accepted the terms in force: needed to buy. */
+  termsAccepted: boolean;
+};
+
+export function getShopServer(cloudUrl: string, token: string): Promise<ShopServerStatus> {
+  return call<ShopServerStatus>(cloudUrl, token, "/shop-server");
+}
+
+/** Stripe Checkout for the setup and the first month; Stripe sends the owner back to `returnTo`. */
+export function buyShopServer(cloudUrl: string, token: string, returnTo: string): Promise<string> {
+  return stripePage(cloudUrl, token, "/shop-server/checkout", returnTo);
+}
+
+/** Stripe's own billing page: the card, cancelling. */
+export function manageShopServer(cloudUrl: string, token: string, returnTo: string): Promise<string> {
+  return stripePage(cloudUrl, token, "/shop-server/manage", returnTo);
+}
+
+async function stripePage(cloudUrl: string, token: string, path: string, returnTo: string): Promise<string> {
+  const body = await call<{ url: string }>(cloudUrl, token, path, { method: "POST", body: JSON.stringify({ returnTo }) });
+  if (!/^https:\/\//.test(body.url)) throw new DanError("unreachable", "Stripe's link was not as expected.");
+  return body.url;
+}
