@@ -3,12 +3,12 @@ import { MOVED_PAGES } from "./old-addresses";
 import { SETTINGS_SECTIONS, sectionsFor, settingsRoute, stripeState } from "./settings";
 
 describe("Settings", () => {
-  it("lists six sections for the owner, in the owner's order of need", () => {
-    expect(SETTINGS_SECTIONS.map((section) => section.id)).toEqual(["shop", "ordering", "flow", "tables", "integrations", "subscription"]);
-    expect(sectionsFor(true)).toHaveLength(6);
+  it("lists seven sections for the owner, in the owner's order of need", () => {
+    expect(SETTINGS_SECTIONS.map((section) => section.id)).toEqual(["shop", "staff", "ordering", "flow", "tables", "integrations", "subscription"]);
+    expect(sectionsFor(true)).toHaveLength(7);
   });
 
-  it("shows the counter PIN Tables & printers only", () => {
+  it("shows staff Tables & printers only", () => {
     expect(sectionsFor(false)).toEqual(["tables"]);
   });
 

@@ -100,7 +100,9 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
           <p className="font-zh text-accent-ink">{session.shop.nameZh}</p>
           <p className="text-sm text-ink-soft">{session.shop.city}</p>
           <p className="mt-2 text-sm text-ink-soft" data-testid="signed-in-as">
-            {t("signedInAs")} <span className="font-display text-ink">{t(session.staff.role === "owner" ? "roleOwner" : "roleCounter")}</span>
+            {t("signedInAs")}{" "}
+            {/* Staff by their own name (DAN-44); the owner as the owner. */}
+            <span className="font-display text-ink">{session.staff.role === "owner" ? t("roleOwner") : session.staff.name || t("roleCounter")}</span>
           </p>
         </div>
         <nav className="flex flex-col px-2 pt-3" aria-label="Dan">

@@ -1,6 +1,8 @@
 import { asDanError, DanError } from "./errors";
 import { normalizeServerUrl } from "./url";
 import type {
+  ActivityPage,
+  ActivityQuery,
   Addon,
   AwaitingPayment,
   Category,
@@ -25,6 +27,7 @@ import type {
   ServerPing,
   Shop,
   ShopPatch,
+  StaffMember,
   Station,
 } from "./types";
 import { DAN_PRODUCT, DEFAULT_STATIONS } from "./types";
@@ -48,6 +51,8 @@ const PING_TIMEOUT_MS = 6000;
 const SHOP = "id name nameZh address city phone";
 const THEME = "preset typeface custom { paper ink accent chrome }";
 const STAFF = "id name role";
+const STAFF_MEMBER = "id name createdAt";
+const ACTIVITY_ENTRY = "id at byId byName byRole action orderId orderNumber detail";
 const CATEGORY = "id nameEn nameZh sort";
 const STATION = "id nameEn nameZh";
 const MENU_ITEM_BASE =
@@ -73,10 +78,11 @@ const ORDER_FIELDS_PRICED = `${ORDER_HEAD}
 const BOARD_COLUMN = "id nameEn nameZh role colour";
 const COURIER = "courier { deliveryId status trackingUrl feePence pickupEta dropoffEta courierName problem } refund";
 /** What the shop server knows: 5 with options and add-ons (DAN-32), 4 with the owner's changes (DAN-31), 3 with board columns (DAN-25), 2 with couriers (DAN-23), 1 with delivery fees, 0 before them. */
-let orderLevel = 5;
+let orderLevel = 6;
 /** The order fields the dashboard uses, for queries and the live channel alike. */
 export function orderFields(): string {
-  if (orderLevel >= 5) return `${ORDER_FIELDS_PRICED} deliveryFeePence deliveryBy ${COURIER} column columnAt columnRemap editCount paidPence`;
+  if (orderLevel >= 6) return `${ORDER_FIELDS_PRICED} deliveryFeePence deliveryBy ${COURIER} column columnAt columnRemap editCount paidPence takenBy { id name }`;
+  if (orderLevel === 5) return `${ORDER_FIELDS_PRICED} deliveryFeePence deliveryBy ${COURIER} column columnAt columnRemap editCount paidPence`;
   if (orderLevel === 4) return `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy ${COURIER} column columnAt columnRemap editCount paidPence`;
   if (orderLevel === 3) return `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy ${COURIER} column columnAt columnRemap`;
   if (orderLevel === 2) return `${ORDER_FIELDS_BASE} deliveryFeePence deliveryBy ${COURIER}`;
@@ -217,7 +223,7 @@ export class GraphQLDanClient implements DanClient {
   }
 
   async login(input: LoginInput): Promise<LoginResult> {
-    const variables = input.pin ? { input: { pin: input.pin } } : { input: { email: input.email, password: input.password } };
+    const variables = input.pin ? { input: { name: input.name, pin: input.pin } } : { input: { email: input.email, password: input.password } };
     const data = await this.run<{ login: LoginResult }>(
       `mutation Login($input: LoginInput!) { login(input: $input) { token staff { ${STAFF} } shop { ${SHOP} } } }`,
       variables,
@@ -423,8 +429,32 @@ export class GraphQLDanClient implements DanClient {
     return data.updateAddons;
   }
 
-  async setCounterPin(pin: string): Promise<void> {
-    await this.run<{ setCounterPin: boolean }>(`mutation SetCounterPin($pin: String!) { setCounterPin(pin: $pin) }`, { pin });
+  async getStaff(): Promise<StaffMember[]> {
+    return (await this.run<{ staff: StaffMember[] }>(`query Staff { staff { ${STAFF_MEMBER} } }`)).staff;
+  }
+
+  async addStaff(name: string, pin: string): Promise<StaffMember> {
+    return (await this.run<{ addStaff: StaffMember }>(`mutation AddStaff($name: String!, $pin: String!) { addStaff(name: $name, pin: $pin) { ${STAFF_MEMBER} } }`, { name, pin })).addStaff;
+  }
+
+  async renameStaff(id: string, name: string): Promise<StaffMember> {
+    return (await this.run<{ renameStaff: StaffMember }>(`mutation RenameStaff($id: String!, $name: String!) { renameStaff(id: $id, name: $name) { ${STAFF_MEMBER} } }`, { id, name })).renameStaff;
+  }
+
+  async setStaffPin(id: string, pin: string): Promise<StaffMember> {
+    return (await this.run<{ setStaffPin: StaffMember }>(`mutation SetStaffPin($id: String!, $pin: String!) { setStaffPin(id: $id, pin: $pin) { ${STAFF_MEMBER} } }`, { id, pin })).setStaffPin;
+  }
+
+  async removeStaff(id: string): Promise<void> {
+    await this.run<{ removeStaff: boolean }>(`mutation RemoveStaff($id: String!) { removeStaff(id: $id) }`, { id });
+  }
+
+  async getActivity(query: ActivityQuery = {}): Promise<ActivityPage> {
+    const data = await this.run<{ activity: ActivityPage }>(
+      `query Activity($by: String, $from: String, $to: String, $before: String, $limit: Int) { activity(by: $by, from: $from, to: $to, before: $before, limit: $limit) { more entries { ${ACTIVITY_ENTRY} } } }`,
+      { by: query.by ?? null, from: query.from ?? null, to: query.to ?? null, before: query.before ?? null, limit: query.limit ?? 50 },
+    );
+    return data.activity;
   }
 
   async updateMenuItem(id: string, patch: MenuItemPatch): Promise<MenuItem> {

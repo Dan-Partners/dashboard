@@ -38,15 +38,15 @@ describe("the Dan cloud's account calls, at its one address (DAN-43)", () => {
 
   it("signs the counter in by the shop's address name, whatever the capitals", async () => {
     const seen: { init?: RequestInit } = {};
-    await cloudPinLogin(" Corner-Bakery ", "2468", { base, fetchImpl: answering(200, { data: { signInStaff: { ...signedIn, staff: { id: "counter", name: "Counter", role: "counter" } } } }, seen) });
-    expect(JSON.parse(String(seen.init?.body)).variables).toEqual({ shop: "corner-bakery", pin: "2468" });
+    await cloudPinLogin(" Corner-Bakery ", " Amy ", "2468", { base, fetchImpl: answering(200, { data: { signInStaff: { ...signedIn, staff: { id: "counter", name: "Counter", role: "counter" } } } }, seen) });
+    expect(JSON.parse(String(seen.init?.body)).variables).toEqual({ shop: "corner-bakery", name: "Amy", pin: "2468" });
   });
 
   it("turns the cloud's refusals into errors with their code", async () => {
     const refused = (code: string) => answering(200, { data: null, errors: [{ message: "No.", extensions: { code } }] });
     await expect(cloudLogin("mei@example.com", "wrong", { base, fetchImpl: refused("unauthorized") })).rejects.toMatchObject({ code: "unauthorized" });
     await expect(joinWaitlist("x@example.com", { base, fetchImpl: refused("rate_limited") })).rejects.toMatchObject({ code: "rate_limited" });
-    await expect(cloudPinLogin("nowhere", "2468", { base, fetchImpl: refused("not_found") })).rejects.toMatchObject({ code: "not_found" });
+    await expect(cloudPinLogin("nowhere", "Amy", "2468", { base, fetchImpl: refused("not_found") })).rejects.toMatchObject({ code: "not_found" });
   });
 
   it("says so when the cloud cannot be reached, or answers with something else", async () => {

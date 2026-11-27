@@ -116,9 +116,13 @@ export async function cloudLogin(email: string, password: string, options?: Opti
   return session(data.signIn, options);
 }
 
-/** The shop's address name and its PIN: signs the counter in. */
-export async function cloudPinLogin(addressName: string, pin: string, options?: Options): Promise<CloudSession> {
-  const data = await ask<{ signInStaff: SessionAnswer }>(`mutation($shop: String!, $pin: String!) { signInStaff(shop: $shop, pin: $pin) { ${SESSION} } }`, { shop: addressName.trim().toLowerCase(), pin }, options);
+/** The shop's address name, then a staff member's name and PIN (DAN-44). */
+export async function cloudPinLogin(addressName: string, name: string, pin: string, options?: Options): Promise<CloudSession> {
+  const data = await ask<{ signInStaff: SessionAnswer }>(
+    `mutation($shop: String!, $name: String!, $pin: String!) { signInStaff(shop: $shop, name: $name, pin: $pin) { ${SESSION} } }`,
+    { shop: addressName.trim().toLowerCase(), name: name.trim(), pin },
+    options,
+  );
   return session(data.signInStaff, options);
 }
 

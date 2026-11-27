@@ -1,4 +1,4 @@
-import { expectPinCannotSee, openSettings } from "./settings";
+import { expectPinCannotSee, openSettings, STAFF_NAME } from "./settings";
 import { expect, test, type Page } from "@playwright/test";
 import { openTill } from "./create-order";
 import { hasCloud } from "./settings";
@@ -44,9 +44,13 @@ test("the counter PIN runs service but cannot see sales or edit dishes", async (
   await connect(page);
   await page.getByRole("button", { name: "PIN", exact: true }).click();
 
+  await page.getByLabel("Your name").fill(STAFF_NAME);
+
   await page.getByLabel("PIN").fill("0000");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByTestId("connect-error")).toContainText("not recognised");
+
+  await page.getByLabel("Your name").fill(STAFF_NAME);
 
   await page.getByLabel("PIN").fill(pin);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -120,6 +124,7 @@ test("the owner's theme is saved on the shop server for every tablet", async ({ 
   await tablet.getByLabel("Shop server").fill(server!);
   await tablet.getByRole("button", { name: "Connect", exact: true }).click();
   await tablet.getByRole("button", { name: "PIN", exact: true }).click();
+  await tablet.getByLabel("Your name").fill(STAFF_NAME);
   await tablet.getByLabel("PIN").fill(pin);
   await tablet.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(tablet.locator("html")).toHaveAttribute("data-theme", "jade");
@@ -160,6 +165,7 @@ test("an online order reaches an open tablet live, with no refresh", async ({ pa
   await page.setViewportSize({ width: 1280, height: 900 });
   await connect(page);
   await page.getByRole("button", { name: "PIN", exact: true }).click();
+  await page.getByLabel("Your name").fill(STAFF_NAME);
   await page.getByLabel("PIN").fill(pin);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
@@ -191,6 +197,7 @@ test("an order from a table's link shows its table and is marked served", async 
   await page.setViewportSize({ width: 1280, height: 900 });
   await connect(page);
   await page.getByRole("button", { name: "PIN", exact: true }).click();
+  await page.getByLabel("Your name").fill(STAFF_NAME);
   await page.getByLabel("PIN").fill(pin);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
@@ -222,6 +229,7 @@ test("the owner is warned when there is no Dan cloud, the counter is not", async
   await page.setViewportSize({ width: 1280, height: 900 });
   await connect(page);
   await page.getByRole("button", { name: "PIN", exact: true }).click();
+  await page.getByLabel("Your name").fill(STAFF_NAME);
   await page.getByLabel("PIN").fill(pin);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
@@ -249,6 +257,7 @@ test("the status corner shows the shop server connected, no cloud yet, and stamp
   await page.setViewportSize({ width: 1280, height: 900 });
   await connect(page);
   await page.getByRole("button", { name: "PIN", exact: true }).click();
+  await page.getByLabel("Your name").fill(STAFF_NAME);
   await page.getByLabel("PIN").fill(pin);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();

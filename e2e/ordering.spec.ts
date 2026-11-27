@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectPinCannotSee, openSettings } from "./settings";
+import { expectPinCannotSee, openSettings, STAFF_NAME } from "./settings";
 
 /**
  * Order and payment methods. The first test runs on the demo. The second
@@ -97,6 +97,7 @@ async function signIn(page: Page, who: "owner" | "pin") {
     await page.getByLabel("Password").fill(ownerPassword);
   } else {
     await page.getByRole("button", { name: "PIN", exact: true }).click();
+    await page.getByLabel("Your name").fill(STAFF_NAME);
     await page.getByLabel("PIN").fill(pin);
   }
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

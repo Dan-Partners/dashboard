@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
+import { STAFF_NAME } from "./settings";
 import { openTill } from "./create-order";
 
 /**
@@ -39,6 +40,7 @@ test("the counter carries on through the cloud while the shop server is down, th
   await page.getByLabel("Shop server").fill(server!);
   await page.getByRole("button", { name: "Connect", exact: true }).click();
   await page.getByRole("button", { name: "PIN", exact: true }).click();
+  await page.getByLabel("Your name").fill(STAFF_NAME);
   await page.getByLabel("PIN").fill(pin);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();

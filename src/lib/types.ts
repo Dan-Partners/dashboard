@@ -98,9 +98,32 @@ export type ServerPing = {
   cloudAddressName?: string | null;
 };
 
+/** The owner's email and password, or a staff member's name and PIN (DAN-44). */
 export type LoginInput =
-  | { email: string; password: string; pin?: undefined }
-  | { pin: string; email?: undefined; password?: undefined };
+  | { email: string; password: string; pin?: undefined; name?: undefined }
+  | { name: string; pin: string; email?: undefined; password?: undefined };
+
+/** A staff member as the owner sees them (DAN-44). Never the PIN. */
+export type StaffMember = { id: string; name: string; createdAt: string };
+
+/** One line of the shop's activity log: who did what, when. Owner only. */
+export type ActivityEntry = {
+  id: string;
+  at: string;
+  byId: string;
+  byName: string;
+  /** owner, staff or online. */
+  byRole: string;
+  action: string;
+  orderId: string | null;
+  orderNumber: number | null;
+  detail: string;
+};
+
+export type ActivityPage = { entries: ActivityEntry[]; more: boolean };
+
+/** By one person (their id), between two times (ISO), older than `before` for the next page. */
+export type ActivityQuery = { by?: string | null; from?: string | null; to?: string | null; before?: string | null; limit?: number };
 
 export type LoginResult = {
   token: string;
@@ -312,6 +335,8 @@ export type Order = {
   editCount?: number | null;
   /** What was taken when it was paid, once a change has made the bill differ from it. */
   paidPence?: number | null;
+  /** Owner only (DAN-44): who took it at the counter or by phone. Null for staff, and for an online order. */
+  takenBy?: { id: string; name: string } | null;
 };
 
 export type Courier = {
@@ -422,8 +447,18 @@ export interface DanClient {
   reorderCategories(ids: string[]): Promise<Category[]>;
   /** Owner only: the shop's name, address and phone. */
   updateShop(patch: ShopPatch): Promise<Shop>;
-  /** Owner only: sets or changes the counter PIN (4 to 6 digits). */
-  setCounterPin(pin: string): Promise<void>;
+  /** Owner only (DAN-44): the shop's staff, in the order they were added. */
+  getStaff(): Promise<StaffMember[]>;
+  /** Owner only: a staff member with their own PIN (4 to 6 digits). The first ends the old shared PIN. */
+  addStaff(name: string, pin: string): Promise<StaffMember>;
+  /** Owner only. Their sign-ins carry on. */
+  renameStaff(id: string, name: string): Promise<StaffMember>;
+  /** Owner only. Their sign-ins end. */
+  setStaffPin(id: string, pin: string): Promise<StaffMember>;
+  /** Owner only. Their sign-ins end. */
+  removeStaff(id: string): Promise<void>;
+  /** Owner only: everything people did in the shop, newest first. */
+  getActivity(query?: ActivityQuery): Promise<ActivityPage>;
   /** The owner's views. */
   getViews(): Promise<View[]>;
   /** Owner only: the whole list. A view that goes takes its sounds with it. */

@@ -6,13 +6,15 @@ import type { CopyKey } from "./i18n";
  * who the shop is, how it takes orders, how orders flow, the hardware, the
  * outside services, and what the shop has agreed with Dan.
  */
-export type SettingsSection = "shop" | "ordering" | "flow" | "tables" | "integrations" | "subscription";
+export type SettingsSection = "shop" | "staff" | "ordering" | "flow" | "tables" | "integrations" | "subscription";
 
 export const SETTINGS_ROUTE = "/shop/settings";
 export const settingsRoute = (section: SettingsSection) => `${SETTINGS_ROUTE}/${section}`;
 
 export const SETTINGS_SECTIONS: { id: SettingsSection; label: CopyKey; gloss: CopyKey; hint: CopyKey }[] = [
   { id: "shop", label: "settingsShop", gloss: "settingsShopZh", hint: "settingsShopHint" },
+  // Named staff and the activity log (RK, 27 Nov 2026, DAN-44): the owner's only.
+  { id: "staff", label: "settingsStaff", gloss: "settingsStaffZh", hint: "settingsStaffHint" },
   { id: "ordering", label: "settingsOrdering", gloss: "settingsOrderingZh", hint: "settingsOrderingHint" },
   { id: "flow", label: "settingsFlow", gloss: "settingsFlowZh", hint: "settingsFlowHint" },
   { id: "tables", label: "settingsTables", gloss: "settingsTablesZh", hint: "settingsTablesHint" },

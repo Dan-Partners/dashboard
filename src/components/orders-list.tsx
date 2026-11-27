@@ -249,6 +249,12 @@ function Row({
         <span className="order-6 col-span-3 min-w-0 truncate text-sm text-ink-soft md:order-none md:col-span-1 md:text-base md:text-ink">
           {type}
           <span className="ml-2 text-sm text-ink-soft">{source}</span>
+          {/* Who took it: the server says only to the owner (DAN-44). */}
+          {order.takenBy ? (
+            <span className="ml-2 text-sm text-ink-soft" data-testid="list-taken-by">
+              · {order.takenBy.name}
+            </span>
+          ) : null}
         </span>
         <span className="order-2 min-w-0 truncate md:order-none" data-testid="list-where">
           <span className="mr-2 inline-block size-2.5 align-middle" style={{ backgroundColor: colour }} aria-hidden="true" />

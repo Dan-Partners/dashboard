@@ -5,6 +5,7 @@ import type { Board } from "./board";
 import type { OrderingSetup } from "./ordering";
 import type { ThemeChoice } from "./theme";
 import type {
+  ActivityEntry,
   Addon,
   Allergen,
   Category,
@@ -703,7 +704,23 @@ export type DemoState = {
   orderEdits?: OrderEdit[];
   /** The demo shop's add-ons. Kept in this browser; none when missing. */
   addons?: Addon[];
+  /** The demo shop's staff (DAN-44), with their PINs: it is only a demo. Amy and Ben when missing. */
+  team?: DemoMember[];
+  /** What was done in the demo, newest last (DAN-44). Kept in this browser. */
+  activity?: ActivityEntry[];
 };
+
+/** A demo staff member. The demo keeps the PIN as typed: nothing real is behind it. */
+export type DemoMember = { id: string; name: string; pin: string; createdAt: string };
+
+/** The demo's staff when nothing is saved: Amy signs in with the demo PIN. */
+export function demoTeam(now: Date): DemoMember[] {
+  const at = now.toISOString();
+  return [
+    { id: "staff_amy", name: "Amy", pin: DEMO_PIN, createdAt: at },
+    { id: "staff_ben", name: "Ben", pin: "1357", createdAt: at },
+  ];
+}
 
 function buildItems(): MenuItem[] {
   return items.map((item) => ({

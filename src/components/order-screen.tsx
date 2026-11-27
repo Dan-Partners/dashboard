@@ -171,6 +171,12 @@ export function OrderScreen({ id }: { id: string }) {
           />
         </div>
         <div className="min-w-0 space-y-10">
+          {/* Who took it: the owner's only (DAN-44). */}
+          {isOwner && (order.takenBy || order.source === "online") ? (
+            <p className="font-display" data-testid="order-taken-by">
+              <span className="text-ink-soft">{t("orderTakenBy")}</span> {order.takenBy?.name ?? t("orderTakenOnline")}
+            </p>
+          ) : null}
           {!isOwner ? (
             <p className="border-l-2 border-accent pl-3" data-testid="order-owner-only">
               {t("orderOwnerOnly")}

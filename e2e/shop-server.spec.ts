@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
+import { STAFF_NAME } from "./settings";
 
 /**
  * A shop server whose shop lives in the Dan cloud (RK, 27 Nov 2026, DAN-34):
@@ -138,6 +139,7 @@ test("a shop server whose key the cloud refuses carries on alone and says the ke
   test.setTimeout(60_000);
   await connect(page, refused!);
   await page.getByRole("button", { name: "PIN", exact: true }).click();
+  await page.getByLabel("Your name").fill(STAFF_NAME);
   await page.getByLabel("PIN").fill(refusedPin);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();

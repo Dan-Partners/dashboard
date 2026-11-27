@@ -7,7 +7,7 @@ import { SETTINGS_ROUTE, SETTINGS_SECTIONS, sectionsFor, settingsRoute, stripeSt
 import type { SettingsAccess } from "@/lib/server-health";
 import { useIsOwner, useShop } from "@/lib/shop-context";
 import { usePaymentsStatus } from "./payments-view";
-import { CounterPinSection, ShopDetailsSection } from "./shop-settings-section";
+import { ShopDetailsSection } from "./shop-settings-section";
 import { ThemeButton, ThemeDialog } from "./theme-dialog";
 import { PageTitle } from "./ui";
 
@@ -117,7 +117,7 @@ export function SettingsFrame({ section, sub, children }: { section: SettingsSec
   );
 }
 
-/** Settings, Shop: the shop's details, the counter PIN, and the theme. */
+/** Settings, Shop: the shop's details and the theme. Staff and their PINs are under Settings, Staff (DAN-44). */
 export function ShopSettings() {
   const { t } = useI18n();
   const [themeOpen, setThemeOpen] = useState(false);
@@ -133,7 +133,6 @@ export function ShopSettings() {
         <ThemeDialog open={themeOpen} onClose={() => setThemeOpen(false)} />
       </section>
       <ShopDetailsSection />
-      <CounterPinSection />
     </div>
   );
 }

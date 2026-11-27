@@ -26,6 +26,8 @@ export function SignInScreen() {
   const [password, setPassword] = useState("");
   const [shopName, setShopName] = useState(() => shop.persisted.lastShopName ?? "");
   const [pin, setPin] = useState("");
+  // A staff member's own name with their PIN (DAN-44).
+  const [staffName, setStaffName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,10 +79,11 @@ export function SignInScreen() {
       return;
     }
     if (!shopName.trim()) return setError(t("signInShopNotFound"));
+    if (!staffName.trim()) return setError(t("loginStaffNameRequired"));
     if (!/^\d{4,6}$/.test(pin)) return setError(t("loginPinInvalid"));
     setBusy(true);
     try {
-      await shop.loginCloudPin(shopName, pin).catch((caught: unknown) => {
+      await shop.loginCloudPin(shopName, staffName.trim(), pin).catch((caught: unknown) => {
         if (isDanError(caught) && caught.code === "not_found") throw new SignInProblem(t("signInShopNotFound"));
         if (isDanError(caught) && caught.code === "no_pin") throw new SignInProblem(t("signInNoPin"));
         throw caught;
@@ -163,6 +166,17 @@ export function SignInScreen() {
                 autoCapitalize="off"
                 autoCorrect="off"
                 spellCheck={false}
+                required
+              />
+              <TextField
+                label={t("loginStaffName")}
+                id="signin-staff-name"
+                name="staff-name"
+                autoComplete="username"
+                autoCapitalize="words"
+                value={staffName}
+                maxLength={40}
+                onChange={(event) => setStaffName(event.target.value)}
                 required
               />
               <TextField

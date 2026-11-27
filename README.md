@@ -31,7 +31,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-- **Sign in** (the first page) is for a shop in the Dan cloud: the owner's email and password, or the shop's address name and the counter PIN. Below it, anyone can **join the waiting list** with an email. See [Accounts in the Dan cloud](#accounts-in-the-dan-cloud).
+- **Sign in** (the first page) is for a shop in the Dan cloud: the owner's email and password, or the shop's address name and a staff member's own name and PIN (DAN-44). Below it, anyone can **join the waiting list** with an email. See [Accounts in the Dan cloud](#accounts-in-the-dan-cloud).
 - **Connect** (`/connect`, linked from the first page) asks for the shop server URL (`http://192.168.1.20:2283`, `https://goldendragon.dan.partners`, …), sends a GraphQL `ping` to `<server>/graphql`, remembers recent servers, then asks for email and password or a counter PIN.
 - **Try the demo / 試用示範** signs into Golden Dragon with no backend. Orders, the menu, stamp cards and today’s takings persist in `localStorage`. **Reset demo** in the side menu loads the shop again.
 
@@ -54,13 +54,14 @@ A business joins in the [Dan cloud](https://github.com/DanPartners/cloud), with 
 
 - **Waiting list.** The first page takes an email (`joinWaitlist`). The answer is the same whoever asks.
 - **Invite.** Dan picks people from the list and sends each a one-time link by hand (`dan-cloud waitlist invite <email>`): `/join#<token>`. The page takes the token out of the address bar, then asks for a name, a password (at least 10 characters), the shop's name, its address name (checked as it is typed) and a template: **online shop** (three columns: New, Ready, Completed; no stations, no views, no sounds) or **restaurant** (New, Preparing, Ready, Completed; four stations; Kitchen and Pass; the kitchen's 叮). Everything a template sets can be changed later on the Order board page. The shop is made and the owner is signed in, on an empty menu.
-- **Sign in.** Email and password find the owner's shop (`signIn`). A counter tablet signs in with the shop's address name and PIN (`signInStaff`); the device remembers the address name. An unknown address name, and a shop with no PIN yet, each say so.
+- **Sign in.** Email and password find the owner's shop (`signIn`). A staff member signs in with the shop's address name, their own name and their PIN (`signInStaff`); the device remembers the address name. An unknown address name, and a shop with no PIN yet, each say so.
 - **Forgotten password.** Dan sends a one-time link (`dan-cloud shop reset-link <email>`): `/reset#<token>`. Choosing a new password ends the old sign-ins.
 - **A shop that lives in the cloud** has one server. The status corner shows one light, "Dan cloud", and there is nothing to sync or switch to.
 - **Building the menu** (owner): on Menu, **Add dish**, **Edit categories** (add, rename, put in order, remove an empty one), and **Remove dish** inside a dish. One name is enough for a dish or a category; it is used for both languages. The demo does the same in the browser.
 - **Stations** (owner, in Settings, Order flow): add, rename, reorder and remove the shop's stations, or have none. A station with dishes on it cannot be removed. The dish form, the kitchen's filter, tickets and printers follow the list. The counter PIN sees it read-only. `e2e/stations.spec.ts` covers the demo, the PIN and a cloud restaurant with no stations.
 - **Views** (owner, in Settings, Order flow): see [Views](#views) below.
-- **Settings, Shop** (owner): **Shop details** (name, Chinese name, address, town, phone) and **Counter PIN** (set or change it; tablets on the old PIN are signed out).
+- **Settings, Shop** (owner): **Shop details** (name, Chinese name, address, town, phone) and the theme.
+- **Settings, Staff** (owner; RK, 27 Nov 2026, DAN-44): the shop's staff, each with their own name and PIN (add, rename, new PIN, remove; a new PIN or removing someone signs their tablets out). There is no shared counter PIN: a shop has no PIN sign-in until the owner adds the first person, which also ends any old shared PIN. Staff sign in with their name (any capitals) and PIN; five wrong PINs pause that device for five minutes. **Activity** (Settings, Staff, Activity): everything done in the shop, newest first, by person and by day: orders taken, moved, changed and cancelled, couriers, bank transfers, sold out, stamps, printers, sign-ins, online orders and every setting changed. Only the owner sees it, and only the owner sees who took each order (on its page, and in the order list). Staff screens show no names.
 - Passwords are cleared from a form once it has signed in, because a page already visited can stay in memory.
 
 `e2e/accounts.spec.ts` runs the whole of it against a real cloud: waiting list, an invite made with the cloud's command, joining, building a menu, an order numbered 1, signing in again by email and by PIN, and a reset link. It is skipped unless you point it at a cloud that allows this dashboard's address, with the dashboard built for that cloud:
@@ -86,10 +87,10 @@ A shop that takes the shop server (a paid extra, DAN-34) runs [DanPartners/serve
   - **Limit:** the counter page is served by the shop machine. A tablet that already has it open carries on; one that reloads while the machine is down has nothing to reload. Until the counter is cached in the browser, open `my.dan.partners` on any device and sign in there.
 - **Status, top right.** A light for each server (green connected, amber reconnecting, red offline), the one in use underlined, and the sync line ("Synced", "Waiting to sync: 12 changes", "Key not valid", or "Sync not running yet"). Tap for the addresses and the last sync. Both servers are checked every 10 seconds; a server is offline after three missed checks. Any staff member sees it.
 - **Connect** sends `ping`. The answer must say `product: "dan"`. A server with no shop yet answers `not_set_up`, and the connect screen says so.
-- **Sign in** with the owner's email and password, or the counter PIN. The token goes in `Authorization: Bearer <token>`.
+- **Sign in** with the owner's email and password, or a staff member's name and PIN. The token goes in `Authorization: Bearer <token>`.
 - **Live, over a WebSocket.** After sign-in the dashboard opens the server's live channel (`<server>/graphql/ws`, the standard `graphql-transport-ws` protocol) and sends its token in the first message. New and moved orders arrive at once, in full; a menu, stamp card or theme change arrives as a notice and the dashboard fetches just that part. Nothing polls. If the connection drops, the dashboard shows that the shop server is not answering, reconnects by itself, and fetches everything again so nothing is missed. The client is [`src/lib/live.ts`](src/lib/live.ts), shared with the customer site. A new online order shows a banner, as in the demo.
 - **Card payments and the shop server** (owner, Settings, Integrations and Subscription) are GraphQL fields of the shop's staff schema that only the cloud answers (`payments`, `connectStripe`, `acceptTerms`, `shopServer`, `buyShopServer`, `manageBilling`; DAN-43). A shop's own machine answers `cloud_only`; the dashboard always asks the cloud ([`src/lib/payments.ts`](src/lib/payments.ts)).
-- **The counter PIN runs service**: orders, the till, tickets, stamp cards, and marking dishes sold out. Only the owner edits dishes and prices or sees sales. The server enforces this. The dashboard hides the Sales link, makes dish rows read-only and explains why, so nobody hits an error mid-rush. The side menu shows who is signed in.
+- **Staff run service** (each with their own PIN): orders, the till, tickets, stamp cards, and marking dishes sold out. Only the owner edits dishes and prices or sees sales. The server enforces this. The dashboard hides the Sales link, makes dish rows read-only and explains why, so nobody hits an error mid-rush. The side menu shows who is signed in.
 - **Online orders** from the customer site show how they are paid: "Paid by card", or "To pay at the shop" with the amount, on the docket and on the ticket.
 - **Errors** carry the server's code (`forbidden`, `locked`, `sold_out` …), and [`src/lib/i18n.ts`](src/lib/i18n.ts) turns it into copy.
 - The server must list a hosted dashboard's address in `DAN_ALLOWED_ORIGINS`, or the browser refuses to connect. The dashboard served from the shop's own machine needs no entry: the server accepts a page from its own local address.
@@ -105,6 +106,8 @@ Prices are integer pence. Times are ISO-8601. The sales day and week are calenda
 ```bash
 DAN_E2E_SERVER_URL=http://127.0.0.1:2283 DAN_E2E_OWNER_EMAIL=you@example.com DAN_E2E_OWNER_PASSWORD='…' DAN_E2E_PIN='…' npx playwright test real-server
 ```
+
+A PIN sign-in in these tests uses a staff member called `Counter` with `DAN_E2E_PIN` (DAN-44: there is no shared PIN); add them in Settings, Staff, or name another with `DAN_E2E_STAFF_NAME`.
 
 `e2e/switch-over.spec.ts` stops a shop server that syncs to a cloud, takes an order through the cloud, starts it again and checks the counter goes back with the order. Give it the cloud address and commands that stop and start that shop server:
 

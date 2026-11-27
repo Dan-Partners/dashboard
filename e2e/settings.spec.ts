@@ -1,11 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectPinCannotSee, openSettings } from "./settings";
+import { expectPinCannotSee, openSettings, STAFF_NAME } from "./settings";
 
 /**
  * Settings (DAN-33): every setting in one place, a page per section. In the
- * demo (the owner): the six sections, each page, the theme, Integrations,
+ * demo (the owner): the seven sections (Staff since DAN-44), each page, the theme, Integrations,
  * Subscription, and the old pages forwarding. With a real shop server
- * (DAN_E2E_SERVER_URL, DAN_E2E_PIN): what the counter PIN sees.
+ * (DAN_E2E_SERVER_URL, DAN_E2E_PIN): what staff see.
  */
 const server = process.env.DAN_E2E_SERVER_URL;
 const pin = process.env.DAN_E2E_PIN ?? "";
@@ -27,7 +27,8 @@ test("the owner finds every setting under Settings, a page per section", async (
   await nav.getByRole("link", { name: /^Settings/ }).click();
   const index = page.getByTestId("settings-index").filter({ visible: true });
   await expect(index.getByTestId("settings-section")).toHaveText([
-    /^Shop店舖Name, address, counter PIN and theme/,
+    /^Shop店舖Name, address and theme/,
+    /^Staff員工/,
     /^Ordering點餐/,
     /^Order flow訂單流程/,
     /^Tables & printers枱號及打印機/,
@@ -43,7 +44,7 @@ test("the owner finds every setting under Settings, a page per section", async (
   await page.getByTestId("settings-back").filter({ visible: true }).click();
   await expect(page).toHaveURL(/\/shop\/settings$/);
 
-  // Shop: the details, the counter PIN and the theme, which opens as before.
+  // Shop: the details and the theme, which opens as before.
   await openSettings(page, "shop");
   await expect(page.getByTestId("shop-details")).toBeVisible();
   await page.getByTestId("theme-button").filter({ visible: true }).click();
@@ -95,10 +96,10 @@ test("on a phone, Settings is under More", async ({ page }) => {
   await openDemo(page, 390);
   await page.getByRole("button", { name: /^More/ }).click();
   await page.getByRole("link", { name: /^Settings/ }).filter({ visible: true }).click();
-  await expect(page.getByTestId("settings-section").filter({ visible: true })).toHaveCount(6);
+  await expect(page.getByTestId("settings-section").filter({ visible: true })).toHaveCount(7);
 });
 
-test("the counter PIN sees Tables & printers only, and still prints a table card", async ({ page }) => {
+test("staff see Tables & printers only, and still print a table card", async ({ page }) => {
   test.skip(!server || !pin, "needs DAN_E2E_SERVER_URL and DAN_E2E_PIN");
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/connect");
@@ -108,13 +109,14 @@ test("the counter PIN sees Tables & printers only, and still prints a table card
   await page.getByLabel("Shop server").fill(server!);
   await page.getByRole("button", { name: "Connect", exact: true }).click();
   await page.getByRole("button", { name: "PIN", exact: true }).click();
+  await page.getByLabel("Your name").fill(STAFF_NAME);
   await page.getByLabel("PIN").fill(pin);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
 
   await page.getByRole("link", { name: /^Settings/ }).first().click();
   await expect(page.getByTestId("settings-index").filter({ visible: true })).toContainText("print table cards and test the printers");
-  for (const section of ["shop", "ordering", "flow", "integrations", "subscription"] as const) await expectPinCannotSee(page, section);
+  for (const section of ["shop", "staff", "ordering", "flow", "integrations", "subscription"] as const) await expectPinCannotSee(page, section);
   // An old address forwards, and says the same.
   await page.goto("/shop/payments");
   await expect(page.getByTestId("settings-owner-only").filter({ visible: true })).toBeVisible();

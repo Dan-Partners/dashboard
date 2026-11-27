@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-type Section = "shop" | "ordering" | "flow" | "tables" | "integrations" | "subscription";
+type Section = "shop" | "staff" | "ordering" | "flow" | "tables" | "integrations" | "subscription";
 
 /**
  * Opens one section of Settings the way staff do: Settings in the menu, then
@@ -45,3 +45,9 @@ export async function hasCloud(server: string): Promise<boolean> {
   const body = (await response?.json().catch(() => null)) as { data?: { ping?: { cloudUrl?: string | null } } } | null;
   return Boolean(body?.data?.ping?.cloudUrl);
 }
+
+/**
+ * The staff member the tests sign in as with a PIN (DAN-44): there is no
+ * shared counter PIN. The test shop has someone of this name, with DAN_E2E_PIN.
+ */
+export const STAFF_NAME = process.env.DAN_E2E_STAFF_NAME ?? "Counter";

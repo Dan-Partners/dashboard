@@ -89,9 +89,10 @@ describe("a shop server from before dish options and add-ons", () => {
     const client = new Fresh("http://shop.test", "token");
     const { orders } = await client.getOrders();
     expect(orders[0].editCount).toBe(2);
-    expect(asked).toHaveLength(2);
-    expect(asked[0]).toContain("amountPence");
-    expect(asked[1]).toContain("paidPence");
+    // With who took it (DAN-44), with options, then without.
+    expect(asked).toHaveLength(3);
+    expect(asked[1]).toContain("amountPence");
+    expect(asked[2]).toContain("paidPence");
     const menu = await client.getMenu();
     expect(menu.items[0].photo).toBe("images/abc");
     expect(asked.at(-1)).toContain("photo");
@@ -133,9 +134,9 @@ describe("a shop server from before the owner could change an order", () => {
     const { orders } = await new Fresh("http://shop.test", "token").getOrders();
     expect(orders[0].column).toBe("ready");
     // Asked with options and add-ons, then with the owner's changes, then without either.
-    expect(asked).toHaveLength(3);
-    expect(asked[2]).toContain("columnRemap");
-    expect(asked[2]).not.toContain("paidPence");
+    expect(asked).toHaveLength(4);
+    expect(asked[3]).toContain("columnRemap");
+    expect(asked[3]).not.toContain("paidPence");
   });
 });
 
@@ -156,9 +157,9 @@ describe("a shop server from before Uber couriers", () => {
     const { orders } = await new GraphQLDanClient("http://shop.test", "token").getOrders();
     expect(orders[0].deliveryBy).toBe("shop");
     // Asked with options and add-ons, then with the owner's changes, then with board columns, then with couriers, then with none of them.
-    expect(asked).toHaveLength(5);
-    expect(asked[4]).toContain("deliveryBy");
-    expect(asked[4]).not.toContain("courier");
+    expect(asked).toHaveLength(6);
+    expect(asked[5]).toContain("deliveryBy");
+    expect(asked[5]).not.toContain("courier");
   });
 
   it("says Uber is not connected rather than failing", async () => {
@@ -168,5 +169,27 @@ describe("a shop server from before Uber couriers", () => {
     );
     const options = await new GraphQLDanClient("http://shop.test", "token").getUberOptions();
     expect(options.connected).toBe(false);
+  });
+});
+
+describe("a shop server from before named staff", () => {
+  it("still gives the board, asked again without who took each order", async () => {
+    vi.resetModules();
+    const { GraphQLDanClient: Fresh } = await import("./graphql-client");
+    const asked: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        const { query } = JSON.parse(String(init.body)) as { query: string };
+        asked.push(query);
+        if (query.includes("takenBy")) return reply({ data: null, errors: [{ message: 'Unknown field "takenBy" on type "Order".' }] });
+        return reply({ data: { orders: [{ id: "o1", paidPence: 900 }] } });
+      }),
+    );
+    const { orders } = await new Fresh("http://shop.test", "token").getOrders();
+    expect(orders[0].paidPence).toBe(900);
+    expect(asked).toHaveLength(2);
+    expect(asked[1]).toContain("paidPence");
+    expect(asked[1]).not.toContain("takenBy");
   });
 });

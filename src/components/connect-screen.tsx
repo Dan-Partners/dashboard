@@ -29,6 +29,8 @@ export function ConnectScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pin, setPin] = useState("");
+  // A staff member's own name with their PIN (DAN-44).
+  const [staffName, setStaffName] = useState("");
 
   // Opened from the shop's machine itself (the counter address on the shop Wi-Fi):
   // that machine is the shop server, so its local address is filled in. The
@@ -82,6 +84,9 @@ export function ConnectScreen() {
         setError(t("loginPasswordRequired"));
         return;
       }
+    } else if (!staffName.trim()) {
+      setError(t("loginStaffNameRequired"));
+      return;
     } else if (!/^\d{4,6}$/.test(pin)) {
       setError(t("loginPinInvalid"));
       return;
@@ -91,7 +96,7 @@ export function ConnectScreen() {
     try {
       await shop.loginRemote(
         phase.baseUrl,
-        authMode === "email" ? { email: email.trim(), password } : { pin },
+        authMode === "email" ? { email: email.trim(), password } : { name: staffName.trim(), pin },
         phase.ping,
         phase.cloudUrl,
       );
@@ -256,6 +261,18 @@ export function ConnectScreen() {
                 />
               </>
             ) : (
+              <>
+              <TextField
+                label={t("loginStaffName")}
+                id="connect-staff-name"
+                name="staff-name"
+                autoComplete="username"
+                autoCapitalize="words"
+                value={staffName}
+                maxLength={40}
+                onChange={(event) => setStaffName(event.target.value)}
+                required
+              />
               <TextField
                 label={t("loginPin")}
                 name="pin"
@@ -267,6 +284,7 @@ export function ConnectScreen() {
                 hint={t("loginPinHint")}
                 required
               />
+              </>
             )}
           </div>
           {error ? (

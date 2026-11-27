@@ -75,10 +75,16 @@ type ShopContextValue = {
   loginRemote: (baseUrl: string, input: LoginInput, ping: ServerPing, cloudUrl?: string | null) => Promise<void>;
   /** Opens a sign-in the Dan cloud gave (email and password, an invite, a reset link). */
   adoptCloudSession: (cloud: CloudSession) => Promise<void>;
-  /** The counter PIN at a shop that lives in the cloud, by its address name. */
-  loginCloudPin: (addressName: string, pin: string) => Promise<void>;
+  /** A staff member's name and PIN at a shop that lives in the cloud, by its address name (DAN-44). */
+  loginCloudPin: (addressName: string, name: string, pin: string) => Promise<void>;
   /** Owner only: adds, removes and arranges dishes and categories. */
   editMenu: <T>(work: (client: DanClient) => Promise<T>) => Promise<T>;
+  /**
+   * Owner only (DAN-44): staff and the activity log. Changes go where the
+   * shop's settings are saved (the cloud); reading, to the server in use.
+   * The demo keeps both in this browser.
+   */
+  onOwner: <T>(work: (client: DanClient) => Promise<T>, change: boolean) => Promise<T>;
   /** Owner only: the shop's name, address and phone. */
   saveShop: (patch: ShopPatch) => Promise<void>;
   /** Owner only: the views of the order flow. A view that goes takes its sounds with it. */
@@ -579,7 +585,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         const shop = result.shop ?? ping.shop;
         const cloud = cloudUrl
           ? await (input.pin
-              ? cloudPinLogin(ping.cloudAddressName ?? shop.id, input.pin, { base: cloudUrl })
+              ? cloudPinLogin(ping.cloudAddressName ?? shop.id, input.name, input.pin, { base: cloudUrl })
               : cloudLogin(input.email ?? "", input.password ?? "", { base: cloudUrl, shop: ping.cloudAddressName ?? null })
             ).catch(() => null)
           : null;
@@ -602,8 +608,8 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       async adoptCloudSession(cloud) {
         await openCloudSession(cloud);
       },
-      async loginCloudPin(addressName, pin) {
-        await openCloudSession(await cloudPinLogin(addressName, pin));
+      async loginCloudPin(addressName, name, pin) {
+        await openCloudSession(await cloudPinLogin(addressName, name, pin));
       },
       async editMenu(work) {
         if (getSnapshot().session?.mode === "demo") {
@@ -614,6 +620,13 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         const result = await work(new GraphQLDanClient(end.url, end.token));
         await afterSettings(end);
         return result;
+      },
+      async onOwner(work, change) {
+        if (getSnapshot().session?.mode === "demo") return demoMutate((server) => work(server));
+        const session = getSnapshot().session;
+        const end = change ? settingsEndpointFor(session) : endpointFor(session);
+        if (!end) throw new Error("Sign in first.");
+        return work(new GraphQLDanClient(end.url, end.token));
       },
       async saveViews(views) {
         if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.updateViews(views));

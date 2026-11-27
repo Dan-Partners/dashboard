@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { openSettings } from "./settings";
+import { openSettings, STAFF_NAME } from "./settings";
 import fs from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { openTill } from "./create-order";
@@ -50,6 +50,7 @@ async function signIn(page: Page, who: "owner" | "pin") {
     await page.getByLabel("Password").fill(ownerPassword);
   } else {
     await page.getByRole("button", { name: "PIN", exact: true }).click();
+    await page.getByLabel("Your name").fill(STAFF_NAME);
     await page.getByLabel("PIN").fill(pin);
   }
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

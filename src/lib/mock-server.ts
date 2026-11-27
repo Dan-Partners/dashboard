@@ -14,11 +14,15 @@ import {
   createSeedState,
   DEMO_EMAIL,
   DEMO_PASSWORD,
-  DEMO_PIN,
+  type DemoMember,
   type DemoState,
+  demoTeam,
   STAMP_GOAL,
 } from "./seed";
 import type {
+  ActivityEntry,
+  ActivityPage,
+  ActivityQuery,
   Addon,
   Category,
   CategoryNames,
@@ -36,6 +40,7 @@ import type {
   ServerPing,
   Shop,
   ShopPatch,
+  StaffMember,
   Station,
 } from "./types";
 import { ALLERGENS, DEFAULT_STATIONS, FULFILMENTS, ORDER_SOURCES, ORDER_STATUSES } from "./types";
@@ -95,7 +100,10 @@ export class MockDanServer implements DanClient {
   }
 
   login(input: LoginInput): Promise<LoginResult> {
-    const pinOk = "pin" in input && input.pin === DEMO_PIN;
+    // A staff member's name (any capitals) and their PIN (DAN-44).
+    const pinOk =
+      "pin" in input &&
+      this.team().some((member) => member.name.toLowerCase() === input.name?.trim().toLowerCase() && member.pin === input.pin);
     const passwordOk =
       "email" in input &&
       input.email?.trim().toLowerCase() === DEMO_EMAIL &&
@@ -160,6 +168,8 @@ export class MockDanServer implements DanClient {
       return Promise.reject(error);
     }
     this.state.items[index] = next;
+    const soldOutOnly = Object.keys(patch).every((key) => key === "soldOut");
+    this.log(soldOutOnly ? (next.soldOut ? "sold_out_on" : "sold_out_off") : "dish_changed", null, `${next.number} ${next.nameEn}`);
     return Promise.resolve(clone(next));
   }
 
@@ -312,10 +322,97 @@ export class MockDanServer implements DanClient {
     }
   }
 
-  /** The demo's PIN is fixed: there is nothing to sign in to. */
-  setCounterPin(pin: string): Promise<void> {
-    if (!/^\d{4,6}$/.test(pin)) return Promise.reject(new DanError("invalid", "A PIN is 4 to 6 digits."));
+  // ------------------------------------------------------------ staff and the activity log (DAN-44)
+
+  private team(): DemoMember[] {
+    if (!this.state.team) this.state.team = demoTeam(this.now());
+    return this.state.team;
+  }
+
+  private static shown(member: DemoMember): StaffMember {
+    return { id: member.id, name: member.name, createdAt: member.createdAt };
+  }
+
+  private checkStaff(name: string, pin: string | null, except: string | null): string {
+    const clean = name.split(/\s+/).filter(Boolean).join(" ");
+    if (!clean || clean.length > 40) throw new DanError("staff_name", "A name is 1 to 40 characters.");
+    if (pin !== null && !/^\d{4,6}$/.test(pin)) throw new DanError("staff_pin", "A PIN is 4 to 6 digits.");
+    if (this.team().some((member) => member.id !== except && member.name.toLowerCase() === clean.toLowerCase())) {
+      throw new DanError("staff_name_taken", "Someone on the staff already has that name.");
+    }
+    return clean;
+  }
+
+  /** Writes one line of the demo's activity log, as the demo's owner. */
+  private log(action: string, order: Order | null = null, detail = "") {
+    const entry: ActivityEntry = {
+      id: `act-${this.now().getTime().toString(36)}-${(this.state.activity ?? []).length}`,
+      at: this.now().toISOString(),
+      byId: this.state.staff.id,
+      byName: this.state.staff.name,
+      byRole: this.state.staff.role === "owner" ? "owner" : "staff",
+      action,
+      orderId: order?.id ?? null,
+      orderNumber: order?.number ?? null,
+      detail,
+    };
+    this.state.activity = [...(this.state.activity ?? []), entry].slice(-500);
+  }
+
+  getStaff(): Promise<StaffMember[]> {
+    return Promise.resolve(this.team().map(MockDanServer.shown));
+  }
+
+  addStaff(name: string, pin: string): Promise<StaffMember> {
+    try {
+      const clean = this.checkStaff(name, pin, null);
+      const member: DemoMember = { id: `staff_${this.now().getTime().toString(36)}`, name: clean, pin, createdAt: this.now().toISOString() };
+      this.team().push(member);
+      this.log("addStaff", null, clean);
+      return Promise.resolve(MockDanServer.shown(member));
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
+  renameStaff(id: string, name: string): Promise<StaffMember> {
+    try {
+      const member = this.team().find((entry) => entry.id === id);
+      if (!member) throw new DanError("not_found", "No such staff member.");
+      member.name = this.checkStaff(name, null, id);
+      this.log("renameStaff", null, member.name);
+      return Promise.resolve(MockDanServer.shown(member));
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
+  setStaffPin(id: string, pin: string): Promise<StaffMember> {
+    const member = this.team().find((entry) => entry.id === id);
+    if (!member) return Promise.reject(new DanError("not_found", "No such staff member."));
+    if (!/^\d{4,6}$/.test(pin)) return Promise.reject(new DanError("staff_pin", "A PIN is 4 to 6 digits."));
+    member.pin = pin;
+    this.log("setStaffPin", null, member.name);
+    return Promise.resolve(MockDanServer.shown(member));
+  }
+
+  removeStaff(id: string): Promise<void> {
+    const member = this.team().find((entry) => entry.id === id);
+    if (!member) return Promise.reject(new DanError("not_found", "No such staff member."));
+    this.state.team = this.team().filter((entry) => entry.id !== id);
+    this.log("removeStaff", null, member.name);
     return Promise.resolve();
+  }
+
+  getActivity(query: ActivityQuery = {}): Promise<ActivityPage> {
+    const limit = Math.min(Math.max(query.limit ?? 50, 1), 100);
+    const matching = [...(this.state.activity ?? [])]
+      .reverse()
+      .filter((entry) => !query.by || entry.byId === query.by)
+      .filter((entry) => !query.from || entry.at >= query.from)
+      .filter((entry) => !query.to || entry.at < query.to)
+      .filter((entry) => !query.before || entry.at < query.before);
+    return Promise.resolve(clone({ entries: matching.slice(0, limit), more: matching.length > limit }));
   }
 
   getOrders() {
@@ -395,7 +492,9 @@ export class MockDanServer implements DanClient {
       column: startFor(normalizeBoard(this.state.board), input.source).id,
       columnAt: this.now().toISOString(),
     };
+    order.takenBy = input.source === "online" ? null : { id: this.state.staff.id, name: this.state.staff.name };
     this.state.orders.unshift(order);
+    this.log(input.source === "online" ? "order_placed_online" : "order_taken", order);
     return Promise.resolve(clone(order));
   }
 
@@ -515,6 +614,7 @@ export class MockDanServer implements DanClient {
     const next = forward?.id === to ? forward : before?.id === to ? before : null;
     if (!next) return Promise.reject(new DanError("bad_status", "Move the order one step at a time; back only within the same stage."));
     Object.assign(order, { column: next.id, columnAt: this.now().toISOString(), columnRemap: false, status: statusAfter(order, next) });
+    this.log("order_moved", order, next.id);
     return Promise.resolve(clone(order));
   }
 

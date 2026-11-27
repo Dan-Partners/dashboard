@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { STAFF_NAME } from "./settings";
 
 /**
  * The Orders page: the board or a list, and Create order (by picking from
@@ -31,6 +32,7 @@ async function signIn(page: Page, address: string, who: "owner" | "pin") {
     await page.getByLabel("Password").fill(ownerPassword);
   } else {
     await page.getByRole("button", { name: "PIN", exact: true }).click();
+    await page.getByLabel("Your name").fill(STAFF_NAME);
     await page.getByLabel("PIN").fill(pin);
   }
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -217,6 +219,7 @@ test("the counter PIN takes an order from the menu and finds it in the shop's or
   await page.getByLabel("Shop server").fill(server!);
   await page.getByRole("button", { name: "Connect", exact: true }).click();
   await page.getByRole("button", { name: "PIN", exact: true }).click();
+  await page.getByLabel("Your name").fill(STAFF_NAME);
   await page.getByLabel("PIN").fill(pin);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();

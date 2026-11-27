@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { STAFF_NAME } from "./settings";
 
 /**
  * Focus mode: a tablet locked to one job. The first test runs on the demo.
@@ -87,6 +88,7 @@ test("kitchen and pass tablets follow a table's order from new to served", async
     await page.getByLabel("Shop server").fill(server!);
     await page.getByRole("button", { name: "Connect", exact: true }).click();
     await page.getByRole("button", { name: "PIN", exact: true }).click();
+    await page.getByLabel("Your name").fill(STAFF_NAME);
     await page.getByLabel("PIN").fill(pin);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();

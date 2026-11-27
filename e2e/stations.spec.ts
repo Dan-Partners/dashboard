@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectPinCannotSee, openSettings } from "./settings";
+import { expectPinCannotSee, openSettings, STAFF_NAME } from "./settings";
 import { openTill } from "./create-order";
 import { cloudOn, cloudSkip, joinNewShop } from "./cloud-join";
 
@@ -101,6 +101,7 @@ test("the counter PIN sees the stations but cannot change them", async ({ page }
   await page.getByLabel("Shop server").fill(server!);
   await page.getByRole("button", { name: "Connect", exact: true }).click();
   await page.getByRole("button", { name: "PIN", exact: true }).click();
+  await page.getByLabel("Your name").fill(STAFF_NAME);
   await page.getByLabel("PIN").fill(pin);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();

@@ -161,7 +161,7 @@ test("a business joins from the waiting list, builds its menu, takes an order an
   await expect(page.getByTestId("menu-notice")).toHaveText("Removed.");
   await expect(page.getByRole("button", { name: /Stale loaf/ })).toHaveCount(0);
 
-  // The shop's details and the counter PIN.
+  // The shop's details.
   await openSettings(page, "shop");
   const details = page.getByTestId("shop-details");
   await expect(details.getByLabel("Shop name")).toHaveValue(shopName);
@@ -169,11 +169,24 @@ test("a business joins from the waiting list, builds its menu, takes an order an
   await details.getByLabel("Town or city").fill("London");
   await details.getByRole("button", { name: "Save details" }).click();
   await expect(page.getByTestId("shop-details-status")).toHaveText("Saved.");
-  const pinSection = page.getByTestId("counter-pin");
-  await expect(pinSection.getByTestId("address-name")).toHaveText(address);
-  await pinSection.getByLabel("New PIN (4 to 6 digits)").fill("2468");
-  await pinSection.getByRole("button", { name: "Set PIN" }).click();
-  await expect(page.getByTestId("pin-status")).toContainText("PIN set");
+  await expect(page.getByTestId("counter-pin")).toHaveCount(0);
+
+  // Staff, each with their own name and PIN (DAN-44). There is no shared PIN.
+  await openSettings(page, "staff");
+  const staff = page.getByTestId("staff-settings").filter({ visible: true });
+  await expect(staff.getByTestId("address-name")).toHaveText(address);
+  await expect(staff.getByTestId("staff-empty")).toBeVisible();
+  page.once("dialog", (dialog) => void dialog.accept());
+  await staff.getByLabel("Name", { exact: true }).fill("Kit Chan");
+  await staff.getByLabel("Their PIN").fill("2468");
+  await staff.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByTestId("staff-status")).toContainText("Kit Chan can sign in now");
+  await expect(staff.getByTestId("staff-name")).toHaveText(["Kit Chan"]);
+  page.once("dialog", (dialog) => void dialog.accept());
+  await staff.getByLabel("Name", { exact: true }).fill("kit chan");
+  await staff.getByLabel("Their PIN").fill("1111");
+  await staff.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByTestId("staff-status")).toContainText("already has that name");
 
   // An order at the till: with no shop machine, the cloud numbers it at once, from 1.
   await openTill(page);
@@ -207,10 +220,11 @@ test("a business joins from the waiting list, builds its menu, takes an order an
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
   await expect(page.getByTestId("docket-number").first()).toContainText("1");
 
-  // The counter PIN, with the shop's address name remembered on this device.
+  // A staff member's own name and PIN, with the shop's address name remembered on this device.
   await signOut(page);
-  await signIn.getByRole("button", { name: "Counter PIN" }).click();
+  await signIn.getByRole("button", { name: "Staff PIN" }).click();
   await expect(signIn.getByLabel("Shop address name")).toHaveValue(address);
+  await signIn.getByLabel("Your name").fill("KIT CHAN");
   await signIn.getByLabel("PIN", { exact: true }).fill("0000");
   await signIn.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByTestId("sign-in-error")).toContainText("not recognised");
@@ -221,13 +235,32 @@ test("a business joins from the waiting list, builds its menu, takes an order an
   await signIn.getByLabel("PIN", { exact: true }).fill("2468");
   await signIn.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
-  await expect(page.getByTestId("signed-in-as").first()).toContainText("Counter");
+  await expect(page.getByTestId("signed-in-as").first()).toContainText("Kit Chan");
   await page.getByRole("link", { name: /^Menu/ }).click();
   await expect(page.getByTestId("menu-counter-note")).toBeVisible();
   await expect(page.getByTestId("menu-tools")).toHaveCount(0);
   await expectPinCannotSee(page, "shop");
   await expect(page.getByTestId("shop-details")).toHaveCount(0);
-  await expect(page.getByTestId("counter-pin")).toHaveCount(0);
+  await expectPinCannotSee(page, "staff");
+  await expect(page.getByTestId("staff-settings")).toHaveCount(0);
+  // Staff never see who took an order.
+  await page.goto("/shop/orders");
+  await expect(page.getByTestId("docket-number").first()).toBeVisible();
+  await expect(page.getByTestId("order-taken-by")).toHaveCount(0);
+
+  // The owner sees who did what: the activity log, and who took each order.
+  await signOut(page);
+  await signIn.getByRole("button", { name: "Owner", exact: true }).click();
+  await signIn.getByLabel("Email", { exact: true }).fill(email);
+  await signIn.getByLabel("Password").fill(password);
+  await signIn.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
+  await openSettings(page, "staff");
+  await page.getByTestId("activity-link").filter({ visible: true }).click();
+  const log = page.getByTestId("activity").filter({ visible: true });
+  await expect(log.locator('[data-testid="activity-entry"][data-action="signed_in"]').first()).toContainText("Kit Chan");
+  await expect(log.locator('[data-testid="activity-entry"][data-action="order_taken"]').first()).toBeVisible();
+  await expect(log.locator('[data-testid="activity-entry"][data-action="addStaff"]').first()).toBeVisible();
 
   // The invite is spent.
   const stranger = await (await browser.newContext()).newPage();

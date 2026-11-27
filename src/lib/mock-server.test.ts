@@ -40,9 +40,10 @@ describe("mock shop", () => {
 
     const byPassword = await shop.login({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
     expect(byPassword.staff.name).toBe("Mei");
-    const byPin = await shop.login({ pin: DEMO_PIN });
+    const byPin = await shop.login({ name: "amy", pin: DEMO_PIN });
     expect(byPin.token).toBeTruthy();
-    await expect(shop.login({ pin: "0000" })).rejects.toMatchObject({ code: "unauthorized" });
+    await expect(shop.login({ name: "Amy", pin: "0000" })).rejects.toMatchObject({ code: "unauthorized" });
+    await expect(shop.login({ name: "Nobody", pin: DEMO_PIN })).rejects.toMatchObject({ code: "unauthorized" });
   });
 
   it("prices an order from the menu and refuses a sold-out dish", async () => {
@@ -214,9 +215,9 @@ describe("graphql client", () => {
       { body: { data: { login: { token: "tok", staff: { id: "counter", name: "Counter", role: "counter" }, shop } } } },
       { body: { data: { orders: [] } } },
     );
-    const result = await new GraphQLDanClient("https://goldendragon.dan.partners", null, fetchImpl).login({ pin: "2580" });
+    const result = await new GraphQLDanClient("https://goldendragon.dan.partners", null, fetchImpl).login({ name: "Amy", pin: "2580" });
     expect(seen[0].url).toBe("https://goldendragon.dan.partners/graphql");
-    expect(seen[0].variables).toEqual({ input: { pin: "2580" } });
+    expect(seen[0].variables).toEqual({ input: { name: "Amy", pin: "2580" } });
     expect(seen[0].headers.authorization).toBeUndefined();
     expect(result).toMatchObject({ token: "tok", staff: { role: "counter" } });
 
@@ -297,14 +298,32 @@ describe("graphql client", () => {
     await expect(server.reorderCategories(ids.slice(1))).rejects.toMatchObject({ code: "invalid" });
   });
 
-  it("changes the shop's details and checks a PIN's shape", async () => {
+  it("changes the shop's details", async () => {
     const server = new MockDanServer();
     const saved = await server.updateShop({ name: " Golden  Dragon Two ", phone: "01923 000000" });
     expect(saved).toMatchObject({ name: "Golden Dragon Two", phone: "01923 000000" });
     expect((await server.ping()).shop.name).toBe("Golden Dragon Two");
     await expect(server.updateShop({ name: "  " })).rejects.toMatchObject({ code: "invalid" });
-    await expect(server.setCounterPin("12")).rejects.toMatchObject({ code: "invalid" });
-    await expect(server.setCounterPin("2468")).resolves.toBeUndefined();
+  });
+
+  it("keeps the demo's staff, each with a name and PIN, and logs what is done (DAN-44)", async () => {
+    const server = new MockDanServer();
+    expect((await server.getStaff()).map((member) => member.name)).toEqual(["Amy", "Ben"]);
+    await expect(server.addStaff("amy", "1111")).rejects.toMatchObject({ code: "staff_name_taken" });
+    await expect(server.addStaff("Cat", "12")).rejects.toMatchObject({ code: "staff_pin" });
+    await expect(server.addStaff("  ", "1234")).rejects.toMatchObject({ code: "staff_name" });
+    const cat = await server.addStaff("  Cat  Lee ", "2468");
+    expect(cat.name).toBe("Cat Lee");
+    await expect(server.login({ name: "cat lee", pin: "2468" })).resolves.toBeTruthy();
+    await server.setStaffPin(cat.id, "1357");
+    await expect(server.login({ name: "Cat Lee", pin: "2468" })).rejects.toMatchObject({ code: "unauthorized" });
+    await server.removeStaff(cat.id);
+    await expect(server.login({ name: "Cat Lee", pin: "1357" })).rejects.toMatchObject({ code: "unauthorized" });
+    const order = await server.createOrder({ source: "counter", fulfilment: "collection", lines: [{ number: 81, qty: 1 }] });
+    expect(order.takenBy?.name).toBe("Mei");
+    const log = await server.getActivity();
+    expect(log.entries[0]).toMatchObject({ action: "order_taken", orderNumber: order.number, byName: "Mei" });
+    expect(log.entries.map((entry) => entry.action)).toContain("addStaff");
   });
   it("lets the owner name the stations, and keeps one that dishes still use", async () => {
     const server = new MockDanServer();
