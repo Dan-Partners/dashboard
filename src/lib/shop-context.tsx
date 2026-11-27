@@ -104,6 +104,8 @@ type ShopContextValue = {
   moveOrderTo: (order: Order, column: string) => Promise<Order>;
   /** Owner only: the record of the owner's changes to one order, oldest first. */
   loadOrderEdits: (orderId: string) => Promise<OrderEdit[]>;
+  /** Owner only: calls an order off for good. A card payment is refunded in full by the Dan cloud. */
+  cancelOrder: (id: string) => Promise<Order>;
   /** The order list: a page of the shop's orders, newest first. */
   loadOrderHistory: (filter: OrderHistoryFilter, before?: string | null) => Promise<OrderPage>;
   setOrderStatus: (id: string, status: OrderStatus) => Promise<void>;
@@ -676,6 +678,14 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         const moved = await new GraphQLDanClient(end.url, end.token).moveOrderTo(order.id, column);
         await refreshRemote();
         return moved;
+      },
+      async cancelOrder(id) {
+        if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.cancelOrder(id));
+        const end = endpointFor(getSnapshot().session);
+        if (!end) throw new Error("Sign in first.");
+        const cancelled = await new GraphQLDanClient(end.url, end.token).cancelOrder(id);
+        await refreshRemote();
+        return cancelled;
       },
       async loadOrderEdits(orderId) {
         const current = getSnapshot().session;

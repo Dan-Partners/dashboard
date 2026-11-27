@@ -32,7 +32,8 @@ export type OrderEdit = {
   at: string;
   byId: string;
   byName: string;
-  kind: "edit" | "move";
+  /** `cancel`: `changes` has the status it had, and `refund` with the pence asked back from the card. */
+  kind: "edit" | "move" | "cancel";
   changes: FieldChange[];
   lines: LineChange[];
   totalBeforePence: number;
@@ -204,4 +205,35 @@ export function courierBooked(order: Pick<Order, "courier">): boolean {
 export function paidDifference(order: Pick<Order, "paidPence" | "totalPence" | "payment">): { paidPence: number; differencePence: number } | null {
   if (order.paidPence == null || order.payment?.status !== "paid" || order.paidPence === order.totalPence) return null;
   return { paidPence: order.paidPence, differencePence: order.totalPence - order.paidPence };
+}
+
+/**
+ * What cancelling an order would do about money already paid online. A card
+ * payment is refunded in full by the Dan cloud, for what was taken; a bank
+ * transfer is the owner's to send back (Dan cannot); anything else was not
+ * paid through Dan.
+ */
+export type CancelPlan = { kind: "card" | "bank"; pence: number } | { kind: "none" };
+
+export function cancelPlan(order: Pick<Order, "payment" | "paidPence" | "totalPence">): CancelPlan {
+  if (order.payment?.status !== "paid") return { kind: "none" };
+  const pence = order.paidPence ?? order.totalPence;
+  if (order.payment.method === "card") return { kind: "card", pence };
+  if (order.payment.method === "bank_transfer") return { kind: "bank", pence };
+  return { kind: "none" };
+}
+
+/**
+ * Where a cancelled order's money stands: the card refunded, the refund
+ * still on its way, the refund failed (the owner does it in Stripe), a bank
+ * transfer to send back, or nothing to refund.
+ */
+export type RefundState = { state: "refunded" | "pending" | "failed" | "bank"; pence: number } | null;
+
+export function refundState(order: Pick<Order, "status" | "payment" | "paidPence" | "totalPence" | "refund">): RefundState {
+  if (order.status !== "cancelled") return null;
+  const plan = cancelPlan(order);
+  if (plan.kind === "none") return null;
+  if (plan.kind === "bank") return { state: "bank", pence: plan.pence };
+  return { state: order.refund === "refunded" ? "refunded" : order.refund ? "failed" : "pending", pence: plan.pence };
 }

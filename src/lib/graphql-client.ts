@@ -407,6 +407,11 @@ export class GraphQLDanClient implements DanClient {
     return data.moveOrderTo;
   }
 
+  /** Owner only. Final. */
+  cancelOrder(id: string): Promise<Order> {
+    return this.courierAction("cancelOrder", id);
+  }
+
   /** Owner only. */
   async getOrderEdits(orderId: string): Promise<OrderEdit[]> {
     const data = await this.run<{ orderEdits: OrderEdit[] }>(`query OrderEdits($id: ID!) { orderEdits(orderId: $id) { ${ORDER_EDIT_FIELDS} } }`, { id: orderId });

@@ -8,7 +8,7 @@ import { isDanError } from "@/lib/errors";
 import { formatPence, orderLabel, primaryName, secondaryName } from "@/lib/format";
 import { listTime } from "@/lib/history";
 import { messageForError, useI18n, type CopyKey } from "@/lib/i18n";
-import { applyEdit, courierBooked, paidDifference, type OrderEdit, type OrderEditInput } from "@/lib/order-edit";
+import { applyEdit, cancelPlan, courierBooked, paidDifference, type OrderEdit, type OrderEditInput } from "@/lib/order-edit";
 import { useIsOwner, useShop } from "@/lib/shop-context";
 import { useTapGuard } from "@/lib/tap-guard";
 import { useBoardColour } from "@/lib/use-board-colour";
@@ -154,6 +154,7 @@ export function OrderScreen({ id }: { id: string }) {
               {t("orderOwnerOnly")}
             </p>
           ) : order.status === "cancelled" ? (
+            // Where its money stands is on the docket beside this.
             <p className="border-l-2 border-accent pl-3" data-testid="order-cancelled-note">
               {t("orderCancelledNote")}
             </p>
@@ -162,6 +163,7 @@ export function OrderScreen({ id }: { id: string }) {
               {/* A new editor for each saved state of the order, so the form always starts from what is saved. */}
               <OrderEditor key={`${order.id}:${order.editCount ?? 0}`} order={order} justSaved={savedCount === (order.editCount ?? 0)} onSaved={saved} />
               <MoveTicket order={order} onMoved={changed} />
+              <CancelOrder order={order} onCancelled={changed} />
             </>
           )}
           {isOwner ? <Record orderId={order.id} recordKey={`${recordKey}:${order.editCount ?? 0}:${order.column ?? ""}:${order.status}`} now={now} /> : null}
@@ -425,6 +427,81 @@ function MoveTicket({ order, onMoved }: { order: Order; onMoved: (order: Order) 
   );
 }
 
+/**
+ * The owner calls an order off for good. What will happen to money already
+ * paid online is said first; the second tap names the order and the refund.
+ */
+function CancelOrder({ order, onCancelled }: { order: Order; onCancelled: (order: Order) => void }) {
+  const { t } = useI18n();
+  const shop = useShop();
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const plan = cancelPlan(order);
+  const number = orderLabel(order.number, t("numberWaiting"));
+  const printers = order.status !== "completed";
+
+  const cancel = () => {
+    setBusy(true);
+    setError(null);
+    shop
+      .cancelOrder(order.id)
+      .then(onCancelled)
+      .catch((caught: unknown) => {
+        setError(messageForError(isDanError(caught) ? caught.code : undefined, t, caught instanceof Error ? caught.message : undefined));
+        setBusy(false);
+      });
+  };
+
+  return (
+    <section aria-labelledby="cancel-title" data-testid="order-cancel">
+      <h2 id="cancel-title" className="font-display text-2xl">
+        {t("cancelTitle")}
+      </h2>
+      <p className="mt-1 text-sm text-ink-soft">{t("cancelLede")}</p>
+      <ul className="mt-3 space-y-1" data-testid="cancel-plan" data-refund={plan.kind}>
+        <li>
+          {plan.kind === "card" ? (
+            <>
+              <strong className="font-display">{formatPence(plan.pence)}</strong> {t("cancelCard")}
+            </>
+          ) : plan.kind === "bank" ? (
+            <>
+              {t("cancelBank")} <strong className="font-display">{formatPence(plan.pence)}</strong>.
+            </>
+          ) : (
+            t("cancelNone")
+          )}
+        </li>
+        {courierBooked(order) ? <li>{t("cancelCallsOffCourier")}</li> : null}
+        {printers ? <li className="text-sm text-ink-soft">{t("cancelKitchen")}</li> : null}
+      </ul>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        {asking ? (
+          <>
+            <Button variant="accent" disabled={busy} onClick={cancel} data-testid="cancel-confirm">
+              {t("cancelYes")} {number}
+              {plan.kind === "card" ? ` ${t("cancelAndRefund")} ${formatPence(plan.pence)}` : ""}
+            </Button>
+            <Button variant="line" disabled={busy} onClick={() => setAsking(false)}>
+              {t("cancelKeep")}
+            </Button>
+          </>
+        ) : (
+          <Button variant="line" onClick={() => setAsking(true)} data-testid="cancel-start">
+            {t("cancelOrder")}
+          </Button>
+        )}
+        {error ? (
+          <p className="text-sm text-accent-ink" role="alert" data-testid="cancel-error">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 /** The record of the owner's changes to one order, newest first. */
 function Record({ orderId, recordKey, now }: { orderId: string; recordKey: string; now: number }) {
   const { t, locale } = useI18n();
@@ -473,7 +550,18 @@ function Record({ orderId, recordKey, now }: { orderId: string; recordKey: strin
               <ul className="mt-1 space-y-0.5">
                 {edit.changes.map((change) => (
                   <li key={change.field}>
-                    {edit.kind === "move" ? (
+                    {edit.kind === "cancel" ? (
+                      change.field === "refund" ? (
+                        <>
+                          {t("recordRefund")}: {formatPence(Number(change.after) || 0)}
+                        </>
+                      ) : (
+                        <>
+                          {t("recordCancelled")}
+                          {change.before ? ` (${t("recordWasIn")} ${change.before})` : ""}
+                        </>
+                      )
+                    ) : edit.kind === "move" ? (
                       <>
                         {t("recordMoved")}: {empty(change.before)} → {change.after}
                       </>

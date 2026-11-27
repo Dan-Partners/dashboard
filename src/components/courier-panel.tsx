@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { CourierAction } from "@/lib/graphql-client";
 import { isDanError } from "@/lib/errors";
 import { messageForError, useI18n, type CopyKey } from "@/lib/i18n";
-import { useShop } from "@/lib/shop-context";
+import { useIsOwner, useShop } from "@/lib/shop-context";
 import type { TapGuard } from "@/lib/tap-guard";
 import type { Order } from "@/lib/types";
 import { clock, courierActive, courierStage, finished, type CourierStage } from "@/lib/uber";
@@ -49,6 +49,7 @@ export function CourierPanel({
 }) {
   const { t } = useI18n();
   const shop = useShop();
+  const isOwner = useIsOwner();
   const [busy, setBusy] = useState(false);
   const { armed, arm } = useConfirm();
   const courier = order.courier ?? null;
@@ -138,10 +139,18 @@ export function CourierPanel({
                 {confirmLabel("toCollection", "toCollection")}
               </Button>
             ) : null}
-            <Button variant="line" disabled={busy} onClick={() => act("cancelOrder", true)}>
-              {confirmLabel("cancelOrder", cardPaid ? "cancelRefund" : "cancelOrder")}
-            </Button>
+            {/* Cancelling refunds a card payment: the owner's alone (the server refuses anyone else). */}
+            {isOwner ? (
+              <Button variant="line" disabled={busy} onClick={() => act("cancelOrder", true)}>
+                {confirmLabel("cancelOrder", cardPaid ? "cancelRefund" : "cancelOrder")}
+              </Button>
+            ) : null}
           </div>
+          {isOwner ? null : (
+            <p className="mt-2 text-sm text-ink-soft" data-testid="cancel-owner-only">
+              {t("cancelOwnerOnly")}
+            </p>
+          )}
         </div>
       ) : open && order.fulfilment === "delivery" ? (
         <div className="mt-1 flex flex-wrap gap-2">

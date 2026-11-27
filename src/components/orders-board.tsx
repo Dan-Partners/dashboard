@@ -19,6 +19,7 @@ import { ReprintButton } from "./print-strip";
 import { WhereStrip } from "./where-strip";
 import { OrdersList } from "./orders-list";
 import { PaidDifference } from "./paid-difference";
+import { RefundNote } from "./refund-note";
 import { CREATE_ORDER_ROUTE } from "@/lib/focus";
 import { writePersisted } from "@/lib/storage";
 
@@ -32,7 +33,6 @@ export function OrdersScreen() {
   const shop = useShop();
   const locked = shop.persisted.focus?.position === "board";
   const layout = locked ? "board" : shop.persisted.ordersLayout;
-  const orders = (shop.snapshot?.orders ?? []).filter((order) => order.status !== "cancelled");
   // Create order goes with the till, as the owner set it under Ordering & payments.
   const tillOn = shop.snapshot?.ordering.settings.till ?? true;
 
@@ -69,7 +69,8 @@ export function OrdersScreen() {
       {shop.persisted.session?.mode === "demo" ? <p className="mb-5 text-sm text-ink-soft">{t("ordersDemoNote")}</p> : null}
       <TicketSounds place="counter" />
       <AwaitingTransfers />
-      <RefundFailures orders={orders} />
+      {/* Every order, cancelled ones included: that is where a refund fails. */}
+      <RefundFailures orders={shop.snapshot?.orders ?? []} />
       {layout === "list" ? <OrdersList /> : <OrdersBoard />}
     </div>
   );
@@ -211,7 +212,11 @@ export function Docket({
           <h3 className="font-display text-2xl leading-none" data-testid="docket-number">
             {orderLabel(order.number, t("numberWaiting"))}
             {/* The owner changed it after it was placed: everyone can see that it was. */}
-            {order.editCount ? (
+            {order.status === "cancelled" ? (
+              <span className="ml-2 bg-ink px-1 py-0.5 align-middle font-display text-[0.7rem] tracking-[0.12em] text-paper uppercase" data-testid="docket-cancelled">
+                {t("statusCancelled")}
+              </span>
+            ) : order.editCount ? (
               <span className="ml-2 border border-ink px-1 py-0.5 align-middle font-display text-[0.7rem] tracking-[0.12em] uppercase" data-testid="docket-changed">
                 {t("changedMark")}
               </span>
@@ -265,6 +270,7 @@ export function Docket({
           ) : null}
         </p>
         <PaidDifference order={order} className="mt-2" />
+        <RefundNote order={order} className="mt-2" />
         <CourierPanel order={order} uberReady={shop.snapshot?.ordering.uberReady ?? false} guard={guard} onError={onError} />
         <div className="mt-3 flex flex-wrap gap-2">
           {next ? (

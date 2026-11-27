@@ -360,13 +360,12 @@ test("the owner changes an order: details and dishes, what was paid, the record,
   await expect(record).toHaveCount(3);
 
   // A cancelled order is final: its page shows it, and offers no change.
-  // (Staff cancel an order when a delivery goes wrong; here one is cancelled in the demo's own data.)
-  await page.evaluate(() => {
-    const state = JSON.parse(localStorage.getItem("dan.v1")!);
-    state.demoState.orders.find((order: { number: number }) => order.number === 1854).status = "cancelled";
-    localStorage.setItem("dan.v1", JSON.stringify(state));
-  });
-  await page.goto("/shop/orders");
+  await screen.getByRole("link", { name: "← Back to orders" }).click();
+  await page.locator("section[data-column='preparing'] article").filter({ visible: true }).filter({ hasText: "#1854" }).getByTestId("docket-edit").click();
+  await screen.getByTestId("cancel-start").click();
+  await screen.getByTestId("cancel-confirm").click();
+  await expect(screen.getByTestId("order-cancelled-note")).toBeVisible();
+  await screen.getByRole("link", { name: "← Back to orders" }).click();
   await page.getByTestId("orders-layout-list").filter({ visible: true }).click();
   await page.getByTestId("list-which").selectOption("cancelled");
   const cancelled = page.getByTestId("list-row");
@@ -383,7 +382,80 @@ test("the owner changes an order: details and dishes, what was paid, the record,
   await expect(page.getByTestId("order-missing")).toHaveText("That order is not here.");
 });
 
-test("the owner's change on the shop server reaches the cloud with its record, a move back in the cloud reaches the shop, and the PIN changes nothing", async ({ browser }) => {
+test("the owner cancels any order from its page: the refund is said first, a card gets back what was taken, and it is on record", async ({ page }) => {
+  await openDemo(page);
+  const screen = page.getByTestId("order-screen").filter({ visible: true });
+  const board = (column: string) => page.locator(`section[data-column='${column}'] article`).filter({ visible: true });
+
+  // An online order paid by card. Its bill is changed first, so what was taken and the bill differ.
+  const paid = board("new").first();
+  const number = (await paid.getByTestId("docket-number").textContent())!.trim();
+  const taken = (await paid.locator("p.font-display.text-xl").first().textContent())!.trim().split(/\s/)[0];
+  await paid.getByTestId("docket-edit").click();
+  const editor = screen.getByTestId("order-editor");
+  await editor.locator('[data-testid="edit-line"][data-number="42"]').getByRole("button", { name: "Remove" }).click();
+  await editor.getByRole("button", { name: "Save changes" }).click();
+  await expect(editor.getByTestId("edit-status")).toContainText("Saved.");
+
+  // What a cancel will do is said before anything happens: the card gets back what was taken.
+  const cancel = screen.getByTestId("order-cancel");
+  await expect(cancel.getByTestId("cancel-plan")).toHaveAttribute("data-refund", "card");
+  await expect(cancel.getByTestId("cancel-plan")).toContainText(`${taken} will be refunded to the customer's card, in full.`);
+  await expect(cancel.getByTestId("cancel-plan")).toContainText("The kitchen's printers print a ticket marked CANCELLED.");
+  await expect(cancel.getByTestId("cancel-confirm")).toHaveCount(0);
+  await cancel.getByTestId("cancel-start").click();
+  await expect(cancel.getByTestId("cancel-confirm")).toHaveText(`Yes, cancel ${number} and refund ${taken}`);
+  // Second thoughts: nothing happened.
+  await cancel.getByRole("button", { name: "Keep the order" }).click();
+  await expect(cancel.getByTestId("cancel-start")).toBeVisible();
+  await expect(screen.getByTestId("order-cancelled-note")).toHaveCount(0);
+  await cancel.getByTestId("cancel-start").click();
+  await cancel.getByTestId("cancel-confirm").click();
+
+  // Final: no more changes, the refund said (the demo refunds at once), and the cancel on record.
+  await expect(screen.getByTestId("order-cancelled-note")).toHaveText("A cancelled order cannot be changed.");
+  await expect(screen.getByTestId("refund-note")).toHaveAttribute("data-refund", "refunded");
+  await expect(screen.getByTestId("refund-note")).toHaveText(`${taken} refunded to the card.`);
+  await expect(screen.getByTestId("order-editor")).toHaveCount(0);
+  await expect(screen.getByTestId("order-move")).toHaveCount(0);
+  await expect(screen.getByTestId("order-cancel")).toHaveCount(0);
+  const record = screen.getByTestId("order-record").getByTestId("record-entry");
+  await expect(record).toHaveCount(2);
+  await expect(record.first()).toHaveAttribute("data-kind", "cancel");
+  await expect(record.first()).toContainText("Cancelled (it was in New)");
+  await expect(record.first()).toContainText(`Card refund asked for: ${taken}`);
+
+  // It has left the board. In the list it is there, struck through, with the refund.
+  await screen.getByRole("link", { name: "← Back to orders" }).click();
+  await expect(board("new")).toHaveCount(0);
+  await page.getByTestId("orders-layout-list").filter({ visible: true }).click();
+  await page.getByTestId("list-search").fill(number);
+  const row = page.getByTestId("list-row");
+  await expect(row).toHaveCount(1);
+  await expect(row).toHaveAttribute("data-status", "cancelled");
+  await expect(row.getByTestId("list-where")).toHaveText("Cancelled");
+  await row.getByRole("button").first().click();
+  await expect(row.getByTestId("refund-note")).toHaveText(`${taken} refunded to the card.`);
+  await page.getByTestId("list-search").fill("");
+  await page.getByTestId("orders-layout-board").click();
+
+  // A collected order can be cancelled too. Nothing was paid online; the kitchen has nothing to stop.
+  const done = board("completed").first();
+  const doneNumber = (await done.getByTestId("docket-number").textContent())!.trim();
+  await done.getByTestId("docket-edit").click();
+  await expect(screen.getByRole("heading", { name: `Order ${doneNumber}` })).toBeVisible();
+  await expect(cancel.getByTestId("cancel-plan")).toHaveAttribute("data-refund", "none");
+  await expect(cancel.getByTestId("cancel-plan")).toContainText("Nothing was paid online, so there is nothing to refund.");
+  await expect(cancel.getByTestId("cancel-plan")).not.toContainText("CANCELLED");
+  await cancel.getByTestId("cancel-start").click();
+  await expect(cancel.getByTestId("cancel-confirm")).toHaveText(`Yes, cancel ${doneNumber}`);
+  await cancel.getByTestId("cancel-confirm").click();
+  await expect(screen.getByTestId("order-cancelled-note")).toBeVisible();
+  await expect(screen.getByTestId("refund-note")).toHaveCount(0);
+  await expect(screen.getByTestId("order-record").getByTestId("record-entry").first()).toContainText("Cancelled (it was in Completed)");
+});
+
+test("the owner's change on the shop server reaches the cloud with its record, a move back in the cloud reaches the shop, a cancel reaches everyone, and the PIN changes nothing", async ({ browser }) => {
   test.skip(!server || !cloud || !pin || !ownerEmail, "Set the shop server, the cloud's staff API, the PIN and the owner's sign-in to run this.");
   test.setTimeout(120_000);
   const atShop = await (await browser.newContext()).newPage();
@@ -427,6 +499,7 @@ test("the owner's change on the shop server reaches the cloud with its record, a
   await expect(counter.getByTestId("order-owner-only")).toHaveText("Only the owner can change an order.");
   await expect(counter.getByTestId("order-editor")).toHaveCount(0);
   await expect(counter.getByTestId("order-move")).toHaveCount(0);
+  await expect(counter.getByTestId("order-cancel")).toHaveCount(0);
   await expect(counter.getByTestId("order-record")).toHaveCount(0);
 
   // In the cloud, a moment later: the order as changed, and its record.
@@ -465,4 +538,22 @@ test("the owner's change on the shop server reaches the cloud with its record, a
   // And it carries on from there as ever.
   await atShop.getByTestId("order-screen").locator("article").first().getByRole("button", { name: "Accept", exact: true }).click();
   await expect(inCloud.getByTestId("order-move").getByTestId("move-column")).toHaveValue("preparing", { timeout: 20_000 });
+
+  // The owner cancels it, on the shop server: it leaves the counter's board with no reload,
+  // and in the cloud it is cancelled, with the cancel on record.
+  // (On the board itself: the order's own page, visited above, can stay in the document, hidden.)
+  await counter.getByRole("link", { name: /^Orders/ }).first().click();
+  const onCounter = counter.locator("section[data-column] article").filter({ hasText: name });
+  await expect(onCounter).toBeVisible({ timeout: 15_000 });
+  const cancel = atShop.getByTestId("order-cancel");
+  await expect(cancel.getByTestId("cancel-plan")).toHaveAttribute("data-refund", "none");
+  await cancel.getByTestId("cancel-start").click();
+  await cancel.getByTestId("cancel-confirm").click();
+  await expect(atShop.getByTestId("order-cancelled-note")).toBeVisible();
+  await expect(shopRecord).toHaveCount(3);
+  await expect(shopRecord.first()).toContainText("Cancelled (it was in Preparing)");
+  await expect(onCounter).toHaveCount(0, { timeout: 15_000 });
+  await expect(inCloud.getByTestId("order-cancelled-note")).toBeVisible({ timeout: 20_000 });
+  await expect(cloudRecord).toHaveCount(3, { timeout: 15_000 });
+  await expect(inCloud.getByTestId("order-cancel")).toHaveCount(0);
 });

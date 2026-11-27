@@ -1,4 +1,4 @@
-import { applyEdit, courierBooked, type Applied, type OrderEdit, type OrderEditInput } from "./order-edit";
+import { applyEdit, cancelPlan, courierBooked, type Applied, type OrderEdit, type OrderEditInput } from "./order-edit";
 import { historyPage, type OrderHistoryFilter, type OrderPage } from "./history";
 import { checkPlaces, checkTriggers, DEFAULT_TRIGGERS, normalizeTriggers, onlyOn, type Triggers } from "./triggers";
 import { checkViews, followBoard, kitchenAndPass, normalizeViews, type View } from "./views";
@@ -593,17 +593,33 @@ export class MockDanServer implements DanClient {
     return Promise.resolve(clone(order));
   }
 
+  /** The owner's cancel: any order not already cancelled, a completed one included. The demo "refunds" a card at once. */
+  cancelOrder(id: string): Promise<Order> {
+    const order = this.state.orders.find((entry) => entry.id === id);
+    if (!order) return Promise.reject(new DanError("not_found", "That order is not here."));
+    if (order.status === "cancelled") return Promise.reject(new DanError("order_cancelled", "That order is already cancelled."));
+    const here = columnOf(normalizeBoard(this.state.board), order);
+    const plan = cancelPlan(order);
+    this.record(
+      order,
+      "cancel",
+      { changes: [{ field: "status", before: here?.nameEn ?? "", after: "Cancelled" }, ...(plan.kind === "card" ? [{ field: "refund", before: "", after: String(plan.pence) }] : [])], lines: [] },
+      order.totalPence,
+    );
+    order.status = "cancelled";
+    if (plan.kind === "card") order.refund = "refunded";
+    return Promise.resolve(clone(order));
+  }
+
   /** The demo has no Uber account: it can only change a delivery to collection, or cancel an order. */
   courierAction(action: "book" | "cancelCourier" | "toCollection" | "cancelOrder" | "byShop" | "byUber", id: string): Promise<Order> {
     const order = this.state.orders.find((entry) => entry.id === id);
     if (!order) return Promise.reject(new DanError("not_found", "That order is not on the board."));
+    if (action === "cancelOrder") return this.cancelOrder(id);
     if (order.status === "completed" || order.status === "cancelled") {
       return Promise.reject(new DanError("order_finished", "That order is finished."));
     }
-    if (action === "cancelOrder") {
-      order.status = "cancelled";
-      if (order.payment?.method === "card" && order.payment.status === "paid") order.refund = "refunded";
-    } else if (action === "toCollection" && order.fulfilment === "delivery") {
+    if (action === "toCollection" && order.fulfilment === "delivery") {
       order.fulfilment = "collection";
     } else if (action === "byShop" && order.fulfilment === "delivery") {
       order.deliveryBy = "shop";

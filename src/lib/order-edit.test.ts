@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MockDanServer } from "./mock-server";
-import { applyEdit, courierBooked, paidDifference } from "./order-edit";
+import { applyEdit, cancelPlan, courierBooked, paidDifference, refundState } from "./order-edit";
 import { createSeedState } from "./seed";
 import type { MenuItem, Order } from "./types";
 
@@ -160,5 +160,53 @@ describe("the demo keeps the record as the shop server does", () => {
     expect((await server.getOrder(order.id)).status).toBe("ready");
     await expect(server.moveOrderTo(order.id, "attic")).rejects.toMatchObject({ code: "not_found" });
     await expect(server.getOrder("nope")).rejects.toMatchObject({ code: "not_found" });
+  });
+});
+
+describe("cancelling an order, and money already paid online", () => {
+  it("refunds a card in full for what was taken, leaves a bank transfer to the owner, and has nothing else to refund", () => {
+    const card = placed([[81, 2]], { payment: { method: "card", status: "paid" } });
+    expect(cancelPlan(card)).toEqual({ kind: "card", pence: card.totalPence });
+    // The bill was changed after it was paid: the card gets back what was taken.
+    const changed = applyEdit(card, { lines: [{ number: 81, qty: 3 }] }, menu, false).order;
+    expect(cancelPlan(changed)).toEqual({ kind: "card", pence: card.totalPence });
+    expect(cancelPlan(placed([[81, 1]], { payment: { method: "bank_transfer", status: "paid" } }))).toEqual({ kind: "bank", pence: price(81) });
+    expect(cancelPlan(placed([[81, 1]], { payment: { method: "at_shop", status: "due" } }))).toEqual({ kind: "none" });
+    expect(cancelPlan(placed([[81, 1]], { payment: { method: "card", status: "due" } }))).toEqual({ kind: "none" });
+    expect(cancelPlan(placed([[81, 1]]))).toEqual({ kind: "none" });
+  });
+
+  it("says where a cancelled order's money stands", () => {
+    const card = placed([[81, 2]], { payment: { method: "card", status: "paid" } });
+    expect(refundState(card)).toBeNull();
+    const cancelled = { ...card, status: "cancelled" as const };
+    expect(refundState(cancelled)).toEqual({ state: "pending", pence: card.totalPence });
+    expect(refundState({ ...cancelled, refund: "refunded" })).toEqual({ state: "refunded", pence: card.totalPence });
+    expect(refundState({ ...cancelled, refund: "failed" })).toEqual({ state: "failed", pence: card.totalPence });
+    expect(refundState(placed([[81, 1]], { status: "cancelled", payment: { method: "bank_transfer", status: "paid" } }))).toEqual({ state: "bank", pence: price(81) });
+    expect(refundState(placed([[81, 1]], { status: "cancelled" }))).toBeNull();
+  });
+
+  it("is the owner's in the demo too: any order not already cancelled, recorded, a card refunded", async () => {
+    const server = new MockDanServer({ state: createSeedState(new Date("2026-11-26T19:00:00Z")) });
+    const { orders } = await server.getOrders();
+    const paid = orders.find((entry) => entry.payment?.method === "card" && entry.payment.status === "paid" && entry.status !== "completed")!;
+    const cancelled = await server.cancelOrder(paid.id);
+    expect(cancelled.status).toBe("cancelled");
+    expect(cancelled.refund).toBe("refunded");
+    const record = await server.getOrderEdits(paid.id);
+    expect(record.map((entry) => entry.kind)).toEqual(["cancel"]);
+    expect(record[0].changes).toEqual([
+      { field: "status", before: "New", after: "Cancelled" },
+      { field: "refund", before: "", after: String(paid.totalPence) },
+    ]);
+    await expect(server.cancelOrder(paid.id)).rejects.toMatchObject({ code: "order_cancelled" });
+    await expect(server.editOrder(paid.id, { notes: "x" })).rejects.toMatchObject({ code: "order_cancelled" });
+    // A completed order too; nothing paid online, so nothing refunded.
+    const done = orders.find((entry) => entry.status === "completed" && !entry.payment)!;
+    const gone = await server.cancelOrder(done.id);
+    expect(gone.status).toBe("cancelled");
+    expect(gone.refund ?? null).toBeNull();
+    expect((await server.getOrderEdits(done.id))[0].changes).toEqual([{ field: "status", before: "Completed", after: "Cancelled" }]);
   });
 });

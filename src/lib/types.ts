@@ -344,6 +344,8 @@ export interface DanClient {
   moveOrderTo(id: string, column: string): Promise<Order>;
   /** Owner only: the record of the owner's changes to one order, oldest first. */
   getOrderEdits(orderId: string): Promise<OrderEdit[]>;
+  /** Owner only: calls an order off for good, a completed one included. A card payment is refunded in full. */
+  cancelOrder(id: string): Promise<Order>;
   updateOrder(id: string, patch: { status: OrderStatus }): Promise<Order>;
   getCustomers(query?: { phone?: string }): Promise<{ customers: Customer[] }>;
   createCustomer(input: { phone: string; name: string }): Promise<Customer>;
