@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { cloudLogin, findShop, joinWaitlist } from "@/lib/cloud";
+import { cloudLogin, joinWaitlist } from "@/lib/cloud";
 import { isDanError } from "@/lib/errors";
 import { pingServer } from "@/lib/graphql-client";
 import { messageForError, useI18n } from "@/lib/i18n";
@@ -80,13 +80,11 @@ export function SignInScreen() {
     if (!/^\d{4,6}$/.test(pin)) return setError(t("loginPinInvalid"));
     setBusy(true);
     try {
-      const found = await findShop(shopName).catch((caught: unknown) => {
+      await shop.loginCloudPin(shopName, pin).catch((caught: unknown) => {
         if (isDanError(caught) && caught.code === "not_found") throw new SignInProblem(t("signInShopNotFound"));
+        if (isDanError(caught) && caught.code === "no_pin") throw new SignInProblem(t("signInNoPin"));
         throw caught;
       });
-      const ping = await pingServer(found.staffUrl);
-      if (!ping.auth.pin) throw new SignInProblem(t("signInNoPin"));
-      await shop.loginCloudPin(found, pin, ping);
       setPin("");
       router.push("/shop/orders");
     } catch (caught) {

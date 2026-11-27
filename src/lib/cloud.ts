@@ -1,10 +1,11 @@
 import { DanError } from "./errors";
+import { graphql } from "./graphql-client";
 import type { Shop, Staff } from "./types";
 
 /**
- * The Dan cloud's own address: where a business joins and where an owner
- * signs in with an email. Each shop's staff API is at its own address, which
- * the cloud hands back on sign-in.
+ * The Dan cloud's one address (RK, 27 Nov 2026, DAN-42, DAN-43): joining,
+ * signing in, and from then on the shop itself, owner and staff alike, at
+ * `https://cloud.dan.partners/graphql`. A sign-in's token says which shop.
  *
  * Set NEXT_PUBLIC_DAN_CLOUD_URL at build time for a cloud somewhere else
  * (local work, a test stack).
@@ -14,15 +15,17 @@ export const CLOUD_URL = (process.env.NEXT_PUBLIC_DAN_CLOUD_URL || "https://clou
 /** How long the cloud gets to answer an account request. */
 const TIMEOUT_MS = 15_000;
 
-/** A sign-in from the cloud: the shop's own session, and where its staff API is. */
+/** A sign-in at the cloud: its token (for this shop only), who, which shop, and where. */
 export type CloudSession = {
   token: string;
   staff: Staff;
   shop: Shop;
-  /** The shop's staff API: the dashboard's server from now on. */
-  staffUrl: string;
+  /** The cloud's one address: the dashboard's server from now on. */
+  cloudUrl: string;
   /** goldendragon in goldendragon.dan.partners. */
   addressName: string;
+  /** The shop's own address: its ordering site, dish photos and Uber's notices. */
+  shopAddress: string;
 };
 
 export type ShopTemplate = "online_shop" | "restaurant";
@@ -38,88 +41,96 @@ export type JoinInput = {
 
 type Options = { fetchImpl?: typeof fetch; base?: string };
 
-async function call<T>(path: string, init: RequestInit, options: Options = {}): Promise<T> {
+/** One GraphQL call to the cloud's one address, with no sign-in. */
+async function ask<T>(query: string, variables: Record<string, unknown>, options: Options = {}): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  let response: Response;
   try {
-    response = await (options.fetchImpl ?? fetch)(`${options.base ?? CLOUD_URL}${path}`, {
-      ...init,
-      headers: { accept: "application/json", ...(init.body ? { "content-type": "application/json" } : {}) },
-      cache: "no-store",
-      signal: controller.signal,
-    });
-  } catch {
-    throw new DanError("cloud_unreachable", "The Dan cloud did not answer. Check the internet connection and try again.");
+    return await graphql<T>(options.base ?? CLOUD_URL, query, variables, { fetchImpl: options.fetchImpl, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof DanError && ["unreachable", "timeout"].includes(error.code)) {
+      throw new DanError("cloud_unreachable", "The Dan cloud did not answer. Check the internet connection and try again.");
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
   }
-  let body: unknown = null;
-  try {
-    const text = await response.text();
-    body = text ? JSON.parse(text) : null;
-  } catch {
-    body = null;
-  }
-  if (!response.ok) {
-    const error = (body as { error?: { code?: string; message?: string } } | null)?.error;
-    throw new DanError(error?.code ?? "bad_response", error?.message ?? "The Dan cloud could not do that. Try again.");
-  }
-  if (body === null) throw new DanError("bad_response", "The Dan cloud gave an answer this page could not read.");
-  return body as T;
 }
 
-const post = (body: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(body) });
+const SESSION = "token shopAddress staff { id name role } shop { id name nameZh address city phone addressName }";
 
-function session(value: CloudSession): CloudSession {
-  if (!value?.token || !value.staffUrl || !value.shop?.name || !value.staff?.role) {
+type SessionAnswer = {
+  token?: string;
+  shopAddress?: string;
+  staff?: Staff;
+  shop?: Shop & { addressName?: string | null };
+};
+
+function session(value: SessionAnswer | null | undefined, options: Options = {}): CloudSession {
+  if (!value?.token || !value.shop?.name || !value.staff?.role) {
     throw new DanError("bad_response", "The Dan cloud gave an answer this page could not read.");
   }
-  return value;
+  const { addressName, ...shop } = value.shop;
+  return {
+    token: value.token,
+    staff: value.staff,
+    shop,
+    cloudUrl: (options.base ?? CLOUD_URL).replace(/\/+$/, ""),
+    addressName: addressName ?? "",
+    shopAddress: value.shopAddress ?? "",
+  };
 }
 
 /** Leaves an email on the waiting list. The answer is the same whoever asks. */
 export async function joinWaitlist(email: string, options?: Options): Promise<void> {
-  await call<{ ok: boolean }>("/v1/waitlist", post({ email }), options);
+  await ask<{ joinWaitlist: boolean }>("mutation($email: String!) { joinWaitlist(email: $email) }", { email }, options);
 }
 
 /** Whose invite this is, if it can still be used. */
-export function getInvite(token: string, options?: Options): Promise<{ email: string }> {
-  return call<{ email: string }>(`/v1/invites/${encodeURIComponent(token)}`, { method: "GET" }, options);
+export async function getInvite(token: string, options?: Options): Promise<{ email: string }> {
+  return (await ask<{ invitation: { email: string } }>("query($token: String!) { invitation(token: $token) { email } }", { token }, options)).invitation;
 }
 
 /** Whether an address name is free, and the address it would give. */
-export function checkAddress(name: string, options?: Options): Promise<{ available: boolean; address: string }> {
-  return call<{ available: boolean; address: string }>(`/v1/address/${encodeURIComponent(name)}`, { method: "GET" }, options);
+export async function checkAddress(name: string, options?: Options): Promise<{ available: boolean; address: string }> {
+  return (await ask<{ addressFree: { available: boolean; address: string } }>("query($name: String!) { addressFree(name: $name) { available address } }", { name }, options))
+    .addressFree;
 }
 
 /** Uses an invite: makes the shop and signs in. */
 export async function joinShop(input: JoinInput, options?: Options): Promise<CloudSession> {
-  return session(await call<CloudSession>("/v1/join", post(input), options));
+  const data = await ask<{ join: SessionAnswer }>(`mutation($input: JoinInput!) { join(input: $input) { ${SESSION} } }`, { input }, options);
+  return session(data.join, options);
 }
 
-/** Email and password: finds the owner's shop and signs in. */
-export async function cloudLogin(email: string, password: string, options?: Options): Promise<CloudSession> {
-  return session(await call<CloudSession>("/v1/login", post({ email, password }), options));
-}
-
-/** Where a shop's staff API is, from its address name (for the counter PIN). */
-export function findShop(name: string, options?: Options): Promise<{ name: string; addressName: string; staffUrl: string }> {
-  return call<{ name: string; addressName: string; staffUrl: string }>(
-    `/v1/shops/${encodeURIComponent(name.trim().toLowerCase())}`,
-    { method: "GET" },
+/**
+ * Email and password: finds the owner's shop and signs in. `shop`, its
+ * address name, when known (a tablet on the shop's machine): that shop.
+ */
+export async function cloudLogin(email: string, password: string, options?: Options & { shop?: string | null }): Promise<CloudSession> {
+  const data = await ask<{ signIn: SessionAnswer }>(
+    `mutation($email: String!, $password: String!, $shop: String) { signIn(email: $email, password: $password, shop: $shop) { ${SESSION} } }`,
+    { email, password, shop: options?.shop ?? null },
     options,
   );
+  return session(data.signIn, options);
+}
+
+/** The shop's address name and its PIN: signs the counter in. */
+export async function cloudPinLogin(addressName: string, pin: string, options?: Options): Promise<CloudSession> {
+  const data = await ask<{ signInStaff: SessionAnswer }>(`mutation($shop: String!, $pin: String!) { signInStaff(shop: $shop, pin: $pin) { ${SESSION} } }`, { shop: addressName.trim().toLowerCase(), pin }, options);
+  return session(data.signInStaff, options);
 }
 
 /** Whose password a reset link is for, if it can still be used. */
-export function getReset(token: string, options?: Options): Promise<{ email: string }> {
-  return call<{ email: string }>(`/v1/resets/${encodeURIComponent(token)}`, { method: "GET" }, options);
+export async function getReset(token: string, options?: Options): Promise<{ email: string }> {
+  return (await ask<{ passwordReset: { email: string } }>("query($token: String!) { passwordReset(token: $token) { email } }", { token }, options)).passwordReset;
 }
 
 /** Sets a new password from a reset link and signs in. */
 export async function resetPassword(token: string, password: string, options?: Options): Promise<CloudSession> {
-  return session(await call<CloudSession>("/v1/reset", post({ token, password }), options));
+  const data = await ask<{ resetPassword: SessionAnswer }>(`mutation($token: String!, $password: String!) { resetPassword(token: $token, password: $password) { ${SESSION} } }`, { token, password }, options);
+  return session(data.resetPassword, options);
 }
 
 /** An address name from a shop's name: lowercase letters, digits and hyphens. */

@@ -1,15 +1,15 @@
-import { orderingAddressFromCloud } from "./tables";
+import { shopAddressOf } from "./tables";
 import type { Session } from "./types";
 
 export type PhotoSize = "thumb" | "large";
 
 /**
- * Where a dish photo is: the Dan cloud serves it at the shop's own address
- * (the cloud address without /staff). None without a cloud, or a photo.
+ * Where a dish photo is: the Dan cloud serves it at the shop's own address.
+ * None without it, or without a photo.
  */
-export function photoSrc(session: Pick<Session, "cloudUrl"> | null | undefined, photo: string | null | undefined, size: PhotoSize): string | null {
+export function photoSrc(session: Pick<Session, "cloudUrl" | "shopAddress"> | null | undefined, photo: string | null | undefined, size: PhotoSize): string | null {
   if (!photo || !/^images\/[0-9a-f]{64}$/.test(photo)) return null;
-  const origin = orderingAddressFromCloud(session?.cloudUrl);
+  const origin = shopAddressOf(session);
   return origin ? `${origin}/${photo}/${size}.jpg` : null;
 }
 

@@ -42,8 +42,10 @@ async function connect(page: Page, address: string) {
 }
 
 async function signInOwner(page: Page) {
+  // The cloud's one address, as the machine says it (DAN-43).
+  const said = await onMachine<{ data: { ping: { cloudUrl: string | null } } }>("{ ping { cloudUrl } }");
   await connect(page, server!);
-  await expect(page.getByTestId("connect-servers")).toContainText(cloud!);
+  await expect(page.getByTestId("connect-servers")).toContainText(said.data.ping.cloudUrl!);
   await page.getByLabel("Email").fill(ownerEmail);
   await page.getByLabel("Password").fill(ownerPassword);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

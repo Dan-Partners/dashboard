@@ -51,11 +51,11 @@ export function checkUberOptions(input: UberOptionsInput) {
   }
 }
 
-/** Where the shop's Uber webhook goes: the shop's own address on the Dan cloud. */
-export function webhookAddress(cloudUrl: string | null | undefined): string | null {
-  if (!cloudUrl) return null;
+/** Where the shop's Uber webhook goes: the shop's own address (served by the Dan cloud). */
+export function webhookAddress(shopAddress: string | null | undefined): string | null {
+  if (!shopAddress) return null;
   try {
-    const url = new URL(cloudUrl);
+    const url = new URL(shopAddress);
     return `${url.origin}/uber/webhook`;
   } catch {
     return null;

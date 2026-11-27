@@ -1,8 +1,10 @@
 import { DanError } from "./errors";
+import { graphql } from "./graphql-client";
 
 /**
  * Card payments for the shop, through the Dan cloud (Stripe Connect). Owner
- * only, signed in to the cloud. Not part of DanClient: only the cloud has it.
+ * only, signed in to the cloud. Not part of DanClient: only the cloud answers
+ * these fields (DAN-43); a shop's own machine says `cloud_only`.
  */
 export type PaymentsStatus = {
   /** Dan's platform is set up, so the shop can connect. */
@@ -102,42 +104,47 @@ export function dealSentences(deal: Deal, copy: (key: DealCopy) => string, offer
 
 export type DealCopy = "dealFirstFree" | "dealOfferUntil" | "dealOfferMonths" | "dealFee" | "dealFeeAfter" | "dealFeeOtherwise";
 
+const DEAL = "freeCardOrders percentBp fixedPence capPence offerOrdersPerMonth offerMonths";
+const PAYMENTS = `available connected cardPayments accountReady payoutsEnabled deal { ${DEAL} } cardOrdersPaid terms { version text } agreement { termsVersion deal { ${DEAL} } ownerName ownerEmail acceptedAt } needsAcceptance offer { ordersPerMonth endsAt monthUsed monthEndsAt }`;
+
+/** One owner call to the cloud's one address (DAN-43): GraphQL, signed in. */
+function ask<T>(cloudUrl: string, token: string, query: string, variables: Record<string, unknown> = {}): Promise<T> {
+  return graphql<T>(cloudUrl, query, variables, { token });
+}
+
 /** The owner accepts the terms and deal they were shown. */
-export function acceptTerms(cloudUrl: string, token: string, termsVersion: string, deal: Deal, name: string): Promise<PaymentsStatus> {
-  return call<PaymentsStatus>(cloudUrl, token, "/payments/accept", { method: "POST", body: JSON.stringify({ termsVersion, deal, name }) });
+export async function acceptTerms(cloudUrl: string, token: string, termsVersion: string, deal: Deal, name: string): Promise<PaymentsStatus> {
+  const input = {
+    freeCardOrders: deal.freeCardOrders,
+    percentBp: deal.percentBp,
+    fixedPence: deal.fixedPence ?? 0,
+    capPence: deal.capPence,
+    offerOrdersPerMonth: deal.offerOrdersPerMonth ?? 0,
+    offerMonths: deal.offerMonths ?? 0,
+  };
+  const data = await ask<{ acceptTerms: PaymentsStatus }>(
+    cloudUrl,
+    token,
+    `mutation($termsVersion: String!, $deal: DealInput!, $name: String!) { acceptTerms(termsVersion: $termsVersion, deal: $deal, name: $name) { ${PAYMENTS} } }`,
+    { termsVersion, deal: input, name },
+  );
+  return data.acceptTerms;
 }
 
-async function call<T>(cloudUrl: string, token: string, path: string, init: RequestInit = {}): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(`${cloudUrl}${path}`, {
-      ...init,
-      headers: { authorization: `Bearer ${token}`, accept: "application/json", ...(init.body ? { "content-type": "application/json" } : {}) },
-      cache: "no-store",
-      credentials: "omit",
-    });
-  } catch {
-    throw new DanError("unreachable", "The Dan cloud could not be reached.");
-  }
-  const body = (await response.json().catch(() => null)) as (T & { error?: { code?: string; message?: string } }) | null;
-  if (!response.ok || !body) {
-    throw new DanError(body?.error?.code ?? "unreachable", body?.error?.message ?? "The Dan cloud could not do that.");
-  }
-  return body;
+export async function getPayments(cloudUrl: string, token: string): Promise<PaymentsStatus> {
+  return (await ask<{ payments: PaymentsStatus }>(cloudUrl, token, `query { payments { ${PAYMENTS} } }`)).payments;
 }
 
-export function getPayments(cloudUrl: string, token: string): Promise<PaymentsStatus> {
-  return call<PaymentsStatus>(cloudUrl, token, "/payments");
+/** A page of Stripe's, which only ever starts https://. */
+function stripeLink(url: string | null | undefined): string {
+  if (!url || !/^https:\/\//.test(url)) throw new DanError("unreachable", "Stripe's link was not as expected.");
+  return url;
 }
 
 /** Stripe's onboarding page for the shop; Stripe sends the owner back to `returnTo`. */
 export async function connectPayments(cloudUrl: string, token: string, returnTo: string): Promise<string> {
-  const body = await call<{ url: string }>(cloudUrl, token, "/payments/connect", {
-    method: "POST",
-    body: JSON.stringify({ returnTo }),
-  });
-  if (!/^https:\/\//.test(body.url)) throw new DanError("unreachable", "Stripe's link was not as expected.");
-  return body.url;
+  const data = await ask<{ connectStripe: string }>(cloudUrl, token, "mutation($returnTo: String!) { connectStripe(returnTo: $returnTo) }", { returnTo });
+  return stripeLink(data.connectStripe);
 }
 
 /**
@@ -163,22 +170,20 @@ export type ShopServerStatus = {
   termsAccepted: boolean;
 };
 
-export function getShopServer(cloudUrl: string, token: string): Promise<ShopServerStatus> {
-  return call<ShopServerStatus>(cloudUrl, token, "/shop-server");
+const SHOP_SERVER = "available prices { setupPence setupWasPence monthlyPence } state on withoutPayment ownMachine periodEnd endsAt endedAt termsAccepted";
+
+export async function getShopServer(cloudUrl: string, token: string): Promise<ShopServerStatus> {
+  return (await ask<{ shopServer: ShopServerStatus }>(cloudUrl, token, `query { shopServer { ${SHOP_SERVER} } }`)).shopServer;
 }
 
 /** Stripe Checkout for the setup and the first month; Stripe sends the owner back to `returnTo`. */
-export function buyShopServer(cloudUrl: string, token: string, returnTo: string): Promise<string> {
-  return stripePage(cloudUrl, token, "/shop-server/checkout", returnTo);
+export async function buyShopServer(cloudUrl: string, token: string, returnTo: string): Promise<string> {
+  const data = await ask<{ buyShopServer: string }>(cloudUrl, token, "mutation($returnTo: String!) { buyShopServer(returnTo: $returnTo) }", { returnTo });
+  return stripeLink(data.buyShopServer);
 }
 
 /** Stripe's own billing page: the card, cancelling. */
-export function manageShopServer(cloudUrl: string, token: string, returnTo: string): Promise<string> {
-  return stripePage(cloudUrl, token, "/shop-server/manage", returnTo);
-}
-
-async function stripePage(cloudUrl: string, token: string, path: string, returnTo: string): Promise<string> {
-  const body = await call<{ url: string }>(cloudUrl, token, path, { method: "POST", body: JSON.stringify({ returnTo }) });
-  if (!/^https:\/\//.test(body.url)) throw new DanError("unreachable", "Stripe's link was not as expected.");
-  return body.url;
+export async function manageShopServer(cloudUrl: string, token: string, returnTo: string): Promise<string> {
+  const data = await ask<{ manageBilling: string }>(cloudUrl, token, "mutation($returnTo: String!) { manageBilling(returnTo: $returnTo) }", { returnTo });
+  return stripeLink(data.manageBilling);
 }

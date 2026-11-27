@@ -36,7 +36,6 @@ import type {
   Customer,
   DanClient,
   LoginInput,
-  LoginResult,
   MenuItemPatch,
   Order,
   OrderStatus,
@@ -53,7 +52,7 @@ import { normalizeStations } from "./stations";
 import { normalizeAddons } from "./addons";
 import { afterFetch, newLiveOrders, tellOrder } from "./live-orders";
 import { normalizeViews, type View } from "./views";
-import type { CloudSession } from "./cloud";
+import { cloudLogin, cloudPinLogin, type CloudSession } from "./cloud";
 
 export type Notice = {
   id: string;
@@ -76,8 +75,8 @@ type ShopContextValue = {
   loginRemote: (baseUrl: string, input: LoginInput, ping: ServerPing, cloudUrl?: string | null) => Promise<void>;
   /** Opens a sign-in the Dan cloud gave (email and password, an invite, a reset link). */
   adoptCloudSession: (cloud: CloudSession) => Promise<void>;
-  /** The counter PIN at a shop that lives in the cloud, found by its address name. */
-  loginCloudPin: (found: { staffUrl: string; addressName: string }, pin: string, ping: ServerPing) => Promise<void>;
+  /** The counter PIN at a shop that lives in the cloud, by its address name. */
+  loginCloudPin: (addressName: string, pin: string) => Promise<void>;
   /** Owner only: adds, removes and arranges dishes and categories. */
   editMenu: <T>(work: (client: DanClient) => Promise<T>) => Promise<T>;
   /** Owner only: the shop's name, address and phone. */
@@ -245,20 +244,21 @@ function adoptShopTheme(theme: ThemeChoice | undefined) {
 }
 
 /**
- * The session for a shop that lives in the Dan cloud: its cloud address is
- * both the server and the cloud, with one sign-in.
+ * The session for a shop that lives in the Dan cloud: the cloud's one address
+ * is both the server and the cloud, with one sign-in.
  */
-function cloudHome(staffUrl: string, addressName: string, signedIn: Pick<LoginResult, "token" | "staff" | "shop">): Session {
+function cloudHome(cloud: CloudSession): Session {
   return {
     mode: "remote",
     home: "cloud",
-    addressName,
-    serverUrl: staffUrl,
-    token: signedIn.token,
-    cloudUrl: staffUrl,
-    cloudToken: signedIn.token,
-    shop: signedIn.shop,
-    staff: signedIn.staff,
+    addressName: cloud.addressName,
+    shopAddress: cloud.shopAddress || null,
+    serverUrl: cloud.cloudUrl,
+    token: cloud.token,
+    cloudUrl: cloud.cloudUrl,
+    cloudToken: cloud.token,
+    shop: cloud.shop,
+    staff: cloud.staff,
   };
 }
 
@@ -321,6 +321,17 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     });
     setRemoteError(null);
   }, []);
+
+  /** Opens a sign-in at the cloud's one address, with the shop's theme from its ping. */
+  const openCloudSession = useCallback(
+    async (cloud: CloudSession) => {
+      // The shop's theme comes with its ping; without it the page keeps its colours.
+      const ping = await pingServer(cloud.cloudUrl, fetch, cloud.token).catch(() => null);
+      writePersisted({ lastShopName: cloud.addressName, lastWay: "cloud" });
+      await openSession(cloudHome(cloud), ping?.theme);
+    },
+    [openSession],
+  );
 
   const refreshRemote = useCallback(async () => {
     const current = getSnapshot().session;
@@ -562,27 +573,37 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       async loginRemote(baseUrl, input, ping, cloudUrl = null) {
         const client = new GraphQLDanClient(baseUrl);
         const result = await client.login(input);
-        // The same details sign in to the cloud as well (staff accounts sync). Not
-        // being able to reach it is fine: the counter works on the shop server.
-        const cloudToken = cloudUrl
-          ? await new GraphQLDanClient(cloudUrl)
-              .login(input)
-              .then((signedIn) => signedIn.token)
-              .catch(() => null)
+        // The same details sign in to the cloud as well (staff accounts sync), at
+        // its one address, by the shop's address name for the PIN. Not being
+        // able to reach it is fine: the counter works on the shop server.
+        const shop = result.shop ?? ping.shop;
+        const cloud = cloudUrl
+          ? await (input.pin
+              ? cloudPinLogin(ping.cloudAddressName ?? shop.id, input.pin, { base: cloudUrl })
+              : cloudLogin(input.email ?? "", input.password ?? "", { base: cloudUrl, shop: ping.cloudAddressName ?? null })
+            ).catch(() => null)
           : null;
         writePersisted({ lastCloudUrl: cloudUrl, lastWay: "server" });
-        await openSession({ mode: "remote", serverUrl: baseUrl, cloudUrl, cloudToken, token: result.token, shop: result.shop ?? ping.shop, staff: result.staff }, ping.theme);
+        await openSession(
+          {
+            mode: "remote",
+            serverUrl: baseUrl,
+            cloudUrl,
+            cloudToken: cloud?.token ?? null,
+            shopAddress: cloud?.shopAddress || null,
+            addressName: cloud?.addressName || null,
+            token: result.token,
+            shop,
+            staff: result.staff,
+          },
+          ping.theme,
+        );
       },
       async adoptCloudSession(cloud) {
-        // The shop's theme comes with its ping; without it the page keeps its colours.
-        const ping = await pingServer(cloud.staffUrl).catch(() => null);
-        writePersisted({ lastShopName: cloud.addressName, lastWay: "cloud" });
-        await openSession(cloudHome(cloud.staffUrl, cloud.addressName, cloud), ping?.theme);
+        await openCloudSession(cloud);
       },
-      async loginCloudPin(found, pin, ping) {
-        const result = await new GraphQLDanClient(found.staffUrl).login({ pin });
-        writePersisted({ lastShopName: found.addressName, lastWay: "cloud" });
-        await openSession(cloudHome(found.staffUrl, found.addressName, { ...result, shop: result.shop ?? ping.shop }), ping.theme);
+      async loginCloudPin(addressName, pin) {
+        await openCloudSession(await cloudPinLogin(addressName, pin));
       },
       async editMenu(work) {
         if (getSnapshot().session?.mode === "demo") {
@@ -928,7 +949,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         return refreshRemote();
       },
     };
-  }, [afterSettings, notice, openSession, persisted, ready, refreshRemote, remoteError, servers, session, snapshot]);
+  }, [afterSettings, notice, openCloudSession, openSession, persisted, ready, refreshRemote, remoteError, servers, session, snapshot]);
 
   return <ShopContext.Provider value={value}>{children}</ShopContext.Provider>;
 }

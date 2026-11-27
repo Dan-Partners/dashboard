@@ -1,4 +1,5 @@
 import { DanError } from "./errors";
+import type { Session } from "./types";
 
 /** A sheet is for a shop's tables, not a stadium. */
 export const MAX_TABLES = 200;
@@ -43,6 +44,17 @@ export function orderingAddressFromCloud(cloudUrl: string | null | undefined): s
   } catch {
     return "";
   }
+}
+
+/**
+ * The shop's own address (https://<shop>.dan.partners): its ordering site,
+ * dish photos and Uber's notices. The cloud's sign-in says it (DAN-43); a
+ * session from before has its cloud address with /staff, which gives it.
+ */
+export function shopAddressOf(session: Pick<Session, "shopAddress" | "cloudUrl"> | null | undefined): string {
+  if (session?.shopAddress) return session.shopAddress.replace(/\/+$/, "");
+  if (session?.cloudUrl && /\/staff\/?$/.test(session.cloudUrl)) return orderingAddressFromCloud(session.cloudUrl);
+  return "";
 }
 
 /** An ordering site address as typed: https (or this machine for testing), the address alone. */

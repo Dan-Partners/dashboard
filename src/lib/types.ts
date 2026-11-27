@@ -90,10 +90,12 @@ export type ServerPing = {
   theme?: ThemeChoice;
   /**
    * A shop server whose shop lives in the Dan cloud (DAN-34): the cloud's
-   * staff address, where the shop's settings are saved. Null until the
+   * one address (DAN-43), where the shop's settings are saved. Null until the
    * machine has reached the cloud once; missing from older servers.
    */
   cloudUrl?: string | null;
+  /** With cloudUrl: the shop's address name there, for a tablet's PIN sign-in (DAN-43). */
+  cloudAddressName?: string | null;
 };
 
 export type LoginInput =
@@ -469,17 +471,22 @@ export type Session = {
   /** The shop server: the counter's first choice, always. */
   serverUrl: string | null;
   token: string | null;
-  /** The Dan cloud, the counter's second server. Optional. */
+  /** The Dan cloud's one address (https://cloud.dan.partners), the counter's second server. Optional. */
   cloudUrl?: string | null;
   /** Signed in to the cloud too, with the same details. Missing when it could not be reached. */
   cloudToken?: string | null;
   /**
    * "cloud": the shop lives in the Dan cloud and has no shop server. Then
-   * `serverUrl` and `cloudUrl` are both the shop's cloud address.
+   * `serverUrl` and `cloudUrl` are both the cloud's one address.
    */
   home?: "cloud";
   /** The shop's address name in the cloud (goldendragon), when known. */
   addressName?: string | null;
+  /**
+   * The shop's own address (https://goldendragon.dan.partners): its ordering
+   * site, dish photos and Uber's notices. From the cloud's sign-in (DAN-43).
+   */
+  shopAddress?: string | null;
   shop: Shop;
   staff: Staff;
 };

@@ -5,7 +5,7 @@ import { isDanError } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n";
 import { useShop } from "@/lib/shop-context";
 import { writePersisted } from "@/lib/storage";
-import { normalizeOrderingAddress, orderingAddressFromCloud, parseTables, tableLink } from "@/lib/tables";
+import { normalizeOrderingAddress, parseTables, shopAddressOf, tableLink } from "@/lib/tables";
 import type { Shop } from "@/lib/types";
 import { PrintersSection } from "./printers-section";
 import { QrCode, qrModules } from "./qr-code";
@@ -31,7 +31,7 @@ function TableQrCodes() {
   const { t } = useI18n();
   const shop = useShop();
   const session = shop.persisted.session;
-  const suggested = session?.mode === "demo" ? DEMO_ORDERING : orderingAddressFromCloud(session?.cloudUrl);
+  const suggested = session?.mode === "demo" ? DEMO_ORDERING : shopAddressOf(session);
   const [address, setAddress] = useState(() => shop.persisted.orderingAddress ?? suggested);
   const [tables, setTables] = useState("1-12");
 

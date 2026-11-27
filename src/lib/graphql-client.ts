@@ -135,7 +135,7 @@ export async function graphql<T>(
   return body.data;
 }
 
-export async function pingServer(input: string, fetchImpl: typeof fetch = fetch): Promise<ServerPing> {
+export async function pingServer(input: string, fetchImpl: typeof fetch = fetch, token?: string | null): Promise<ServerPing> {
   const base = normalizeServerUrl(input);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
@@ -145,13 +145,19 @@ export async function pingServer(input: string, fetchImpl: typeof fetch = fetch)
         base,
         `query Ping { ping { ok product version shop { ${SHOP} } auth { password pin } theme { ${THEME} }${extra} } }`,
         {},
-        { fetchImpl, signal: controller.signal },
+        { fetchImpl, signal: controller.signal, token },
       );
-    // A shop server from before DAN-34 does not know `cloudUrl`: asked again without it.
-    const data = await ask(" cloudUrl").catch((error: unknown) => {
-      if (error instanceof DanError && error.code === "bad_response") return ask("");
-      throw error;
-    });
+    // A shop server from before DAN-43 does not know `cloudAddressName`, and
+    // one from before DAN-34 not `cloudUrl`: asked again without them.
+    const data = await ask(" cloudUrl cloudAddressName")
+      .catch((error: unknown) => {
+        if (error instanceof DanError && error.code === "bad_response") return ask(" cloudUrl");
+        throw error;
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DanError && error.code === "bad_response") return ask("");
+        throw error;
+      });
     const ping = data.ping;
     if (ping?.theme) ping.theme = normalizeTheme(ping.theme);
     if (!ping || ping.ok !== true || ping.product !== DAN_PRODUCT || !ping.shop?.name) {
@@ -171,15 +177,28 @@ export async function pingServer(input: string, fetchImpl: typeof fetch = fetch)
 }
 
 /**
- * Is the shop there on the Dan cloud? A shop's cloud address is its staff API
- * there (`https://<shop>.dan.partners/staff`), so this pings it like a shop
- * server: it answers only if the cloud is up and runs that shop.
+ * Is the Dan cloud there? Its one address answers `/healthz` as the Dan
+ * cloud (DAN-43). A shop's old cloud address (`.../staff`) is a shop server
+ * to it, so that is pinged like one.
  */
 export async function checkCloud(base: string, fetchImpl: typeof fetch = fetch): Promise<boolean> {
-  return pingServer(base, fetchImpl).then(
-    () => true,
-    () => false,
-  );
+  if (/\/staff\/?$/.test(base)) {
+    return pingServer(base, fetchImpl).then(
+      () => true,
+      () => false,
+    );
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
+  try {
+    const response = await fetchImpl(`${normalizeServerUrl(base)}/healthz`, { cache: "no-store", signal: controller.signal });
+    const body = (await response.json().catch(() => null)) as { product?: string } | null;
+    return response.ok && body?.product === "dan-cloud";
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export class GraphQLDanClient implements DanClient {
@@ -194,7 +213,7 @@ export class GraphQLDanClient implements DanClient {
   }
 
   ping() {
-    return pingServer(this.baseUrl, this.fetchImpl);
+    return pingServer(this.baseUrl, this.fetchImpl, this.token);
   }
 
   async login(input: LoginInput): Promise<LoginResult> {
