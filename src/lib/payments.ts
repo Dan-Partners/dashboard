@@ -23,9 +23,33 @@ export type PaymentsStatus = {
   agreement?: Agreement | null;
   /** The terms or the deal changed since the owner last accepted (or never did). */
   needsAcceptance?: boolean;
+  /** The launch offer of the deal in force (DAN-41). Missing from an older cloud. */
+  offer?: Offer | null;
 };
 
-export type Deal = { freeCardOrders: number; percentBp: number; capPence: number };
+export type Offer = {
+  ordersPerMonth: number;
+  /** When the offer ends: the shop's join date plus its months. */
+  endsAt: string;
+  /** Card orders paid this offer month, and when the month ends; null once the offer is over. */
+  monthUsed: number | null;
+  monthEndsAt: string | null;
+};
+
+/**
+ * Dan's deal with a shop. Since DAN-41 the standard one comes from Stripe:
+ * a percent plus a fixed amount, capped, with a launch offer of free card
+ * orders each month for the shop's first months. The new fields are missing
+ * from an older cloud, and from deals accepted before (read as 0).
+ */
+export type Deal = {
+  freeCardOrders: number;
+  percentBp: number;
+  fixedPence?: number;
+  capPence: number;
+  offerOrdersPerMonth?: number;
+  offerMonths?: number;
+};
 export type Agreement = { termsVersion: string; deal: Deal; ownerName: string; ownerEmail: string; acceptedAt: string };
 
 /** "3" or "2.5", from basis points. */
@@ -34,8 +58,49 @@ export function percentText(bp: number): string {
 }
 
 export function sameDeal(a: Deal | undefined | null, b: Deal | undefined | null): boolean {
-  return Boolean(a && b && a.freeCardOrders === b.freeCardOrders && a.percentBp === b.percentBp && a.capPence === b.capPence);
+  return Boolean(
+    a &&
+      b &&
+      a.freeCardOrders === b.freeCardOrders &&
+      a.percentBp === b.percentBp &&
+      (a.fixedPence ?? 0) === (b.fixedPence ?? 0) &&
+      a.capPence === b.capPence &&
+      (a.offerOrdersPerMonth ?? 0) === (b.offerOrdersPerMonth ?? 0) &&
+      (a.offerMonths ?? 0) === (b.offerMonths ?? 0),
+  );
 }
+
+/** "10p" under a pound, "£1.00" from a pound. */
+function money(pence: number): string {
+  return pence < 100 ? `${pence}p` : `£${(pence / 100).toFixed(2)}`;
+}
+
+/** "0.5% + 10p", or "3%" with no fixed amount. */
+export function feeText(deal: Deal): string {
+  const fixed = deal.fixedPence ?? 0;
+  return fixed > 0 ? `${percentText(deal.percentBp)}% + ${money(fixed)}` : `${percentText(deal.percentBp)}%`;
+}
+
+/**
+ * The deal in plain words, from the copy given (English or Chinese). `offerEnds`:
+ * the end of the launch offer as a date to show, when known.
+ */
+export function dealSentences(deal: Deal, copy: (key: DealCopy) => string, offerEnds: string | null): string {
+  const parts: string[] = [];
+  const offer = (deal.offerOrdersPerMonth ?? 0) > 0 && (deal.offerMonths ?? 0) > 0;
+  if (deal.freeCardOrders > 0) parts.push(copy("dealFirstFree").replace("{free}", String(deal.freeCardOrders)));
+  if (offer) {
+    parts.push(
+      (offerEnds ? copy("dealOfferUntil").replace("{date}", offerEnds) : copy("dealOfferMonths").replace("{months}", String(deal.offerMonths)))
+        .replace("{offer}", String(deal.offerOrdersPerMonth)),
+    );
+  }
+  const fee = parts.length === 0 ? "dealFee" : offer ? "dealFeeOtherwise" : "dealFeeAfter";
+  parts.push(copy(fee).replace("{fee}", feeText(deal)).replace("{cap}", `£${(deal.capPence / 100).toFixed(2)}`));
+  return parts.join(" ");
+}
+
+export type DealCopy = "dealFirstFree" | "dealOfferUntil" | "dealOfferMonths" | "dealFee" | "dealFeeAfter" | "dealFeeOtherwise";
 
 /** The owner accepts the terms and deal they were shown. */
 export function acceptTerms(cloudUrl: string, token: string, termsVersion: string, deal: Deal, name: string): Promise<PaymentsStatus> {

@@ -39,10 +39,11 @@ test("card payments wait for the owner to accept Dan's terms and deal; then cust
 
   // Stripe is ready, but cards wait for the terms.
   await expect(page.getByTestId("payments-waiting-terms")).toBeVisible({ timeout: 15_000 });
+  // The deal from Stripe (DAN-41): the launch offer, then 0.5% + 10p, capped at £1.
   await expect(page.getByTestId("deal-words")).toHaveText(
-    "Your first 100 card orders are free of any Dan fee. After that, Dan's fee is 3% of each card payment, at most £1.00 per order.",
+    /^Launch offer: your first 100 card orders each month are free of any Dan fee, until \d{1,2} \w+ \d{4}\. Otherwise, Dan's fee is 0\.5% \+ 10p of each card payment, at most £1\.00 per order\.$/,
   );
-  await expect(page.getByTestId("deal-usage")).toHaveText(/^\d+ of 100 free card orders used$/);
+  await expect(page.getByTestId("deal-offer-usage")).toHaveText(/^\d+ of 100 free card orders used this month \(until \d{1,2} \w+ \d{4}\)$/);
   await expect(page.getByTestId("terms-text")).toContainText("You are the seller and the merchant of record");
 
   // The customer site offers no card yet.

@@ -12,6 +12,7 @@
 //   POST /__payouts/hold     the shop's account has payouts on hold
 //   POST /__payouts/ok       payouts are on again (the default)
 //
+// Dan's card fee (DAN-41): the Free plan's price with the fee in its metadata.
 // For the shop server (DAN-35), on Dan's own account: the two prices by lookup
 // key, customers, Checkout sessions and billing-page sessions. A test that
 // needs a purchase to be paid sends the cloud Stripe's own notice
@@ -49,6 +50,9 @@ http
       // The shop server's prices on Dan's own account, as configured in the real one.
       if (path === "/v1/prices" && req.method === "GET") {
         return send(res, 200, { data: [
+          // Dan's card fee and launch offer, as in the real Free plan's metadata (DAN-41).
+          { id: "price_e2e_free", lookup_key: "dan_free_monthly", unit_amount: 0, currency: "gbp", recurring: { interval: "month" }, product: { metadata: {} },
+            metadata: { dan_fee_percent: "0.5", dan_fee_fixed_pence: "10", dan_fee_cap_pence: "100", promo_name: "launch", promo_free_online_orders_per_month: "100", promo_duration_months: "6" } },
           { id: "price_e2e_setup", lookup_key: "dan_duo_setup", unit_amount: 9900, currency: "gbp", recurring: null, metadata: { compare_at_amount: "22000" }, product: { metadata: {} } },
           { id: "price_e2e_monthly", lookup_key: "dan_duo_maintenance_monthly", unit_amount: 500, currency: "gbp", recurring: { interval: "month" }, metadata: {}, product: { metadata: {} } },
         ] });

@@ -59,6 +59,11 @@ test("the owner buys the shop server, Dan switches it on, and a cancel runs to t
   await expect(section.getByTestId("shop-server-price")).toHaveText("£99.00 to set up (usually £220.00), then £5.00 a month. Hardware is extra. No VAT is charged.");
   await expect(section.getByTestId("shop-server-buy")).toBeDisabled();
   await expect(section.getByTestId("shop-server-terms-first")).toBeVisible();
+  // Dan's card fee, read from Stripe (DAN-41): the launch offer from the day the shop joined.
+  await expect(page.getByTestId("deal-words")).toHaveText(
+    /^Launch offer: your first 100 card orders each month are free of any Dan fee, until \d{1,2} \w+ \d{4}\. Otherwise, Dan's fee is 0\.5% \+ 10p of each card payment, at most £1\.00 per order\.$/,
+  );
+  await expect(page.getByTestId("deal-offer-usage")).toHaveText(/^0 of 100 free card orders used this month \(until \d{1,2} \w+ \d{4}\)$/);
   await page.getByLabel("Your full name").fill("Sam Lee");
   await page.getByTestId("deal-agree").check();
   await page.getByTestId("deal-accept-button").click();

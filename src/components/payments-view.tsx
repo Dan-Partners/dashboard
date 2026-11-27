@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { isDanError } from "@/lib/errors";
-import { formatPence } from "@/lib/format";
-import { acceptTerms, connectPayments, getPayments, percentText, sameDeal, type Deal, type PaymentsStatus, type ShopServerStatus } from "@/lib/payments";
+import { acceptTerms, connectPayments, dealSentences, getPayments, sameDeal, type Deal, type PaymentsStatus, type ShopServerStatus } from "@/lib/payments";
 import { settingsRoute } from "@/lib/settings";
 import { useIsOwner, useShop } from "@/lib/shop-context";
 import { ShopServerSection } from "./shop-server-section";
@@ -185,11 +184,13 @@ export function SubscriptionView() {
   );
 }
 
-function dealWords(deal: Deal, t: (key: CopyKey) => string): string {
-  return t("dealWords")
-    .replace("{free}", String(deal.freeCardOrders))
-    .replace("{percent}", percentText(deal.percentBp))
-    .replace("{cap}", formatPence(deal.capPence));
+function dealWords(deal: Deal, t: (key: CopyKey) => string, offerEnds: string | null): string {
+  return dealSentences(deal, (key) => t(key), offerEnds);
+}
+
+/** "27 May 2027", in the shop's time. */
+function day(iso: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale === "zh-Hant" ? "zh-HK" : "en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" }).format(new Date(iso));
 }
 
 /**
@@ -216,6 +217,8 @@ function DealSection({
   const deal = status.deal;
   if (!deal || !status.terms) return null;
   const used = Math.min(status.cardOrdersPaid ?? 0, deal.freeCardOrders);
+  const offer = status.offer ?? null;
+  const offerEnds = offer ? day(offer.endsAt, locale) : null;
   const accepted = status.agreement;
   const terms = status.terms;
 
@@ -241,11 +244,21 @@ function DealSection({
       <h2 id="deal-title" className="font-display text-2xl">
         {t("dealTitle")}
       </h2>
-      <p data-testid="deal-words">{dealWords(deal, t)}</p>
+      <p data-testid="deal-words">{dealWords(deal, t, offerEnds)}</p>
       <p className="text-sm text-ink-soft">{t("dealNoFee")}</p>
-      <p className="font-display text-lg" data-testid="deal-usage">
-        {t("dealUsage").replace("{used}", String(used)).replace("{free}", String(deal.freeCardOrders))}
-      </p>
+      {deal.freeCardOrders > 0 ? (
+        <p className="font-display text-lg" data-testid="deal-usage">
+          {t("dealUsage").replace("{used}", String(used)).replace("{free}", String(deal.freeCardOrders))}
+        </p>
+      ) : null}
+      {offer && offer.monthUsed !== null && offer.monthEndsAt ? (
+        <p className="font-display text-lg" data-testid="deal-offer-usage">
+          {t("dealOfferUsage")
+            .replace("{used}", String(Math.min(offer.monthUsed, offer.ordersPerMonth)))
+            .replace("{offer}", String(offer.ordersPerMonth))
+            .replace("{date}", day(new Date(new Date(offer.monthEndsAt).getTime() - 1).toISOString(), locale))}
+        </p>
+      ) : null}
       {accepted ? (
         <p className="text-sm text-ink-soft" data-testid="deal-accepted">
           {t("dealAcceptedBy")} {accepted.ownerName} ({accepted.ownerEmail}), {new Date(accepted.acceptedAt).toLocaleDateString(locale === "zh-Hant" ? "zh-HK" : "en-GB", { timeZone: "Europe/London" })} · {t("dealTermsVersion")} {accepted.termsVersion}
@@ -256,7 +269,7 @@ function DealSection({
           <p className="font-display">{accepted ? t("dealNewToAccept") : t("dealAcceptToStart")}</p>
           {accepted && !sameDeal(accepted.deal, deal) ? (
             <p className="text-sm" data-testid="deal-until">
-              {t("dealUntil")} {dealWords(accepted.deal, t)}
+              {t("dealUntil")} {dealWords(accepted.deal, t, null)}
             </p>
           ) : null}
           <p className="text-sm text-ink-soft">
