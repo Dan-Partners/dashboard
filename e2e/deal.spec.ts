@@ -23,7 +23,6 @@ async function signIn(page: Page) {
   await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");
   await page.getByLabel("Shop server").fill(server!);
-  await page.getByLabel("Dan cloud (optional)").fill(cloud!);
   await page.getByRole("button", { name: "Connect", exact: true }).click();
   await page.getByLabel("Email").fill(ownerEmail);
   await page.getByLabel("Password").fill(ownerPassword);

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { dayKey } from "@/lib/format";
 import { GraphQLDanClient } from "@/lib/graphql-client";
 import { useI18n } from "@/lib/i18n";
+import { useShop } from "@/lib/shop-context";
 import type { Session } from "@/lib/types";
 import { Button } from "./ui";
 
@@ -71,6 +72,23 @@ export function CloudNotice({ session }: { session: Session }) {
       >
         {t("noticeHideToday")}
       </Button>
+    </div>
+  );
+}
+
+/**
+ * Tells everyone at the counter when the Dan cloud no longer accepts the shop
+ * server's key (RK, 27 Nov 2026, DAN-34). The machine carries on alone, as it
+ * does when the internet is down, and the shop's settings cannot be changed.
+ * Not hidden: it stays until Dan sorts the key out.
+ */
+export function KeyRefusedNotice() {
+  const { t } = useI18n();
+  const shop = useShop();
+  if (shop.settingsAccess !== "key_refused") return null;
+  return (
+    <div className="no-print border-b border-rule border-l-[6px] border-l-accent bg-paper-raised px-4 py-3 md:px-8" role="alert" data-testid="key-refused">
+      <p className="max-w-3xl font-display">{t("keyRefused")}</p>
     </div>
   );
 }

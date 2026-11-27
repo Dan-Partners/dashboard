@@ -37,7 +37,6 @@ test("the counter carries on through the cloud while the shop server is down, th
   await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");
   await page.getByLabel("Shop server").fill(server!);
-  await page.getByLabel("Dan cloud (optional)").fill(cloud!);
   await page.getByRole("button", { name: "Connect", exact: true }).click();
   await page.getByRole("button", { name: "PIN", exact: true }).click();
   await page.getByLabel("PIN").fill(pin);

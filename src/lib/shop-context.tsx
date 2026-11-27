@@ -16,7 +16,7 @@ import { normalizeTriggers, onlyOn, type Triggers } from "./triggers";
 import { backStep, columnOf, DEFAULT_BOARD, nextAfter, normalizeBoard, statusAfter, type Board, type BoardPreview } from "./board";
 import { normalizeSetup, type BankDetails, type OrderingSettings, type OrderingSetup } from "./ordering";
 import { live } from "./live";
-import { endpointFor, useServerHealth, type Servers } from "./server-health";
+import { endpointFor, settingsAccess, settingsEndpointFor, useServerHealth, type Endpoint, type Servers, type SettingsAccess } from "./server-health";
 import type { ServerName } from "./server-links";
 import type { ThemeChoice } from "./theme";
 import { editingThemeNow } from "./use-theme";
@@ -99,6 +99,14 @@ type ShopContextValue = {
   saveOrdering: (settings: OrderingSettings, bank?: BankDetails | null) => Promise<OrderingSetup>;
   /** Runs something on the server in use (printers, reprints). Not in the demo. */
   onServer: <T>(work: (client: GraphQLDanClient) => Promise<T>) => Promise<T>;
+  /**
+   * Runs an owner's setting change where the shop's settings are saved now
+   * (the cloud, for a shop server whose shop lives there). Refused with a
+   * DanError while they cannot be changed. Not in the demo.
+   */
+  onSettings: <T>(work: (client: GraphQLDanClient) => Promise<T>) => Promise<T>;
+  /** Whether the owner's settings can be changed now, and where they go (DAN-34). */
+  settingsAccess: SettingsAccess;
   removeItemPhoto: (id: string) => Promise<void>;
   placeOrder: (input: CreateOrderInput) => Promise<Order>;
   /** One order, wherever it is (the board has only the latest). */
@@ -192,6 +200,22 @@ async function pullRemote(baseUrl: string, token: string): Promise<Omit<ShopSnap
     views,
     theme,
   };
+}
+
+/** The shop's settings and menu alone, without its orders or customers. */
+async function pullSettings(baseUrl: string, token: string) {
+  const client = new GraphQLDanClient(baseUrl, token);
+  const [menu, theme, ordering, board, triggers, stations, addons] = await Promise.all([
+    client.getMenu(),
+    client.getTheme(),
+    client.getOrderingSettings(),
+    client.getBoard(),
+    client.getTriggers(),
+    client.getStations(),
+    client.getAddons(),
+  ]);
+  const views = await client.getViews(board);
+  return { categories: menu.categories, items: menu.items, ordering, board, triggers, stations, addons, views, theme };
 }
 
 /** What the shop server's live channel sends. */
@@ -323,6 +347,24 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       throw error;
     }
   }, [signInRefused]);
+
+  /*
+   * After an owner's setting was saved. Saved to the cloud while the counter
+   * is on the machine (DAN-34), the shop's settings and menu are read back
+   * from the cloud, which has them now; the orders and customers stay the
+   * machine's. The machine follows within seconds and tells every tablet.
+   */
+  const afterSettings = useCallback(
+    async (end: Endpoint) => {
+      const current = getSnapshot().session;
+      if (end.server !== "cloud" || endpointFor(current)?.server === "cloud") return refreshRemote();
+      const { theme, ...settings } = await pullSettings(end.url, end.token);
+      adoptShopTheme(theme);
+      boardNow = settings.board;
+      setRemote((snapshot) => (snapshot ? { ...snapshot, ...settings } : snapshot));
+    },
+    [refreshRemote],
+  );
 
   /*
    * The live channel of the server in use (the shop server, or the cloud while
@@ -512,6 +554,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       snapshot,
       remoteError,
       servers,
+      settingsAccess: settingsAccess(session, servers),
       notice,
       dismissNotice: () => setNotice(null),
       rememberServer,
@@ -545,32 +588,32 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         if (getSnapshot().session?.mode === "demo") {
           return demoMutate((server) => work(server));
         }
-        const end = endpointFor(getSnapshot().session);
+        const end = settingsEndpointFor(getSnapshot().session);
         if (!end) throw new Error("Sign in first.");
         const result = await work(new GraphQLDanClient(end.url, end.token));
-        await refreshRemote();
+        await afterSettings(end);
         return result;
       },
       async saveViews(views) {
         if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.updateViews(views));
-        const end = endpointFor(getSnapshot().session);
+        const end = settingsEndpointFor(getSnapshot().session);
         if (!end) throw new Error("Sign in first.");
         const saved = await new GraphQLDanClient(end.url, end.token).updateViews(views);
         // The sounds too: a view that went took its sounds with it.
-        await refreshRemote();
+        await afterSettings(end);
         return saved;
       },
       async resetViews() {
         if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.resetViews());
-        const end = endpointFor(getSnapshot().session);
+        const end = settingsEndpointFor(getSnapshot().session);
         if (!end) throw new Error("Sign in first.");
         const saved = await new GraphQLDanClient(end.url, end.token).resetViews();
-        await refreshRemote();
+        await afterSettings(end);
         return saved;
       },
       async saveStations(stations) {
         if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.updateStations(stations));
-        const end = endpointFor(getSnapshot().session);
+        const end = settingsEndpointFor(getSnapshot().session);
         if (!end) throw new Error("Sign in first.");
         const saved = await new GraphQLDanClient(end.url, end.token).updateStations(stations);
         setRemote((current) => (current ? { ...current, stations: saved } : current));
@@ -578,7 +621,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       },
       async saveAddons(addons) {
         if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.updateAddons(addons));
-        const end = endpointFor(getSnapshot().session);
+        const end = settingsEndpointFor(getSnapshot().session);
         if (!end) throw new Error("Sign in first.");
         const saved = await new GraphQLDanClient(end.url, end.token).updateAddons(addons);
         setRemote((current) => (current ? { ...current, addons: saved } : current));
@@ -591,7 +634,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
           writePersisted({ session: { ...current, shop: saved } });
           return;
         }
-        const end = endpointFor(current);
+        const end = settingsEndpointFor(current);
         if (!current || !end) throw new Error("Sign in first.");
         const saved = await new GraphQLDanClient(end.url, end.token).updateShop(patch);
         writePersisted({ session: { ...current, shop: saved } });
@@ -623,20 +666,35 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
           await demoMutate((server) => server.updateMenuItem(id, patch));
           return;
         }
-        const end = endpointFor(getSnapshot().session);
+        // Sold out is the shop's own, on the machine; everything else about a dish is a setting.
+        const soldOutOnly = Object.keys(patch).every((key) => key === "soldOut");
+        const end = soldOutOnly ? endpointFor(getSnapshot().session) : settingsEndpointFor(getSnapshot().session);
         if (!end) return;
         await new GraphQLDanClient(end.url, end.token).updateMenuItem(id, patch);
-        await refreshRemote();
+        await afterSettings(end);
       },
       async saveOrdering(settings, bank) {
         if (getSnapshot().session?.mode === "demo") {
           return demoMutate((server) => server.updateOrderingSettings(settings, bank));
         }
-        const end = endpointFor(getSnapshot().session);
+        const end = settingsEndpointFor(getSnapshot().session);
         if (!end) throw new Error("Sign in first.");
         const saved = await new GraphQLDanClient(end.url, end.token).updateOrderingSettings(settings, bank);
         setRemote((current) => (current ? { ...current, ordering: saved } : current));
         return saved;
+      },
+      onSettings(work) {
+        const current = getSnapshot().session;
+        if (current?.mode === "demo") {
+          return Promise.reject(new DanError("printers_demo", english("printersDemo")));
+        }
+        try {
+          const end = settingsEndpointFor(current);
+          if (!end) return Promise.reject(new Error("Sign in first."));
+          return work(new GraphQLDanClient(end.url, end.token));
+        } catch (error) {
+          return Promise.reject(error);
+        }
       },
       onServer(work) {
         const current = getSnapshot().session;
@@ -662,10 +720,10 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         );
       },
       async removeItemPhoto(id) {
-        const end = endpointFor(getSnapshot().session);
+        const end = settingsEndpointFor(getSnapshot().session);
         if (!end) throw new Error("Sign in first.");
         await new GraphQLDanClient(end.url, end.token).removeMenuItemPhoto(id);
-        await refreshRemote();
+        await afterSettings(end);
       },
       async placeOrder(input) {
         if (getSnapshot().session?.mode === "demo") {
@@ -777,21 +835,21 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       },
       async previewBoard(board) {
         if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.previewBoard(board));
-        const end = endpointFor(getSnapshot().session);
+        const end = settingsEndpointFor(getSnapshot().session);
         if (!end) throw new Error("Sign in first.");
         return new GraphQLDanClient(end.url, end.token).previewBoard(board);
       },
       async saveBoard(board, moveTickets) {
         if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.updateBoard(board, moveTickets));
-        const end = endpointFor(getSnapshot().session);
+        const end = settingsEndpointFor(getSnapshot().session);
         if (!end) throw new Error("Sign in first.");
         const saved = await new GraphQLDanClient(end.url, end.token).updateBoard(board, moveTickets);
-        await refreshRemote();
+        await afterSettings(end);
         return saved;
       },
       async saveTriggers(triggers) {
         if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.updateTriggers(triggers));
-        const end = endpointFor(getSnapshot().session);
+        const end = settingsEndpointFor(getSnapshot().session);
         if (!end) throw new Error("Sign in first.");
         const saved = await new GraphQLDanClient(end.url, end.token).updateTriggers(triggers);
         setRemote((current) => (current ? { ...current, triggers: saved } : current));
@@ -799,7 +857,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       },
       async resetTriggers() {
         if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.resetTriggers());
-        const end = endpointFor(getSnapshot().session);
+        const end = settingsEndpointFor(getSnapshot().session);
         if (!end) throw new Error("Sign in first.");
         const saved = await new GraphQLDanClient(end.url, end.token).resetTriggers();
         setRemote((current) => (current ? { ...current, triggers: saved } : current));
@@ -807,10 +865,10 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       },
       async resetBoard() {
         if (getSnapshot().session?.mode === "demo") return demoMutate((server) => server.resetBoard());
-        const end = endpointFor(getSnapshot().session);
+        const end = settingsEndpointFor(getSnapshot().session);
         if (!end) throw new Error("Sign in first.");
         const saved = await new GraphQLDanClient(end.url, end.token).resetBoard();
-        await refreshRemote();
+        await afterSettings(end);
         return saved;
       },
       async courierAction(action, id) {
@@ -870,7 +928,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         return refreshRemote();
       },
     };
-  }, [notice, openSession, persisted, ready, refreshRemote, remoteError, servers, snapshot]);
+  }, [afterSettings, notice, openSession, persisted, ready, refreshRemote, remoteError, servers, session, snapshot]);
 
   return <ShopContext.Provider value={value}>{children}</ShopContext.Provider>;
 }

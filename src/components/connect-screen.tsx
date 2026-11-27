@@ -7,7 +7,7 @@ import { messageForError, useI18n } from "@/lib/i18n";
 import { checkCloud, pingServer } from "@/lib/graphql-client";
 import { useSessionRedirect, useShop } from "@/lib/shop-context";
 import { writePersisted } from "@/lib/storage";
-import { normalizeCloudUrl, normalizeServerUrl } from "@/lib/url";
+import { normalizeServerUrl } from "@/lib/url";
 import type { ServerPing } from "@/lib/types";
 import { DanMark } from "./mark";
 import { Button, Kicker, Splash, TextField } from "./ui";
@@ -22,8 +22,6 @@ export function ConnectScreen() {
   const shop = useShop();
   const router = useRouter();
   const [url, setUrl] = useState("");
-  const [cloud, setCloud] = useState(() => shop.persisted.lastCloudUrl ?? "");
-  const [cloudError, setCloudError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>({ name: "url" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +31,8 @@ export function ConnectScreen() {
   const [pin, setPin] = useState("");
 
   // Opened from the shop's machine itself (the counter address on the shop Wi-Fi):
-  // that machine is the shop server, so fill it in.
+  // that machine is the shop server, so its local address is filled in. The
+  // Dan cloud is not asked for: the machine knows it from its key (DAN-34).
   useEffect(() => {
     if (typeof window === "undefined" || !/^https?:$/.test(window.location.protocol)) return;
     const here = window.location.origin;
@@ -53,21 +52,12 @@ export function ConnectScreen() {
   async function connect(raw: string) {
     setBusy(true);
     setError(null);
-    setCloudError(null);
-    let cloudUrl: string | null;
-    try {
-      cloudUrl = normalizeCloudUrl(cloud);
-    } catch (caught) {
-      setCloudError(caught instanceof Error ? caught.message : t("errGeneric"));
-      setBusy(false);
-      return;
-    }
     try {
       const canonical = normalizeServerUrl(raw);
-      const [ping, cloudReachable] = await Promise.all([
-        pingServer(canonical),
-        cloudUrl ? checkCloud(cloudUrl) : Promise.resolve(false),
-      ]);
+      const ping = await pingServer(canonical);
+      // The shop server says where its shop lives in the Dan cloud, once it has reached it.
+      const cloudUrl = ping.cloudUrl ?? null;
+      const cloudReachable = cloudUrl ? await checkCloud(cloudUrl) : false;
       shop.rememberServer(canonical);
       setUrl(canonical);
       setAuthMode(ping.auth.password ? "email" : "pin");
@@ -167,21 +157,6 @@ export function ConnectScreen() {
               spellCheck={false}
               inputMode="url"
               required
-            />
-          </div>
-          <div className="mt-4">
-            <TextField
-              label={t("connectCloud")}
-              name="cloud-url"
-              value={cloud}
-              onChange={(event) => setCloud(event.target.value)}
-              placeholder={t("connectCloudPlaceholder")}
-              hint={cloudError ? undefined : t("connectCloudHint")}
-              error={cloudError ?? undefined}
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck={false}
-              inputMode="url"
             />
           </div>
           <Button type="submit" className="mt-4 w-full" disabled={busy}>

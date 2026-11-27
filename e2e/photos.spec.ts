@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { openTill } from "./create-order";
+import { hasCloud } from "./settings";
 
 /**
  * Dish photos, end to end: the owner adds one through the Dan cloud; it is
@@ -51,7 +52,6 @@ test("the owner adds a dish photo through the cloud; the menu, till and customer
   await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");
   await page.getByLabel("Shop server").fill(server!);
-  await page.getByLabel("Dan cloud (optional)").fill(cloud!);
   await page.getByRole("button", { name: "Connect", exact: true }).click();
   await page.getByLabel("Email").fill(ownerEmail);
   await page.getByLabel("Password").fill(ownerPassword);
@@ -106,6 +106,7 @@ test("the owner adds a dish photo through the cloud; the menu, till and customer
 });
 
 test("without the cloud, a photo cannot be added and the owner is told why", async ({ page }) => {
+  test.skip(await hasCloud(server!), "needs a shop server with no Dan cloud key (a keyed one gives its tablets the cloud)");
   await page.goto("/connect");
   await page.evaluate(() => localStorage.clear());
   await page.reload();

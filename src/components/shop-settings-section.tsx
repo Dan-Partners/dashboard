@@ -90,7 +90,7 @@ export function CounterPinSection() {
     if (!/^\d{4,6}$/.test(pin)) return setState({ busy: false, message: t("pinInvalid"), failed: true });
     setState({ busy: true, message: null, failed: false });
     try {
-      await shop.onServer((client) => client.setCounterPin(pin));
+      await shop.onSettings((client) => client.setCounterPin(pin));
       setPin("");
       setState({ busy: false, message: t("pinSaved"), failed: false });
     } catch (caught) {

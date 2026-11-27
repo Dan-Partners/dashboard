@@ -4,11 +4,40 @@ import Link from "next/link";
 import { useState } from "react";
 import { useI18n, type CopyKey } from "@/lib/i18n";
 import { SETTINGS_ROUTE, SETTINGS_SECTIONS, sectionsFor, settingsRoute, stripeState, type IntegrationState, type SettingsSection } from "@/lib/settings";
+import type { SettingsAccess } from "@/lib/server-health";
 import { useIsOwner, useShop } from "@/lib/shop-context";
 import { usePaymentsStatus } from "./payments-view";
 import { CounterPinSection, ShopDetailsSection } from "./shop-settings-section";
 import { ThemeButton, ThemeDialog } from "./theme-dialog";
 import { PageTitle } from "./ui";
+
+const READ_ONLY_COPY: Partial<Record<SettingsAccess, CopyKey>> = {
+  offline: "settingsInCloudOffline",
+  key_refused: "settingsInCloudKey",
+  sign_in_again: "settingsInCloudSignIn",
+};
+
+/**
+ * Why the shop's settings can only be looked at now, or null when they can
+ * be changed (RK, 27 Nov 2026, DAN-34: a shop server's settings are the Dan
+ * cloud's, saved only while the machine is connected with a valid key).
+ */
+export function useSettingsReadOnly(): CopyKey | null {
+  return READ_ONLY_COPY[useShop().settingsAccess] ?? null;
+}
+
+/** Says why the settings below can only be looked at. Nothing when they can be changed. */
+export function SettingsReadOnlyNote({ className = "" }: { className?: string }) {
+  const { t } = useI18n();
+  const shop = useShop();
+  const copy = useSettingsReadOnly();
+  if (!copy) return null;
+  return (
+    <p className={`max-w-xl border-l-2 border-accent pl-3 ${className}`} role="status" data-testid="settings-read-only" data-reason={shop.settingsAccess}>
+      {t(copy)}
+    </p>
+  );
+}
 
 /**
  * Settings: one list of sections, each its own page (RK, 27 Nov 2026,
@@ -22,6 +51,7 @@ export function SettingsIndex() {
     <div className="max-w-3xl" data-testid="settings-index">
       <PageTitle title={t("settingsTitle")} gloss={locale === "zh-Hant" ? "Settings" : "設定"} />
       <p className="-mt-2 mb-6 text-ink-soft">{t(isOwner ? "settingsLede" : "settingsPinNote")}</p>
+      {isOwner ? <SettingsReadOnlyNote className="mb-6" /> : null}
       <ul className="divide-y divide-rule border-y border-rule">
         {SETTINGS_SECTIONS.filter((section) => shown.includes(section.id)).map((section) => (
           <li key={section.id}>
@@ -59,6 +89,8 @@ export function SettingsFrame({ section, sub, children }: { section: SettingsSec
   const isOwner = useIsOwner();
   const entry = SETTINGS_SECTIONS.find((candidate) => candidate.id === section)!;
   const allowed = sectionsFor(isOwner).includes(section);
+  // Printers are the machine's own, so Tables & printers is never read only.
+  const readOnly = useSettingsReadOnly() !== null && section !== "tables";
   const parent = sub ? { href: settingsRoute(section), label: t(entry.label) } : { href: SETTINGS_ROUTE, label: t("settingsBack") };
   return (
     <div data-testid="settings-page" data-section={section}>
@@ -69,7 +101,13 @@ export function SettingsFrame({ section, sub, children }: { section: SettingsSec
         </Link>
       </p>
       {allowed ? (
-        children
+        <>
+          {readOnly ? <SettingsReadOnlyNote className="mb-6" /> : null}
+          {/* Every control in the section is off while the settings cannot be saved. */}
+          <fieldset disabled={readOnly} className="m-0 min-w-0 border-0 p-0" data-testid="settings-fields">
+            {children}
+          </fieldset>
+        </>
       ) : (
         <p className="max-w-xl border-l-2 border-accent pl-3" data-testid="settings-owner-only">
           {t("settingsOwnerOnly")}

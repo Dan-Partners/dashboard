@@ -79,7 +79,9 @@ export function ConnectionStatus({ session, compact = false }: { session: Sessio
       ? t("statusSyncBack")
       : !sync || sync.mode === "not_running"
       ? t("statusSyncOff")
-      : sync.mode === "synced"
+      : sync.mode === "key_refused"
+        ? t("statusKeyRefused")
+        : sync.mode === "synced"
         ? t("statusSynced")
         : `${t("statusWaiting")}: ${sync.pending} ${t("statusChanges")}`;
 

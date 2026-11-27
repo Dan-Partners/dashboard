@@ -30,3 +30,18 @@ export async function expectPinCannotSee(page: Page, section: Exclude<Section, "
   await page.goto(`/shop/settings/${section}`);
   await expect(page.getByTestId("settings-owner-only").filter({ visible: true })).toBeVisible();
 }
+
+/**
+ * Whether a shop server has a Dan cloud (DAN-34: one started from a key says
+ * its cloud's address once it has reached it). The tests about a shop with no
+ * cloud need a shop server without a key.
+ */
+export async function hasCloud(server: string): Promise<boolean> {
+  const response = await fetch(`${server}/graphql`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ query: "{ ping { cloudUrl } }" }),
+  }).catch(() => null);
+  const body = (await response?.json().catch(() => null)) as { data?: { ping?: { cloudUrl?: string | null } } } | null;
+  return Boolean(body?.data?.ping?.cloudUrl);
+}

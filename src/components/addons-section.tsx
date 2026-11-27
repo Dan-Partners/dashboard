@@ -8,6 +8,7 @@ import { messageForError, useI18n } from "@/lib/i18n";
 import { useIsOwner, useShop } from "@/lib/shop-context";
 import type { Addon } from "@/lib/types";
 import { Button } from "./ui";
+import { useSettingsReadOnly } from "./settings-view";
 
 /** A row being edited. A new add-on has no id until it is saved; its amount is typed as people write it. */
 type Row = { id: string | null; nameEn: string; nameZh: string; scope: Addon["scope"]; kind: Addon["kind"]; minus: boolean; amount: string; auto: boolean; required: boolean; channels: Addon["channels"] };
@@ -44,7 +45,10 @@ function valueOf(row: Row): number | null {
 export function AddonsSection() {
   const { t } = useI18n();
   const shop = useShop();
-  const isOwner = useIsOwner();
+  // While the shop's settings cannot be saved (DAN-34) the owner sees the add-ons as the counter does.
+  const owner = useIsOwner();
+  const readOnly = useSettingsReadOnly() !== null;
+  const isOwner = owner && !readOnly;
   const saved = shop.snapshot?.addons ?? [];
   const [draft, setDraft] = useState<Row[] | null>(null);
   const rows = draft ?? toRows(saved);
@@ -103,7 +107,7 @@ export function AddonsSection() {
         {t("addonsTitle")}
       </h2>
       <p className="mt-1 mb-4 text-ink-soft">{t("addonsLede")}</p>
-      {!isOwner ? <p className="mb-4 text-sm text-ink-soft" data-testid="addons-owner-only">{t("addonsOwnerOnly")}</p> : null}
+      {!owner ? <p className="mb-4 text-sm text-ink-soft" data-testid="addons-owner-only">{t("addonsOwnerOnly")}</p> : null}
       {rows.length === 0 ? (
         <p className="border-y border-rule py-6 text-ink-soft" data-testid="addons-none">
           {t("addonsNone")}

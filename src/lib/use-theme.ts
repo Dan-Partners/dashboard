@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { GraphQLDanClient } from "./graphql-client";
+import { settingsEndpointFor, type Endpoint } from "./server-health";
 import { getServerSnapshot, getSnapshot, subscribe, writePersisted } from "./storage";
 import { THEME_CACHE_KEY, normalizeTheme, resolveTheme, serializeResolved, specOf, type ThemeChoice } from "./theme";
 import type { Session } from "./types";
@@ -66,9 +67,17 @@ function saveToServer(session: Session, theme: ThemeChoice) {
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => {
     timer = null;
-    if (!session.serverUrl || !session.token) return;
+    // Where the shop's settings are saved now: the cloud, for a shop server whose shop lives there (DAN-34).
+    let end: Endpoint | null;
+    try {
+      end = settingsEndpointFor(session);
+    } catch {
+      setSave({ saving: false, failed: true });
+      return;
+    }
+    if (!end) return;
     setSave({ saving: true, failed: false });
-    new GraphQLDanClient(session.serverUrl, session.token)
+    new GraphQLDanClient(end.url, end.token)
       .updateTheme(theme)
       .then((saved) => {
         writePersisted({ theme: saved });

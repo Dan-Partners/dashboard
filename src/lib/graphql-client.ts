@@ -140,12 +140,18 @@ export async function pingServer(input: string, fetchImpl: typeof fetch = fetch)
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
   try {
-    const data = await graphql<{ ping: ServerPing }>(
-      base,
-      `query Ping { ping { ok product version shop { ${SHOP} } auth { password pin } theme { ${THEME} } } }`,
-      {},
-      { fetchImpl, signal: controller.signal },
-    );
+    const ask = (extra: string) =>
+      graphql<{ ping: ServerPing }>(
+        base,
+        `query Ping { ping { ok product version shop { ${SHOP} } auth { password pin } theme { ${THEME} }${extra} } }`,
+        {},
+        { fetchImpl, signal: controller.signal },
+      );
+    // A shop server from before DAN-34 does not know `cloudUrl`: asked again without it.
+    const data = await ask(" cloudUrl").catch((error: unknown) => {
+      if (error instanceof DanError && error.code === "bad_response") return ask("");
+      throw error;
+    });
     const ping = data.ping;
     if (ping?.theme) ping.theme = normalizeTheme(ping.theme);
     if (!ping || ping.ok !== true || ping.product !== DAN_PRODUCT || !ping.shop?.name) {
@@ -696,7 +702,11 @@ export class GraphQLDanClient implements DanClient {
 
   /** Any signed-in staff. For the status corner; not part of DanClient. */
   async getSyncStatus(): Promise<SyncStatus> {
-    const data = await this.run<{ syncStatus: SyncStatus }>("query SyncStatus { syncStatus { mode pending lastSyncedAt } }");
+    // `connected` is new with DAN-34: an older shop server is asked without it.
+    const data = await this.run<{ syncStatus: SyncStatus }>("query SyncStatus { syncStatus { mode pending lastSyncedAt connected } }").catch((error: unknown) => {
+      if (error instanceof DanError && error.code === "bad_response") return this.run<{ syncStatus: SyncStatus }>("query SyncStatus { syncStatus { mode pending lastSyncedAt } }");
+      throw error;
+    });
     return data.syncStatus;
   }
 

@@ -12,6 +12,7 @@ import { AddonsSection } from "./addons-section";
 import { DishPhoto } from "./dish-photo";
 import { fromOptionRows, OptionsEditor, toOptionRows, type GroupRow } from "./options-editor";
 import { Button, Dialog, PageTitle } from "./ui";
+import { SettingsReadOnlyNote, useSettingsReadOnly } from "./settings-view";
 
 const ALLERGEN_KEY: Record<Allergen, CopyKey> = {
   celery: "allergenCelery",
@@ -34,6 +35,9 @@ export function MenuBoard() {
   const { t, locale } = useI18n();
   const shop = useShop();
   const isOwner = useIsOwner();
+  // The dishes are settings: while they cannot be saved (DAN-34) the owner sees the menu as the counter does.
+  const readOnly = useSettingsReadOnly() !== null;
+  const canEdit = isOwner && !readOnly;
   const categories = shop.snapshot?.categories ?? [];
   const items = shop.snapshot?.items ?? [];
   const [categoryId, setCategoryId] = useState(categories[0]?.id ?? "");
@@ -52,7 +56,8 @@ export function MenuBoard() {
     <div>
       <PageTitle title={t("menuTitle")} gloss={locale === "zh-Hant" ? "Menu" : "餐牌"} />
       {!isOwner ? <p className="mb-4 max-w-xl text-sm text-ink-soft" data-testid="menu-counter-note">{t("menuCounterNote")}</p> : null}
-      {isOwner ? (
+      {isOwner ? <SettingsReadOnlyNote className="mb-4" /> : null}
+      {canEdit ? (
         <div className="mb-4 flex flex-wrap gap-2" data-testid="menu-tools">
           {categories.length > 0 ? (
             <Button type="button" variant="accent" onClick={() => setAdding(true)}>
@@ -102,8 +107,8 @@ export function MenuBoard() {
                   {/* Only the owner edits a dish. With the PIN the row is read-only, and the sold-out switch still works. */}
                   <button
                     type="button"
-                    className={`min-w-0 flex-1 text-left ${isOwner ? "cursor-pointer" : "cursor-default"}`}
-                    disabled={!isOwner}
+                    className={`min-w-0 flex-1 text-left ${canEdit ? "cursor-pointer" : "cursor-default"}`}
+                    disabled={!canEdit}
                     onClick={() => setEditing(item)}
                   >
                     <span className="flex items-baseline gap-3">

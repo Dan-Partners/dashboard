@@ -1,6 +1,7 @@
 import { expectPinCannotSee, openSettings } from "./settings";
 import { expect, test, type Page } from "@playwright/test";
 import { openTill } from "./create-order";
+import { hasCloud } from "./settings";
 
 /**
  * Runs the dashboard against a real Dan shop server, not the demo.
@@ -217,6 +218,7 @@ test("an order from a table's link shows its table and is marked served", async 
 });
 
 test("the owner is warned when there is no Dan cloud, the counter is not", async ({ page }) => {
+  test.skip(await hasCloud(server!), "needs a shop server with no Dan cloud key (a keyed one gives its tablets the cloud)");
   await page.setViewportSize({ width: 1280, height: 900 });
   await connect(page);
   await page.getByRole("button", { name: "PIN", exact: true }).click();
@@ -243,6 +245,7 @@ test("the owner is warned when there is no Dan cloud, the counter is not", async
 });
 
 test("the status corner shows the shop server connected, no cloud yet, and stamps are off", async ({ page }) => {
+  test.skip(await hasCloud(server!), "needs a shop server with no Dan cloud key (a keyed one gives its tablets the cloud)");
   await page.setViewportSize({ width: 1280, height: 900 });
   await connect(page);
   await page.getByRole("button", { name: "PIN", exact: true }).click();

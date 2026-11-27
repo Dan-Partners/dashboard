@@ -88,6 +88,12 @@ export type ServerPing = {
   };
   /** The shop's theme. Older servers may not send it. */
   theme?: ThemeChoice;
+  /**
+   * A shop server whose shop lives in the Dan cloud (DAN-34): the cloud's
+   * staff address, where the shop's settings are saved. Null until the
+   * machine has reached the cloud once; missing from older servers.
+   */
+  cloudUrl?: string | null;
 };
 
 export type LoginInput =
@@ -384,9 +390,16 @@ export type SalesSummary = {
  */
 /** Whether the shop's changes are in step with the Dan cloud. Any signed-in staff. */
 export type SyncStatus = {
-  mode: "not_running" | "synced" | "waiting";
+  /** `key_refused`: the cloud no longer accepts the shop's key (DAN-34). */
+  mode: "not_running" | "synced" | "waiting" | "key_refused";
   pending: number;
   lastSyncedAt: string | null;
+  /**
+   * The machine's last round with the cloud worked, in the last 30 seconds:
+   * the shop's settings can be saved now. Missing from older shop servers,
+   * whose settings are their own.
+   */
+  connected?: boolean;
 };
 
 export interface DanClient {
