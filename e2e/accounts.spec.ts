@@ -198,10 +198,9 @@ test("a business joins from the waiting list, builds its menu, takes an order an
   await page.getByRole("link", { name: /^Orders/ }).first().click();
   await expect(page.getByTestId("docket-number").first()).toContainText("1");
 
-  // The shop's public address answers customers already.
-  // (Asked by address, with the shop named in the Host header: this process cannot look up *.localhost.)
-  const answer = await request.post(`${cloud!.replace("localhost", "127.0.0.1")}/graphql`, {
-    headers: { host: `${address}.localhost:2290`, origin: customerSite, "content-type": "application/json" },
+  // The shop answers customers already: the cloud's one address, naming the shop (DAN-45).
+  const answer = await request.post(`${cloud}/graphql?shop=${address}`, {
+    headers: { origin: customerSite, "content-type": "application/json" },
     data: { query: "{ shop { name phone } }" },
   });
   expect(answer.ok()).toBeTruthy();
@@ -282,8 +281,11 @@ test("a business joins from the waiting list, builds its menu, takes an order an
   await stranger.getByRole("button", { name: "Save and sign in" }).click();
   await expect(stranger.getByRole("heading", { name: "Orders" })).toBeVisible({ timeout: 20_000 });
   await expect(stranger.getByTestId("signed-in-as").first()).toContainText("Owner");
-  const old = await request.post(`${cloud}/v1/login`, { headers: { origin: "http://localhost:3000" }, data: { email, password } });
-  expect(old.status()).toBe(401);
+  const old = await request.post(`${cloud}/graphql`, {
+    headers: { origin: "http://localhost:3000" },
+    data: { query: "mutation($e: String!, $p: String!) { signIn(email: $e, password: $p) { token } }", variables: { e: email, p: password } },
+  });
+  expect(((await old.json()) as { errors?: { extensions?: { code?: string } }[] }).errors?.[0]?.extensions?.code).toBe("unauthorized");
   await stranger.goto(reset);
   await expect(stranger.getByTestId("link-invalid")).toBeVisible();
 

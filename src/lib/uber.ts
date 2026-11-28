@@ -56,8 +56,6 @@ export function webhookAddress(cloudUrl: string | null | undefined, addressName:
   if (!cloudUrl || !addressName || !/^[a-z0-9-]{1,40}$/.test(addressName)) return null;
   try {
     const url = new URL(cloudUrl);
-    // A session from before the one address (DAN-43) has the shop's own address with /staff.
-    if (/\/staff\/?$/.test(url.pathname)) return `${url.origin}/uber/webhook`;
     return `${url.origin}/webhooks/uber/${addressName}`;
   } catch {
     return null;

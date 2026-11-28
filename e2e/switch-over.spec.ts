@@ -12,7 +12,7 @@ import { openTill } from "./create-order";
  * start that shop server:
  *
  *   DAN_E2E_SERVER_URL=http://127.0.0.1:2283 \
- *   DAN_E2E_CLOUD_URL=http://goldendragon.localhost:2290/staff DAN_E2E_PIN=… \
+ *   DAN_E2E_CLOUD_URL=http://localhost:2290 DAN_E2E_PIN=… \
  *   DAN_E2E_SHOP_STOP='…' DAN_E2E_SHOP_START='…' npx playwright test switch-over
  *
  * It stops the shop server, so never point it at a shop in service.

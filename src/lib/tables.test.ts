@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_TABLES, normalizeOrderingAddress, orderingAddressFromCloud, parseTables, tableLink } from "./tables";
+import { MAX_TABLES, normalizeOrderingAddress, parseTables, tableLink } from "./tables";
 
 describe("tables as an owner writes them", () => {
   it("reads numbers, ranges and short names, in order, without repeats", () => {
@@ -17,11 +17,6 @@ describe("tables as an owner writes them", () => {
 });
 
 describe("the ordering address", () => {
-  it("comes from the cloud address, without /staff", () => {
-    expect(orderingAddressFromCloud("https://goldendragon.dan.partners/staff")).toBe("https://goldendragon.dan.partners");
-    expect(orderingAddressFromCloud(null)).toBe("");
-  });
-
   it("is https and the address alone", () => {
     expect(normalizeOrderingAddress("order.goldendragon.co.uk/menu")).toBe("https://order.goldendragon.co.uk");
     expect(normalizeOrderingAddress("http://goldendragon.localhost:3001")).toBe("http://goldendragon.localhost:3001");

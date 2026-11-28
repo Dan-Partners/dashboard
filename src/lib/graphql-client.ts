@@ -182,18 +182,8 @@ export async function pingServer(input: string, fetchImpl: typeof fetch = fetch,
   }
 }
 
-/**
- * Is the Dan cloud there? Its one address answers `/healthz` as the Dan
- * cloud (DAN-43). A shop's old cloud address (`.../staff`) is a shop server
- * to it, so that is pinged like one.
- */
+/** Is the Dan cloud there? Its one address answers `/healthz` as the Dan cloud (DAN-43). */
 export async function checkCloud(base: string, fetchImpl: typeof fetch = fetch): Promise<boolean> {
-  if (/\/staff\/?$/.test(base)) {
-    return pingServer(base, fetchImpl).then(
-      () => true,
-      () => false,
-    );
-  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
   try {

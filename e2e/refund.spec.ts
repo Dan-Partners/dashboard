@@ -22,6 +22,8 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
  */
 const server = process.env.DAN_E2E_SERVER_URL;
 const publicApi = process.env.DAN_E2E_PUBLIC_URL;
+/** The shop the customer's calls name on the cloud's one address (DAN-45). */
+const shopName = process.env.DAN_E2E_SHOP ?? "goldendragon";
 const customerSite = process.env.DAN_E2E_CUSTOMER_ORIGIN;
 const ownerEmail = process.env.DAN_E2E_OWNER_EMAIL ?? "";
 const ownerPassword = process.env.DAN_E2E_OWNER_PASSWORD ?? "";
@@ -35,9 +37,9 @@ type Asked = {
 const asked = async () => (await (await fetch(`${fakeStripe}/__state`)).json()) as Asked;
 const refundsFail = (fail: boolean) => fetch(`${fakeStripe}/__refunds/${fail ? "fail" : "ok"}`, { method: "POST" });
 
-/** A customer's card order, paid: placed at the shop's address, then Stripe's notice that the payment succeeded. */
+/** A customer's card order, paid: placed through the cloud, then Stripe's notice that the payment succeeded (to the cloud's Connect webhook, DAN-48). */
 async function paidCardOrder(request: APIRequestContext, name: string) {
-  const placed = await request.post(`${publicApi}/graphql`, {
+  const placed = await request.post(`${publicApi}/graphql?shop=${shopName}`, {
     headers: { origin: customerSite! },
     data: {
       query: "mutation($i: PlaceOrderInput!) { placeOrder(input: $i) { order { totalPence clientSecret } } }",
@@ -56,7 +58,7 @@ async function paidCardOrder(request: APIRequestContext, name: string) {
   });
   const at = Math.floor(Date.now() / 1000);
   const signature = crypto.createHmac("sha256", webhookSecret).update(`${at}.${body}`).digest("hex");
-  const noticed = await request.post(`${publicApi}/stripe/webhook`, { headers: { "stripe-signature": `t=${at},v1=${signature}`, "content-type": "application/json" }, data: body });
+  const noticed = await request.post(`${publicApi}/webhooks/stripe`, { headers: { "stripe-signature": `t=${at},v1=${signature}`, "content-type": "application/json" }, data: body });
   expect(noticed.status()).toBe(200);
   return { intent: id, totalPence };
 }

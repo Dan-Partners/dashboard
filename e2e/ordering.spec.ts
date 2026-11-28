@@ -5,7 +5,7 @@ import { expectPinCannotSee, openSettings, STAFF_NAME } from "./settings";
  * Order and payment methods. The first test runs on the demo. The second
  * needs a shop server syncing to a cloud, and the shop's customer site:
  *
- *   DAN_E2E_SERVER_URL=… DAN_E2E_CLOUD_URL=…/staff DAN_E2E_OWNER_EMAIL=… DAN_E2E_OWNER_PASSWORD=… \
+ *   DAN_E2E_SERVER_URL=… DAN_E2E_CLOUD_URL=… DAN_E2E_OWNER_EMAIL=… DAN_E2E_OWNER_PASSWORD=… \
  *   DAN_E2E_PIN=… DAN_E2E_CUSTOMER_ORIGIN=http://localhost:3001 npx playwright test ordering
  *
  * It changes the shop's settings and puts them back at the end.

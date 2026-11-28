@@ -10,7 +10,7 @@ import { hasCloud } from "./settings";
  * Opt in with a shop server syncing to a cloud that keeps photos, and the
  * shop's customer site:
  *
- *   DAN_E2E_SERVER_URL=http://127.0.0.1:2283 DAN_E2E_CLOUD_URL=http://goldendragon.localhost:2290/staff \
+ *   DAN_E2E_SERVER_URL=http://127.0.0.1:2283 DAN_E2E_CLOUD_URL=http://localhost:2290 \
  *   DAN_E2E_OWNER_EMAIL=… DAN_E2E_OWNER_PASSWORD=… DAN_E2E_CUSTOMER_ORIGIN=http://localhost:3001 \
  *   npx playwright test photos
  */

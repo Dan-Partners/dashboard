@@ -24,7 +24,7 @@ async function notice(request: APIRequestContext, type: string, object: Record<s
   const body = JSON.stringify({ type, data: { object } });
   const at = Math.floor(Date.now() / 1000);
   const signature = crypto.createHmac("sha256", billingSecret!).update(`${at}.${body}`).digest("hex");
-  const answer = await request.post(`${cloud}/v1/stripe/billing-webhook`, { headers: { "stripe-signature": `t=${at},v1=${signature}`, "content-type": "application/json" }, data: body });
+  const answer = await request.post(`${cloud}/webhooks/stripe-billing`, { headers: { "stripe-signature": `t=${at},v1=${signature}`, "content-type": "application/json" }, data: body });
   expect(answer.status()).toBe(200);
 }
 

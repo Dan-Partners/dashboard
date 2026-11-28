@@ -33,29 +33,12 @@ export function parseTables(input: string): string[] {
 }
 
 /**
- * The shop's ordering site, from its Dan cloud address: the cloud address
- * is the staff API (https://<shop>.dan.partners/staff); customers order at
- * the same address without /staff.
- */
-export function orderingAddressFromCloud(cloudUrl: string | null | undefined): string {
-  if (!cloudUrl) return "";
-  try {
-    return new URL(cloudUrl).origin;
-  } catch {
-    return "";
-  }
-}
-
-/**
  * The shop's ordering site (https://<shop>.dan.partners), for its table QR
- * codes. The cloud's sign-in says it (DAN-43); a session from before has its
- * cloud address with /staff, which gives it. Photos and Uber's notices are on
- * the cloud's one address since DAN-45 (photos.ts, uber.ts).
+ * codes, as the cloud's sign-in says it (DAN-43). Photos and Uber's notices
+ * are on the cloud's one address (photos.ts, uber.ts).
  */
-export function shopAddressOf(session: Pick<Session, "shopAddress" | "cloudUrl"> | null | undefined): string {
-  if (session?.shopAddress) return session.shopAddress.replace(/\/+$/, "");
-  if (session?.cloudUrl && /\/staff\/?$/.test(session.cloudUrl)) return orderingAddressFromCloud(session.cloudUrl);
-  return "";
+export function shopAddressOf(session: Pick<Session, "shopAddress"> | null | undefined): string {
+  return session?.shopAddress ? session.shopAddress.replace(/\/+$/, "") : "";
 }
 
 /** An ordering site address as typed: https (or this machine for testing), the address alone. */

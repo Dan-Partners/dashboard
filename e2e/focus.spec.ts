@@ -11,6 +11,8 @@ import { STAFF_NAME } from "./settings";
 const server = process.env.DAN_E2E_SERVER_URL;
 const pin = process.env.DAN_E2E_PIN ?? "";
 const publicApi = process.env.DAN_E2E_PUBLIC_URL;
+/** The shop the customer's calls name on the cloud's one address (DAN-45). */
+const shopName = process.env.DAN_E2E_SHOP ?? "goldendragon";
 const customerSite = process.env.DAN_E2E_CUSTOMER_ORIGIN ?? "http://localhost:3001";
 
 async function holdLock(page: Page, ms: number) {
@@ -100,7 +102,7 @@ test("kitchen and pass tablets follow a table's order from new to served", async
   await kitchen.waitForTimeout(1000);
 
   const customer = `Focus ${Date.now()}`;
-  const placed = await kitchen.request.post(`${publicApi}/graphql`, {
+  const placed = await kitchen.request.post(`${publicApi}/graphql?shop=${shopName}`, {
     headers: { origin: customerSite },
     data: {
       query: "mutation($i: PlaceOrderInput!) { placeOrder(input: $i) { order { number } } }",

@@ -7,7 +7,7 @@ import { openSettings } from "./settings";
  * the shop's Stripe account connected and ready, and no acceptance yet.
  * Never the real Stripe.
  *
- *   DAN_E2E_DEAL=1 DAN_E2E_SERVER_URL=… DAN_E2E_CLOUD_URL=…/staff DAN_E2E_OWNER_EMAIL=… DAN_E2E_OWNER_PASSWORD=… \
+ *   DAN_E2E_DEAL=1 DAN_E2E_SERVER_URL=… DAN_E2E_CLOUD_URL=… DAN_E2E_OWNER_EMAIL=… DAN_E2E_OWNER_PASSWORD=… \
  *   DAN_E2E_CUSTOMER_ORIGIN=http://localhost:3001 DAN_E2E_FAKE_STRIPE=http://127.0.0.1:9130 npx playwright test deal
  */
 const server = process.env.DAN_E2E_SERVER_URL;

@@ -25,6 +25,8 @@ const ownerPassword = process.env.DAN_E2E_OWNER_PASSWORD ?? "";
 const pin = process.env.DAN_E2E_PIN ?? "";
 /** The shop's public API and the customer site's address, for placing an online order. */
 const publicApi = process.env.DAN_E2E_PUBLIC_URL;
+/** The shop the customer's calls name on the cloud's one address (DAN-45). */
+const shopName = process.env.DAN_E2E_SHOP ?? "goldendragon";
 const customerSite = process.env.DAN_E2E_CUSTOMER_ORIGIN ?? "http://localhost:3001";
 
 test.skip(!server, "Set DAN_E2E_SERVER_URL to run against a real shop server.");
@@ -173,7 +175,7 @@ test("an online order reaches an open tablet live, with no refresh", async ({ pa
   await page.waitForTimeout(1000);
 
   const customer = `Live ${Date.now()}`;
-  const placed = await page.request.post(`${publicApi}/graphql`, {
+  const placed = await page.request.post(`${publicApi}/graphql?shop=${shopName}`, {
     headers: { origin: customerSite },
     data: {
       query: "mutation($i: PlaceOrderInput!) { placeOrder(input: $i) { order { number } } }",
@@ -204,7 +206,7 @@ test("an order from a table's link shows its table and is marked served", async 
   await page.waitForTimeout(1000);
 
   const customer = `Table ${Date.now()}`;
-  await page.request.post(`${publicApi}/graphql`, {
+  await page.request.post(`${publicApi}/graphql?shop=${shopName}`, {
     headers: { origin: customerSite },
     data: {
       query: "mutation($i: PlaceOrderInput!) { placeOrder(input: $i) { order { number } } }",

@@ -6,7 +6,7 @@ import { openSettings } from "./settings";
  * run with DAN_SECRETS_KEY and pointed at a stand-in Uber (DAN_UBER_AUTH_BASE
  * and DAN_UBER_API_BASE), and the shop's customer site. Never the real Uber.
  *
- *   DAN_E2E_SERVER_URL=… DAN_E2E_CLOUD_URL=…/staff DAN_E2E_OWNER_EMAIL=… DAN_E2E_OWNER_PASSWORD=… \
+ *   DAN_E2E_SERVER_URL=… DAN_E2E_CLOUD_URL=… DAN_E2E_OWNER_EMAIL=… DAN_E2E_OWNER_PASSWORD=… \
  *   DAN_E2E_PIN=… DAN_E2E_CUSTOMER_ORIGIN=http://localhost:3001 DAN_E2E_FAKE_UBER=http://127.0.0.1:9120 \
  *   npx playwright test uber
  *

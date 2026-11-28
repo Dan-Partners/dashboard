@@ -18,7 +18,7 @@ const pin = process.env.DAN_E2E_PIN ?? "";
 const ownerEmail = process.env.DAN_E2E_OWNER_EMAIL ?? "";
 const ownerPassword = process.env.DAN_E2E_OWNER_PASSWORD ?? "";
 
-/** Signs in to a Dan server by its address: the shop's own, or its staff API in the cloud. */
+/** Signs in to the shop server by its address. */
 async function signIn(page: Page, address: string, who: "owner" | "pin") {
   await page.setViewportSize({ width: 1280, height: 1000 });
   await page.goto("/connect");
@@ -35,6 +35,19 @@ async function signIn(page: Page, address: string, who: "owner" | "pin") {
     await page.getByLabel("Your name").fill(STAFF_NAME);
     await page.getByLabel("PIN").fill(pin);
   }
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
+}
+
+/** The owner in the cloud: the sign-in page, which finds the shop by its owner's email (DAN-43). */
+async function signInCloud(page: Page) {
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.waitForFunction(() => document.documentElement.dataset.dan === "ready");
+  await page.getByLabel("Email", { exact: true }).fill(ownerEmail);
+  await page.getByLabel("Password").fill(ownerPassword);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Orders" })).toBeVisible();
 }
@@ -506,7 +519,7 @@ test("the owner's change on the shop server reaches the cloud with its record, a
   await expect(counter.getByTestId("order-record")).toHaveCount(0);
 
   // In the cloud, a moment later: the order as changed, and its record.
-  await signIn(inCloud, cloud!, "owner");
+  await signInCloud(inCloud);
   await inCloud.getByTestId("orders-layout-list").click();
   await inCloud.getByTestId("list-search").fill(name);
   const row = inCloud.getByTestId("list-row");
