@@ -10,7 +10,7 @@ import { CREATE_ORDER_ROUTE } from "@/lib/focus";
 import { useIsOwner, useSessionRedirect, useShop } from "@/lib/shop-context";
 import { viewGloss, viewName, viewRoute } from "@/lib/views";
 import { SETTINGS_ROUTE } from "@/lib/settings";
-import { CloudNotice, KeyRefusedNotice } from "./cloud-notice";
+import { CloudNotice, KeyRefusedNotice, ServerUpdateNotice } from "./cloud-notice";
 import { ConnectionStatus } from "./connection-status";
 import { FocusDialog } from "./focus-dialog";
 import { FocusFrame } from "./focus-frame";
@@ -185,6 +185,7 @@ export function ShopFrame({ children }: { children: React.ReactNode }) {
 
         <KeyRefusedNotice />
         <CloudNotice session={session} />
+        <ServerUpdateNotice session={session} />
 
         <main id="main" className="px-4 py-6 pb-28 md:px-8 md:py-8 md:pb-10">
           {children}

@@ -741,10 +741,15 @@ export class GraphQLDanClient implements DanClient {
 
   /** Any signed-in staff. For the status corner; not part of DanClient. */
   async getSyncStatus(): Promise<SyncStatus> {
-    // `connected` is new with DAN-34: an older shop server is asked without it.
-    const data = await this.run<{ syncStatus: SyncStatus }>("query SyncStatus { syncStatus { mode pending lastSyncedAt connected } }").catch((error: unknown) => {
-      if (error instanceof DanError && error.code === "bad_response") return this.run<{ syncStatus: SyncStatus }>("query SyncStatus { syncStatus { mode pending lastSyncedAt } }");
-      throw error;
+    // The versions are new with DAN-49 and `connected` with DAN-34: an older shop server is asked without them.
+    const ask = (fields: string) => this.run<{ syncStatus: SyncStatus }>(`query SyncStatus { syncStatus { ${fields} } }`);
+    const older = (error: unknown) => error instanceof DanError && error.code === "bad_response";
+    const data = await ask("mode pending lastSyncedAt connected version latestVersion updateAvailable updateRequired").catch((error: unknown) => {
+      if (!older(error)) throw error;
+      return ask("mode pending lastSyncedAt connected").catch((again: unknown) => {
+        if (older(again)) return ask("mode pending lastSyncedAt");
+        throw again;
+      });
     });
     return data.syncStatus;
   }

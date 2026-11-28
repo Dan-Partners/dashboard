@@ -427,6 +427,14 @@ export type SyncStatus = {
    * whose settings are their own.
    */
   connected?: boolean;
+  /** This shop server's version (DAN-49). Missing from older shop servers. */
+  version?: string;
+  /** The newest shop server version, as the cloud last said. */
+  latestVersion?: string | null;
+  /** A newer shop server is published: Dan updates the machine. */
+  updateAvailable?: boolean;
+  /** The cloud no longer syncs with this version until it is updated. */
+  updateRequired?: boolean;
 };
 
 export interface DanClient {
